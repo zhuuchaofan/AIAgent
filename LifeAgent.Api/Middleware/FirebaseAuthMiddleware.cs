@@ -3,6 +3,7 @@ using System.Text.Json;
 using FirebaseAdmin;
 using FirebaseAdmin.Auth;
 using Google.Apis.Auth.OAuth2;
+using LifeAgent.Api.Models.Exceptions;
 
 namespace LifeAgent.Api.Middleware;
 
@@ -42,14 +43,14 @@ public class FirebaseAuthMiddleware
         var authHeader = context.Request.Headers["Authorization"].ToString();
         if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            await WriteUnauthorized(context, "UNAUTHORIZED", "缺少 Authorization: Bearer <token> 请求头");
+            await WriteUnauthorized(context, "缺少 Authorization: Bearer <token> 请求头");
             return;
         }
 
         var idToken = authHeader["Bearer ".Length..].Trim();
         if (string.IsNullOrEmpty(idToken))
         {
-            await WriteUnauthorized(context, "UNAUTHORIZED", "Bearer Token 不能为空");
+            await WriteUnauthorized(context, "Bearer Token 不能为空");
             return;
         }
 
@@ -61,23 +62,13 @@ public class FirebaseAuthMiddleware
         }
         catch (FirebaseAuthException ex)
         {
-            _logger.LogWarning(ex, "Firebase Token 验签失败");
-            await WriteUnauthorized(context, "UNAUTHORIZED", "Token 无效或已过期");
+            _logger.LogWarning(ex, "Firebase ID Token 验签失败");
+            throw new UnauthorizedException("无效或过期的 Token");
         }
     }
 
-    // ── 统一 401 响应 ───────────────────────────────────────────
-    private static async Task WriteUnauthorized(HttpContext context, string code, string message)
+    private Task WriteUnauthorized(HttpContext context, string message)
     {
-        context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-        context.Response.ContentType = "application/json; charset=utf-8";
-
-        var body = JsonSerializer.Serialize(new
-        {
-            success = false,
-            error = new { code, message }
-        });
-
-        await context.Response.WriteAsync(body);
+        throw new UnauthorizedException(message);
     }
 }

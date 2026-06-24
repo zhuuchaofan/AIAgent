@@ -36,6 +36,7 @@ if (!string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
 }
 
 // ── 中间件注册 ─────────────────────────────────────────────────
+app.UseMiddleware<ExceptionMiddleware>();
 app.UseMiddleware<FirebaseAuthMiddleware>();
 
 // ── 路由 ──────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
+using LifeAgent.Api.Models.Exceptions;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -18,17 +19,13 @@ public static class LifeEndpoints
         {
             if (string.IsNullOrWhiteSpace(request.Text))
             {
-                return Results.BadRequest(new ErrorResponse
-                {
-                    Success = false,
-                    Error = new ErrorDetail { Code = "INVALID_INPUT", Message = "Text 不能为空" }
-                });
+                throw new InvalidInputException("Text 不能为空");
             }
 
             var userId = ctx.Items["userId"] as string;
             if (string.IsNullOrEmpty(userId))
             {
-                return Results.Unauthorized();
+                throw new UnauthorizedException();
             }
 
             // 优先使用请求体中的时区，缺失时暂时默认 Asia/Tokyo
@@ -97,7 +94,7 @@ public static class LifeEndpoints
             var userId = ctx.Items["userId"] as string;
             if (string.IsNullOrEmpty(userId))
             {
-                return Results.Unauthorized();
+                throw new UnauthorizedException();
             }
 
             // 调用 Service 执行带 Cursor 的翻页查询
@@ -140,17 +137,13 @@ public static class LifeEndpoints
             var userId = ctx.Items["userId"] as string;
             if (string.IsNullOrEmpty(userId))
             {
-                return Results.Unauthorized();
+                throw new UnauthorizedException();
             }
 
             var lifeEvent = await lifeEventService.GetEventAsync(userId, id);
             if (lifeEvent == null)
             {
-                return Results.NotFound(new ErrorResponse
-                {
-                    Success = false,
-                    Error = new ErrorDetail { Code = "EVENT_NOT_FOUND", Message = $"事件 {id} 不存在" }
-                });
+                throw new EventNotFoundException(id);
             }
 
             var dto = new EventDetailDto
