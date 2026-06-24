@@ -48,6 +48,9 @@ public static class LifeEndpoints
                 RawLlmOutput = parsedEvent.RawLlmOutput
             };
 
+            // Schema 强类型约束校验与过滤
+            LifeEventSchemaValidator.ValidateAndSanitize(lifeEvent);
+
             // 保存到 Firestore
             var savedEvent = await lifeEventService.SaveEventAsync(userId, lifeEvent);
 
