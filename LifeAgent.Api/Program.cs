@@ -4,6 +4,7 @@ using Google.Cloud.Firestore;
 using LifeAgent.Api.Middleware;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
+using LifeAgent.Api.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +17,7 @@ builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
 
 // ── 业务 Service 注册 ─────────────────────────────────────────
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
+builder.Services.AddScoped<ILlmService, MockLlmService>();
 
 var app = builder.Build();
 
@@ -37,6 +39,8 @@ if (!string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
 app.UseMiddleware<FirebaseAuthMiddleware>();
 
 // ── 路由 ──────────────────────────────────────────────────────
+
+app.MapLifeEndpoints();
 
 // GET /health — 无需鉴权
 app.MapGet("/health", () => Results.Ok("healthy"));
