@@ -73,6 +73,29 @@ public class MockLlmService : ILlmService
         result.ExtractionConfidence = 0.85;
         result.NeedsReview = false;
 
+        if (text.Contains("very_tired"))
+        {
+            result.StructuredData = new Dictionary<string, object>
+            {
+                { "distanceKm", 18 },
+                { "avgHeartRate", 145 },
+                { "fatigue", "very_tired" }
+            };
+            result.ExtractionConfidence = 0.85;
+            result.Title = "骑行 18km (very tired)";
+            return;
+        }
+        else if (text.Contains("low_confidence"))
+        {
+            result.StructuredData = new Dictionary<string, object>
+            {
+                { "distanceKm", 10 }
+            };
+            result.ExtractionConfidence = 0.5;
+            result.Title = "骑行记录 (Low Confidence)";
+            return;
+        }
+
         // 提取距离：支持 "18km" "18公里" "18千米"
         var distanceMatch = Regex.Match(text, @"(\d+(?:\.\d+)?)\s*(?:km|公里|千米)", RegexOptions.IgnoreCase);
         double? distanceKm = distanceMatch.Success
@@ -99,10 +122,10 @@ public class MockLlmService : ILlmService
 
         // 按规则只写入有值的字段（严禁写 0 默认值）
         var sd = new Dictionary<string, object>();
-        if (distanceKm.HasValue)    sd["distanceKm"]      = distanceKm.Value;
-        if (avgHeartRate.HasValue)  sd["avgHeartRate"]     = avgHeartRate.Value;
+        if (distanceKm.HasValue)      sd["distanceKm"]      = distanceKm.Value;
+        if (avgHeartRate.HasValue)    sd["avgHeartRate"]     = avgHeartRate.Value;
         if (durationMinutes.HasValue) sd["durationMinutes"] = durationMinutes.Value;
-        if (fatigue != null)         sd["fatigue"]          = fatigue;
+        if (fatigue != null)          sd["fatigue"]          = fatigue;
         result.StructuredData = sd;
     }
 
