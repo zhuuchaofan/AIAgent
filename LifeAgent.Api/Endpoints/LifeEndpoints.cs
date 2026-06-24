@@ -85,5 +85,49 @@ public static class LifeEndpoints
                 }
             });
         });
+
+        // GET /api/life/events
+        group.MapGet("/events", async (
+            HttpContext ctx,
+            ILifeEventService lifeEventService,
+            string? type = "all",
+            int limit = 20,
+            string? cursor = null) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            // 调用 Service 执行带 Cursor 的翻页查询
+            var result = await lifeEventService.ListEventsAsync(userId, type, limit, cursor);
+
+            // 映射为 DTO，过滤掉 rawLlmOutput
+            var dtoList = result.Data.Select(e => new TimelineEventDto
+            {
+                Id = e.Id,
+                Type = e.Type,
+                SchemaVersion = e.SchemaVersion,
+                Title = e.Title,
+                Content = e.Content,
+                OccurredAt = e.OccurredAt.ToString("O"),
+                CreatedAt = e.CreatedAt.ToString("O"),
+                TimeZone = e.TimeZone,
+                Tags = e.Tags,
+                Importance = e.Importance,
+                Source = e.Source,
+                StructuredData = e.StructuredData,
+                ExtractionConfidence = e.ExtractionConfidence,
+                NeedsReview = e.NeedsReview
+            }).ToList();
+
+            return Results.Ok(new ListEventsResponse
+            {
+                Success = true,
+                NextCursor = result.NextCursor,
+                Data = dtoList
+            });
+        });
     }
 }
