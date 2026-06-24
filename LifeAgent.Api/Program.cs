@@ -1,17 +1,26 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using Google.Cloud.Firestore;
 using LifeAgent.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Firestore 初始化（注册为单例）────────────────────────────────
+// GCP 项目 ID 优先读取环境变量 FIRESTORE_PROJECT_ID；
+// 本地开发可在 launchSettings.json 或 shell export 中设置。
+// Firestore SDK 会自动读取 GOOGLE_APPLICATION_CREDENTIALS 或 GCP ADC 凭证。
+var firestoreProjectId = builder.Configuration["Firestore:ProjectId"]
+    ?? Environment.GetEnvironmentVariable("FIRESTORE_PROJECT_ID")
+    ?? "copper-affinity-467409-k7";
+
+builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
+
 var app = builder.Build();
 
 // ── Firebase App 初始化（非 Mock 模式才需要）───────────────────
-// Mock 模式下直接跳过，不初始化 Firebase SDK
 var useMockAuth = Environment.GetEnvironmentVariable("USE_MOCK_AUTH");
 if (!string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
 {
-    // 生产/测试环境：用 GOOGLE_APPLICATION_CREDENTIALS 或 GCP ADC 自动加载凭证
     if (FirebaseApp.DefaultInstance == null)
     {
         FirebaseApp.Create(new AppOptions
@@ -23,11 +32,9 @@ if (!string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
 }
 
 // ── 中间件注册顺序 ───────────────────────────────────────────
-// FirebaseAuthMiddleware 放在所有业务路由之前
 app.UseMiddleware<FirebaseAuthMiddleware>();
 
 // ── 路由 ────────────────────────────────────────────────────
-// GET /health 不需要鉴权（中间件内部已豁免）
 app.MapGet("/health", () => Results.Ok("healthy"));
 
 app.Run();
