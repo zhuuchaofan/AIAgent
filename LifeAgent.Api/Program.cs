@@ -17,8 +17,16 @@ builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
 
 // ── 业务 Service 注册 ─────────────────────────────────────────
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
-builder.Services.AddScoped<ILlmService, MockLlmService>();
 
+var useMockLlm = Environment.GetEnvironmentVariable("USE_MOCK_LLM");
+if (string.Equals(useMockLlm, "true", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddScoped<ILlmService, MockLlmService>();
+}
+else
+{
+    builder.Services.AddHttpClient<ILlmService, GeminiLlmService>();
+}
 var app = builder.Build();
 
 // ── Firebase App 初始化（非 Mock 模式才需要）───────────────────
