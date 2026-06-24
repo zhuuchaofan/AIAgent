@@ -1,0 +1,28 @@
+# 覆盖全局 gitignore 的 *.json 规则，允许项目 JSON 文件入库
+!*.json
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.csproj.user
+
+# 敏感文件 & 凭证（仅精确文件名，不使用通配 *.json.local 防误伤 appsettings）
+serviceAccountKey.json
+google-credentials.json
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# 前端 (Next.js)
+life-web/node_modules/
+life-web/.next/
+life-web/out/
+life-web/.env*.local
+
+# 日志
+*.log
