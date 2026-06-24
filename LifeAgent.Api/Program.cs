@@ -54,6 +54,9 @@ app.MapLifeEndpoints();
 // GET /health — 无需鉴权
 app.MapGet("/health", () => Results.Ok("healthy"));
 
+// 根目录访问
+app.MapGet("/", () => Results.Ok("LifeAgent API is running. Please use /health to check status."));
+
 // POST /debug/save-mock-event — 临时测试端点
 // 用一个手写 Mock LifeEvent 验证 Firestore 写入链路是否通畅。
 // 验证完成后可删除此端点。
