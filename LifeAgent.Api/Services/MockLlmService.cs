@@ -88,7 +88,7 @@ public class MockLlmService : ILlmService
         int? durationMinutes = durMatch.Success ? int.Parse(durMatch.Groups[1].Value) : null;
 
         // 疲劳度检测
-        string? fatigue = text.Contains("很累") || text.Contains("疲惫") || text.Contains("腿酸") || text.Contains("大腿酸")
+        string? fatigue = text.Contains("很累") || text.Contains("疲惫") || text.Contains("腿酸") || text.Contains("大腿酸") || text.Contains("酸")
             ? "medium"
             : null;
 
