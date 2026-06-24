@@ -53,8 +53,8 @@ app.MapPost("/debug/save-mock-event", async (
     if (string.IsNullOrEmpty(userId))
         return Results.Unauthorized();
 
-    // 手写 Mock 事件（模拟 LLM 解析后的结构化结果）
-    var mockEvent = new LifeEvent
+    // 手写 Mock 事件 A（骑行）
+    var eventA = new LifeEvent
     {
         Type    = "cycling",
         Title   = "骑行 18km",
@@ -72,15 +72,73 @@ app.MapPost("/debug/save-mock-event", async (
         }
     };
 
-    var saved = await svc.SaveEventAsync(userId, mockEvent);
+    // 手写 Mock 事件 B（猫）— 稍等 50ms 确保 occurredAt 时间戳不同
+    await Task.Delay(50);
+    var eventB = new LifeEvent
+    {
+        Type    = "cat",
+        Title   = "喂猫并观察行为",
+        Content = "今天猫咪喝了很多水，看起来很活跃。",
+        TimeZone = "Asia/Shanghai",
+        Tags     = ["猫", "健康"],
+        Importance = 2,
+        ExtractionConfidence = 0.88,
+        NeedsReview = false,
+        StructuredData = new()
+        {
+            ["catName"] = "小橘"
+        }
+    };
+
+    var savedA = await svc.SaveEventAsync(userId, eventA);
+    var savedB = await svc.SaveEventAsync(userId, eventB);
 
     return Results.Ok(new
     {
         success = true,
-        message = "Mock 事件已写入 Firestore",
-        eventId = saved.Id,
-        userId  = saved.UserId,
-        path    = $"users/{saved.UserId}/life_events/{saved.Id}"
+        message = "2 条 Mock 事件已写入 Firestore",
+        events  = new[]
+        {
+            new { eventId = savedA.Id, type = savedA.Type, occurredAt = savedA.OccurredAt },
+            new { eventId = savedB.Id, type = savedB.Type, occurredAt = savedB.OccurredAt }
+        }
+    });
+});
+
+// GET /debug/list-events — 临时分页查询测试端点
+// 验证 ListEventsAsync 的 cursor 分页、排序、路径正确性。
+app.MapGet("/debug/list-events", async (
+    HttpContext ctx,
+    ILifeEventService svc,
+    string? type   = null,
+    int     limit  = 20,
+    string? cursor = null) =>
+{
+    var userId = ctx.Items["userId"] as string;
+    if (string.IsNullOrEmpty(userId))
+        return Results.Unauthorized();
+
+    var result = await svc.ListEventsAsync(userId, type, limit, cursor);
+
+    return Results.Ok(new
+    {
+        count      = result.Data.Count,
+        nextCursor = result.NextCursor,
+        // 解码 nextCursor 便于肉眼核查
+        nextCursorDecoded = result.NextCursor is not null
+            ? System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(result.NextCursor))
+            : null,
+        data = result.Data.Select(e => new
+        {
+            e.Id,
+            e.UserId,
+            e.Type,
+            e.Title,
+            occurredAt = e.OccurredAt.ToString("O"),
+            createdAt  = e.CreatedAt.ToString("O"),
+            e.SchemaVersion,
+            e.Source
+        })
     });
 });
 
