@@ -165,4 +165,17 @@ public class LifeEventService : ILifeEventService
             NextCursor = nextCursor
         };
     }
+
+    public async Task<LifeEvent?> GetEventAsync(string userId, string eventId)
+    {
+        var docRef = _db.Collection("users").Document(userId).Collection("life_events").Document(eventId);
+        var snapshot = await docRef.GetSnapshotAsync();
+
+        if (!snapshot.Exists)
+        {
+            return null;
+        }
+
+        return snapshot.ConvertTo<LifeEvent>();
+    }
 }

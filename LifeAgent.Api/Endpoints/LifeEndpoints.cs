@@ -129,5 +129,59 @@ public static class LifeEndpoints
                 Data = dtoList
             });
         });
+
+        // GET /api/life/events/{id}
+        group.MapGet("/events/{id}", async (
+            string id,
+            HttpContext ctx,
+            ILifeEventService lifeEventService,
+            IWebHostEnvironment env) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var lifeEvent = await lifeEventService.GetEventAsync(userId, id);
+            if (lifeEvent == null)
+            {
+                return Results.NotFound(new ErrorResponse
+                {
+                    Success = false,
+                    Error = new ErrorDetail { Code = "EVENT_NOT_FOUND", Message = $"事件 {id} 不存在" }
+                });
+            }
+
+            var dto = new EventDetailDto
+            {
+                Id = lifeEvent.Id,
+                Type = lifeEvent.Type,
+                SchemaVersion = lifeEvent.SchemaVersion,
+                Title = lifeEvent.Title,
+                Content = lifeEvent.Content,
+                OccurredAt = lifeEvent.OccurredAt.ToString("O"),
+                CreatedAt = lifeEvent.CreatedAt.ToString("O"),
+                TimeZone = lifeEvent.TimeZone,
+                Tags = lifeEvent.Tags,
+                Importance = lifeEvent.Importance,
+                Source = lifeEvent.Source,
+                StructuredData = lifeEvent.StructuredData,
+                ExtractionConfidence = lifeEvent.ExtractionConfidence,
+                NeedsReview = lifeEvent.NeedsReview
+            };
+
+            // Debug / Development 环境下暴露 rawLlmOutput
+            if (env.IsDevelopment() || env.EnvironmentName == "Debug")
+            {
+                dto.RawLlmOutput = lifeEvent.RawLlmOutput;
+            }
+
+            return Results.Ok(new EventDetailResponse
+            {
+                Success = true,
+                Data = dto
+            });
+        });
     }
 }

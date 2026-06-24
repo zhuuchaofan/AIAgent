@@ -29,4 +29,9 @@ public interface ILifeEventService
         string? type  = null,
         int    limit  = 20,
         string? cursor = null);
+
+    /// <summary>
+    /// 根据 ID 获取事件（按用户隔离）
+    /// </summary>
+    Task<LifeEvent?> GetEventAsync(string userId, string eventId);
 }
