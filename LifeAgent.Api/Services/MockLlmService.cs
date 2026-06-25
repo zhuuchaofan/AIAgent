@@ -48,6 +48,51 @@ public class MockLlmService : ILlmService
             BuildUnknownEvent(text, result);
         }
 
+        // ── 3. 补充 Mock 提醒三要素规则 ──
+        if (text.Contains("给猫剪指甲") && text.Contains("明天下午3点"))
+        {
+            result.DetectedReminderIntent = true;
+            result.ReminderTitle = "给猫剪指甲";
+            var tz = string.IsNullOrEmpty(timeZone) ? "Asia/Shanghai" : timeZone;
+            TimeZoneInfo zone;
+            try
+            {
+                zone = TimeZoneInfo.FindSystemTimeZoneById(tz);
+            }
+            catch
+            {
+                zone = TimeZoneInfo.Utc;
+            }
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone);
+            var localTomorrow3Pm = new DateTime(localNow.Year, localNow.Month, localNow.Day, 15, 0, 0, DateTimeKind.Unspecified).AddDays(1);
+            
+            DateTime utcTomorrow3Pm;
+            if (zone == TimeZoneInfo.Utc)
+            {
+                utcTomorrow3Pm = DateTime.SpecifyKind(localTomorrow3Pm.AddHours(-8), DateTimeKind.Utc);
+            }
+            else
+            {
+                utcTomorrow3Pm = TimeZoneInfo.ConvertTimeToUtc(localTomorrow3Pm, zone);
+            }
+            result.ReminderDueAtIso = utcTomorrow3Pm.ToString("yyyy-MM-ddTHH:mm:ssZ");
+            result.ReminderDescription = "给猫剪指甲";
+        }
+        else if (text.Contains("买一本新书") && text.Contains("以后记得提醒"))
+        {
+            result.DetectedReminderIntent = true;
+            result.ReminderTitle = "买一本新书";
+            result.ReminderDueAtIso = null;
+            result.ReminderDescription = "买一本新书";
+        }
+        else if (text.Contains("测试非法时间"))
+        {
+            result.DetectedReminderIntent = true;
+            result.ReminderTitle = "测试非法时间";
+            result.ReminderDueAtIso = "INVALID_TIME";
+            result.ReminderDescription = "测试非法时间";
+        }
+
         _logger.LogInformation(
             "MockLlmService 解析完成：type={Type}, confidence={Conf}, reminderIntent={Reminder}",
             result.Type, result.ExtractionConfidence, result.DetectedReminderIntent);

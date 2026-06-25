@@ -6,6 +6,7 @@
 3. 所有数据操作均限制在当前用户的子集合路径下（例如 `users/{uid}/life_events/...`，`users/{uid}/reminders/...`）。由于路径天然隔离，后端将直接对当前登录用户的子集合进行操作。
 4. 任何涉及特定资源 ID 的操作（如 `GET`, `PUT`, `DELETE`, `PATCH` 对特定 `{id}` 的操作），后端均需在当前用户的子集合内定位该文档。如找不到或跨用户非法请求，为防枚举，**一律返回 `404 Not Found`**（或显式返回 `403 Forbidden`）。
 5. 未携带 Token 或 Token 无效、过期，**一律返回 `401 Unauthorized`**。
+6. 任何针对 StructuredData 强类型 Schema 校验失败（包括属性缺失、多余字段、字段类型不匹配等），后端一律返回 **`422 Unprocessable Entity`** (错误码 `SCHEMA_VALIDATION_FAILED`)。
 
 ---
 

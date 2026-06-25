@@ -54,6 +54,104 @@ public class LifeEventService : ILifeEventService
         return lifeEvent;
     }
 
+    /// <inheritdoc/>
+    public async Task<(LifeEvent, Reminder?)> SaveEventWithReminderAsync(string userId, LifeEvent lifeEvent, ParsedEvent parsedEvent)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("userId 不能为空", nameof(userId));
+
+        var eventId = $"evt_{Guid.NewGuid():N}";
+        var now = DateTime.UtcNow;
+
+        lifeEvent.Id         = eventId;
+        lifeEvent.UserId     = userId;
+        lifeEvent.CreatedAt  = now;
+        lifeEvent.OccurredAt = now;
+        lifeEvent.Source     = "manual";
+
+        Reminder? reminder = null;
+
+        if (parsedEvent.DetectedReminderIntent)
+        {
+            lifeEvent.ReminderIntentDetected = true;
+            if (string.IsNullOrWhiteSpace(parsedEvent.ReminderDueAtIso))
+            {
+                lifeEvent.ReminderParseStatus = "missing_due_time";
+                lifeEvent.ReminderParseNote = "检测到提醒意图但完全缺失时间";
+            }
+            else
+            {
+                if (DateTime.TryParse(parsedEvent.ReminderDueAtIso, out var parsedUtc))
+                {
+                    lifeEvent.ReminderParseStatus = "success";
+                    var reminderId = $"rem_{Guid.NewGuid():N}";
+                    lifeEvent.CreatedReminderId = reminderId;
+
+                    reminder = new Reminder
+                    {
+                        Id = reminderId,
+                        UserId = userId,
+                        SourceEventId = eventId,
+                        Title = parsedEvent.ReminderTitle ?? lifeEvent.Title,
+                        Description = parsedEvent.ReminderDescription,
+                        DueAt = parsedUtc.ToUniversalTime(),
+                        Timezone = lifeEvent.TimeZone,
+                        Status = "pending",
+                        RepeatRule = "none",
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        LlmConfidence = parsedEvent.ExtractionConfidence,
+                        RawText = lifeEvent.Content
+                    };
+                }
+                else
+                {
+                    lifeEvent.ReminderParseStatus = "invalid_due_time";
+                    lifeEvent.ReminderParseNote = $"检测到提醒意图，但时间格式不合法: {parsedEvent.ReminderDueAtIso}";
+                }
+            }
+        }
+        else
+        {
+            lifeEvent.ReminderIntentDetected = false;
+            lifeEvent.ReminderParseStatus = "none";
+        }
+
+        // Schema 强类型约束校验与过滤
+        LifeEventSchemaValidator.ValidateAndSanitize(lifeEvent);
+
+        var batch = _db.StartBatch();
+
+        var eventDocRef = _db
+            .Collection("users")
+            .Document(userId)
+            .Collection("life_events")
+            .Document(eventId);
+
+        batch.Set(eventDocRef, lifeEvent);
+
+        if (reminder != null)
+        {
+            var reminderDocRef = _db
+                .Collection("users")
+                .Document(userId)
+                .Collection("reminders")
+                .Document(reminder.Id);
+
+            batch.Set(reminderDocRef, reminder);
+        }
+
+        _logger.LogInformation(
+            "开始执行 WriteBatch 双写。UserId={UserId}, EventId={EventId}, HasReminder={HasReminder}, ParseStatus={ParseStatus}",
+            userId, eventId, reminder != null, lifeEvent.ReminderParseStatus);
+
+        await batch.CommitAsync();
+
+        _logger.LogInformation("WriteBatch 双写提交成功。");
+
+        return (lifeEvent, reminder);
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ListEventsAsync
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

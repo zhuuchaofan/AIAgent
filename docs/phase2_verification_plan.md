@@ -126,6 +126,16 @@ curl -X GET "http://localhost:5000/api/life/events?limit=20" \
    ```
 2. 验证结果列表里的每一条记录其 `tags` 数组中均含有 `"骑行"`，且绝对不含其他用户的任何事件。
 
+### 3. 非法 structuredData 格式校验 (422 Unprocessable Entity)
+1. 发送包含非法格式的 `structuredData`（如不合法的 JSON 结构或不符合 schema 规定的属性）的 PUT 或 POST 接口：
+   ```bash
+   curl -i -X PUT http://localhost:5000/api/life/events/TEST_EVENT_ID \
+     -H "Authorization: Bearer TOKEN_A" \
+     -H "Content-Type: application/json" \
+     -d "{\"title\": \"测试非法数据\", \"structuredData\": \"not-an-object\"}"
+   ```
+2. *预期响应*：`HTTP/1.1 422 Unprocessable Entity`，响应体中包含错误码 `SCHEMA_VALIDATION_FAILED`。
+
 ---
 
 ## 四、 提醒闭环逻辑验证 (Phase 2B)

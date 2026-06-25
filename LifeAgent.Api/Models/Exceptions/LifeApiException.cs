@@ -52,3 +52,9 @@ public class SchemaValidationFailedException : LifeApiException
     public SchemaValidationFailedException(string message, object? details = null) 
         : base(message, "SCHEMA_VALIDATION_FAILED", 422, details) { }
 }
+
+public class ReminderNotFoundException : LifeApiException
+{
+    public ReminderNotFoundException(string id) 
+        : base($"提醒 {id} 不存在", "REMINDER_NOT_FOUND", 404, new { id }) { }
+}

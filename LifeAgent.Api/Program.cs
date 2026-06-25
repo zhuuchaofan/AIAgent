@@ -24,6 +24,7 @@ builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
 
 // ── 业务 Service 注册 ─────────────────────────────────────────
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
+builder.Services.AddScoped<IReminderService, ReminderService>();
 
 var useMockLlm = Environment.GetEnvironmentVariable("USE_MOCK_LLM");
 if (string.Equals(useMockLlm, "true", StringComparison.OrdinalIgnoreCase))
@@ -58,6 +59,7 @@ app.UseMiddleware<FirebaseAuthMiddleware>();
 // ── 路由 ──────────────────────────────────────────────────────
 
 app.MapLifeEndpoints();
+app.MapReminderEndpoints();
 app.MapMigrationEndpoints();
 
 // GET /health — 无需鉴权

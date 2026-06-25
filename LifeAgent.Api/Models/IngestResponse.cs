@@ -12,6 +12,9 @@ public class IngestResponse
     /// <summary>Phase 1 固定为 false，提醒功能后续阶段开放</summary>
     public bool ReminderCreated { get; set; } = false;
 
+    /// <summary>关联创建的 Reminder ID</summary>
+    public string? ReminderId { get; set; }
+
     public IngestResponseData? Data { get; set; }
 }
 
@@ -32,6 +35,7 @@ public class IngestResponseData
     public Dictionary<string, object> StructuredData { get; set; } = new();
     public double ExtractionConfidence { get; set; }
     public bool NeedsReview { get; set; }
+    public string? ReminderId { get; set; }
 }
 
 /// <summary>统一错误响应体</summary>

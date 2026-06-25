@@ -27,5 +27,15 @@ public class ParsedEvent
     public double ExtractionConfidence { get; set; } = 0.5;
     public bool NeedsReview { get; set; } = true;
     public bool DetectedReminderIntent { get; set; } = false;
+
+    [System.Text.Json.Serialization.JsonPropertyName("reminderTitle")]
+    public string? ReminderTitle { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("reminderDueAt")]
+    public string? ReminderDueAtIso { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("reminderDescription")]
+    public string? ReminderDescription { get; set; }
+
     public string? RawLlmOutput { get; set; }
 }

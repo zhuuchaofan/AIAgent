@@ -98,6 +98,22 @@ public class LifeEvent
     [FirestoreProperty("needsReview")]
     public bool NeedsReview { get; set; }
 
+    /// <summary>是否检测到提醒意图</summary>
+    [FirestoreProperty("reminderIntentDetected")]
+    public bool ReminderIntentDetected { get; set; } = false;
+
+    /// <summary>提醒解析状态：success | missing_due_time | invalid_due_time | llm_parse_failed | none</summary>
+    [FirestoreProperty("reminderParseStatus")]
+    public string ReminderParseStatus { get; set; } = "none";
+
+    /// <summary>解析状态备注或错误信息</summary>
+    [FirestoreProperty("reminderParseNote")]
+    public string? ReminderParseNote { get; set; }
+
+    /// <summary>若成功创建提醒，关联的 Reminder ID</summary>
+    [FirestoreProperty("createdReminderId")]
+    public string? CreatedReminderId { get; set; }
+
     /// <summary>
     /// 调试用：原始大模型输出 JSON 文本（可空）。
     /// 生产环境 API 响应中不返回该字段；Timeline 列表永远不返回。

@@ -51,21 +51,35 @@ public static class LifeEndpoints
             // Schema 强类型约束校验与过滤
             LifeEventSchemaValidator.ValidateAndSanitize(lifeEvent);
 
-            // 保存到 Firestore
-            var savedEvent = await lifeEventService.SaveEventAsync(userId, lifeEvent);
+            // 保存到 Firestore (原子双写)
+            var (savedEvent, createdReminder) = await lifeEventService.SaveEventWithReminderAsync(userId, lifeEvent, parsedEvent);
 
             string message = "已成功记录事件。";
-            if (parsedEvent.DetectedReminderIntent)
+            bool reminderCreated = false;
+            if (savedEvent.ReminderIntentDetected)
             {
-                message += "检测到提醒意图，但阶段 1 暂不支持提醒自动创建，该功能将在后续阶段开启。";
+                if (savedEvent.ReminderParseStatus == "success" && createdReminder != null)
+                {
+                    message += $"已自动创建关联的提醒事项(ID: {createdReminder.Id})。";
+                    reminderCreated = true;
+                }
+                else if (savedEvent.ReminderParseStatus == "missing_due_time")
+                {
+                    message += "检测到提醒意图，但因完全缺失时间未能创建提醒事项。";
+                }
+                else if (savedEvent.ReminderParseStatus == "invalid_due_time")
+                {
+                    message += "检测到提醒意图，但因时间格式不合法未能创建提醒事项。";
+                }
             }
 
             return Results.Ok(new IngestResponse
             {
                 Success = true,
                 Message = message,
-                DetectedReminderIntent = parsedEvent.DetectedReminderIntent,
-                ReminderCreated = false,
+                DetectedReminderIntent = savedEvent.ReminderIntentDetected,
+                ReminderCreated = reminderCreated,
+                ReminderId = createdReminder?.Id,
                 Data = new IngestResponseData
                 {
                     Id = savedEvent.Id,
@@ -81,7 +95,8 @@ public static class LifeEndpoints
                     Source = savedEvent.Source,
                     StructuredData = savedEvent.StructuredData,
                     ExtractionConfidence = savedEvent.ExtractionConfidence,
-                    NeedsReview = savedEvent.NeedsReview
+                    NeedsReview = savedEvent.NeedsReview,
+                    ReminderId = createdReminder?.Id
                 }
             });
         });

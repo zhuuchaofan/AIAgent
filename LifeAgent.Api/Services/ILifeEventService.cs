@@ -17,6 +17,12 @@ public interface ILifeEventService
     Task<LifeEvent> SaveEventAsync(string userId, LifeEvent lifeEvent);
 
     /// <summary>
+    /// 原子双写：保存生活事件的同时，如果检测到提醒意图且由于日期合法，会同步创建物理提醒事项。
+    /// 使用 Firestore WriteBatch 实现。
+    /// </summary>
+    Task<(LifeEvent, Reminder?)> SaveEventWithReminderAsync(string userId, LifeEvent lifeEvent, ParsedEvent parsedEvent);
+
+    /// <summary>
     /// 按 occurredAt DESC 分页查询指定用户的生活事件列表。
     /// 查询路径：users/{userId}/life_events
     /// </summary>

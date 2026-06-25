@@ -62,7 +62,10 @@ public class GeminiLlmService : ILlmService
   ""structuredData"": {}, // 根据 type 提取对应指标的字典
   ""extractionConfidence"": 0.85, // 你对提取结果的置信度 (0.0 到 1.0)
   ""needsReview"": false, // 如果遇到拿捏不准的数据或模糊意图，设置为 true
-  ""detectedReminderIntent"": false // 如果用户提到'提醒我'或未来计划，设置为 true
+  ""detectedReminderIntent"": false, // 如果用户提到'提醒我'、'记得...'、'待办...'或含有明显的未来提醒/待办意图，设置为 true
+  ""reminderTitle"": ""string"", // 当 detectedReminderIntent 为 true 时，提取要提醒事宜的简短标题（如'给猫剪指甲'），否则设为 null
+  ""reminderDueAt"": ""string"", // 当 detectedReminderIntent 为 true 时，根据用户提供的时间（结合用户当前本地时区和当前服务器时间，计算为符合 ISO8601 格式的 UTC 时间戳，如'2026-06-26T07:00:00Z'）。如果模糊或未提具体时间（如'以后提醒我'），设为 null
+  ""reminderDescription"": ""string"" // 当 detectedReminderIntent 为 true 时的提醒详细描述或补充说明（可选），否则设为 null
 }
 
 【系统字段禁令】（极其重要）
@@ -145,7 +148,7 @@ public class GeminiLlmService : ILlmService
             // 保存 RawLlmOutput
             parsedEvent.RawLlmOutput = rawOutput;
 
-            // 强制忽略提醒功能（即使 detectedReminderIntent=true，后续我们在业务层也不生成提醒）
+            // 提取完毕，返回 parsedEvent
             return parsedEvent;
         }
         catch (JsonException ex)
