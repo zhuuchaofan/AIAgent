@@ -58,6 +58,7 @@ app.UseMiddleware<FirebaseAuthMiddleware>();
 // ── 路由 ──────────────────────────────────────────────────────
 
 app.MapLifeEndpoints();
+app.MapMigrationEndpoints();
 
 // GET /health — 无需鉴权
 app.MapGet("/health", () => Results.Ok("healthy"));

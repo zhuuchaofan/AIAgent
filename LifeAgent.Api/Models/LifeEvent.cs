@@ -23,6 +23,19 @@ public class LifeEvent
     [FirestoreProperty("createdAt")]
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>记录最后一次被编辑的时间</summary>
+    [FirestoreProperty("updatedAt")]
+    public DateTime? UpdatedAt { get; set; }
+
+    /// <summary>软删除标识，查询 Timeline 时默认过滤</summary>
+    [FirestoreProperty("isDeleted")]
+    public bool IsDeleted { get; set; } = false;
+
+    /// <summary>记录被软删除的 UTC 时间</summary>
+    [FirestoreProperty("deletedAt")]
+    public DateTime? DeletedAt { get; set; }
+
+
     // ── 大模型/Mock 可写字段（仅限纯业务内容）────────────────────────
 
     /// <summary>事件核心分类：cycling | home | cat | life | unknown</summary>
