@@ -17,7 +17,7 @@
         *   **DryRun 支持**：支持传入参数 `?dryRun=true`，此时仅扫描数据库文档统计数量，绝不写入任何更改。
         *   **幂等性**：迁移操作必须是幂等的。若文档已存在 `isDeleted` 字段，直接跳过。
         *   **批处理写入**：采用 Firestore `WriteBatch` 机制进行分批写入，每批写入操作数量（`writes`）绝不能超过 Firestore 限制的 **500 次**。
-        *   **指标输出**：迁移结束时，响应体必须结构化输出：`scannedCount`（总扫描数）、`migratedCount`（成功写入迁移数）、`skippedCount`（幂等跳过数）、`failedCount`（迁移失败数）。
+        *   **指标输出**：迁移结束时，响应体必须结构化输出：`scannedCount`（总扫描数）、`migratedCount`（成功写入迁移数，dryRun 时必为 0）、`wouldMigrateCount`（干跑时统计预计修改量，非 dryRun 时为 0）、`skippedCount`（幂等跳过数）、`failedCount`（迁移失败数）。
 *   **涉及文件**：新建 `MigrationController.cs` 或 `MigrationService.cs`（带有开发环境限制或安全密钥拦截）。
 *   **验收方式**：
     *   执行迁移 API（带 Secret）。

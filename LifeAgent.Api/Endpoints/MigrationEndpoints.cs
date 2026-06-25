@@ -53,6 +53,7 @@ public static class MigrationEndpoints
 
             int scannedCount = 0;
             int migratedCount = 0;
+            int wouldMigrateCount = 0;
             int skippedCount = 0;
             int failedCount = 0;
 
@@ -90,7 +91,7 @@ public static class MigrationEndpoints
 
                     if (dryRun == true)
                     {
-                        migratedCount++;
+                        wouldMigrateCount++;
                         continue;
                     }
 
@@ -128,14 +129,15 @@ public static class MigrationEndpoints
                 await batch.CommitAsync();
             }
 
-            logger.LogInformation("Phase 2A-0 迁移完成：scanned={Scanned}, migrated={Migrated}, skipped={Skipped}, failed={Failed}",
-                scannedCount, migratedCount, skippedCount, failedCount);
+            logger.LogInformation("Phase 2A-0 迁移完成：scanned={Scanned}, migrated={Migrated}, wouldMigrate={WouldMigrate}, skipped={Skipped}, failed={Failed}",
+                scannedCount, migratedCount, wouldMigrateCount, skippedCount, failedCount);
 
             return Results.Ok(new MigrationResponse
             {
                 Success = true,
                 ScannedCount = scannedCount,
                 MigratedCount = migratedCount,
+                WouldMigrateCount = wouldMigrateCount,
                 SkippedCount = skippedCount,
                 FailedCount = failedCount
             });
@@ -148,6 +150,7 @@ public class MigrationResponse
     public bool Success { get; set; }
     public int ScannedCount { get; set; }
     public int MigratedCount { get; set; }
+    public int WouldMigrateCount { get; set; }
     public int SkippedCount { get; set; }
     public int FailedCount { get; set; }
 }

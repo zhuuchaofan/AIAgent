@@ -20,9 +20,10 @@
      *预期响应*：
      ```json
      {
-       "status": "success",
+       "success": true,
        "scannedCount": 42,
        "migratedCount": 0,
+       "wouldMigrateCount": 42,
        "skippedCount": 0,
        "failedCount": 0
      }

@@ -20,11 +20,13 @@
 *   **Request Query**：
     `dryRun` (可选，Boolean，默认 `false`。若为 `true` 则仅统计不写入更改)
 *   **Response** (`200 OK`)：
+    *dryRun=true 模式下：`migratedCount` 必为 0，`wouldMigrateCount` 统计预计修改量；非 dryRun 模式下：`migratedCount` 记录实际写入量，`wouldMigrateCount` 为 0。*
     ```json
     {
       "success": true,
       "scannedCount": 42,
       "migratedCount": 35,
+      "wouldMigrateCount": 0,
       "skippedCount": 7,
       "failedCount": 0
     }
