@@ -9,11 +9,15 @@ obj/
 .vs/
 *.csproj.user
 
-# 敏感文件 & 凭证（仅精确文件名，不使用通配 *.json.local 防误伤 appsettings）
+# 敏感文件 & 凭证
 serviceAccountKey.json
 google-credentials.json
 .env
 .env.local
+.env.production
+appsettings.Development.json
+appsettings.*.json
+*.key
 
 # macOS
 .DS_Store
