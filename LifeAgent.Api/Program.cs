@@ -9,9 +9,16 @@ using LifeAgent.Api.Endpoints;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Firestore 初始化（注册为单例）────────────────────────────────
+// Firestore 读写使用 GCP 计费项目
 var firestoreProjectId = builder.Configuration["Firestore:ProjectId"]
     ?? Environment.GetEnvironmentVariable("FIRESTORE_PROJECT_ID")
     ?? "copper-affinity-467409-k7";
+
+// Firebase Auth 验签必须使用与前端 Firebase App 相同的 Firebase 项目
+// 前端 NEXT_PUBLIC_FIREBASE_PROJECT_ID=my-agent-app-a5e42
+var firebaseProjectId = builder.Configuration["Firebase:ProjectId"]
+    ?? Environment.GetEnvironmentVariable("FIREBASE_PROJECT_ID")
+    ?? "my-agent-app-a5e42";
 
 builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
 
@@ -37,9 +44,10 @@ if (!string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
     {
         FirebaseApp.Create(new AppOptions
         {
-            Credential = GoogleCredential.GetApplicationDefault()
+            Credential = GoogleCredential.GetApplicationDefault(),
+            ProjectId = firebaseProjectId   // 必须与前端 Firebase Auth 项目一致
         });
-        app.Logger.LogInformation("Firebase App 初始化完成（使用 ADC 凭证）");
+        app.Logger.LogInformation("Firebase App 初始化完成（ProjectId: {ProjectId}）", firebaseProjectId);
     }
 }
 
