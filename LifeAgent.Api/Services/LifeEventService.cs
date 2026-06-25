@@ -79,39 +79,35 @@ public class LifeEventService : ILifeEventService
         // 上限 100，下限 1
         limit = Math.Clamp(limit, 1, 100);
 
-        // ── 获取全部文档以进行内存过滤排序，绕过 Firestore 复合索引限制 ──
+        // ── 构建基础查询 ───────────────────────────────────────────────
         var collection = _db
             .Collection("users")
             .Document(userId)
             .Collection("life_events");
 
-        var snapshot = await collection.GetSnapshotAsync();
-        var allEvents = snapshot.Documents
-            .Select(d => d.ConvertTo<LifeEvent>())
-            .ToList();
+        Query query = collection
+            .WhereEqualTo("isDeleted", false);
 
-        // ── 内存过滤与排序 ─────────────────────────────────────────────
-        var filteredQuery = allEvents.Where(e => !e.IsDeleted);
-
+        // ── 可选 type 过滤 ────────────────────────────────────────────
         if (!string.IsNullOrEmpty(type)
             && !string.Equals(type, "all", StringComparison.OrdinalIgnoreCase))
         {
-            filteredQuery = filteredQuery.Where(e => string.Equals(e.Type, type, StringComparison.OrdinalIgnoreCase));
+            query = query.WhereEqualTo("type", type);
         }
 
+        // ── 可选 tag 过滤 ─────────────────────────────────────────────
         if (!string.IsNullOrEmpty(tag))
         {
-            filteredQuery = filteredQuery.Where(e => e.Tags != null && e.Tags.Contains(tag));
+            query = query.WhereArrayContains("tags", tag);
         }
 
-        // 稳定双字段排序：occurredAt DESC -> id DESC
-        var sortedList = filteredQuery
-            .OrderByDescending(e => e.OccurredAt)
-            .ThenByDescending(e => e.Id)
-            .ToList();
+        // 排序规则必须跟 OrderByDescending 声明完全一致以支撑 StartAfter 游标
+        query = query
+            .OrderByDescending("occurredAt")
+            .OrderByDescending(FieldPath.DocumentId);
 
-        // ── Cursor 内存分页定位 ─────────────────────────────────────────
-        int startIndex = 0;
+        // ── Cursor 游标定位 ────────────────────────────────────────────
+        // 格式：Base64(JSON, {"occurredAt":"ISO","id":"eventId"})
         if (!string.IsNullOrEmpty(cursor))
         {
             try
@@ -124,12 +120,15 @@ public class LifeEventService : ILifeEventService
 
                 if (cursorObj != null)
                 {
-                    // 根据游标中的 ID 进行定位
-                    var index = sortedList.FindIndex(e => e.Id == cursorObj.Id);
-                    if (index >= 0)
-                    {
-                        startIndex = index + 1;
-                    }
+                    var lastOccurredAt = cursorObj.OccurredAt.ToUniversalTime();
+                    var lastDocId = cursorObj.Id;
+                    var lastDocRef = collection.Document(lastDocId);
+
+                    query = query.StartAfter(Timestamp.FromDateTime(lastOccurredAt), lastDocRef);
+
+                    _logger.LogDebug(
+                        "使用 cursor 翻页：lastOccurredAt={OccurredAt}, lastDocId={DocId}",
+                        lastOccurredAt, lastDocId);
                 }
             }
             catch (Exception ex)
@@ -138,9 +137,19 @@ public class LifeEventService : ILifeEventService
             }
         }
 
-        // ── 截取分页数据 ───────────────────────────────────────────────
-        var pageItems = sortedList.Skip(startIndex).Take(limit).ToList();
-        bool hasMore = sortedList.Count > startIndex + limit;
+        // ── 执行服务端查询（多取 1 条判断 hasMore）───────────────────────
+        query = query.Limit(limit + 1);
+
+        var snapshot = await query.GetSnapshotAsync();
+        var docs     = snapshot.Documents;
+
+        bool hasMore = docs.Count > limit;
+
+        // 截取本页数据（最多 limit 条）
+        var pageItems = docs
+            .Take(limit)
+            .Select(d => d.ConvertTo<LifeEvent>())
+            .ToList();
 
         // ── Cursor 编码 ────────────────────────────────────────────────
         string? nextCursor = null;
@@ -162,7 +171,7 @@ public class LifeEventService : ILifeEventService
         }
 
         _logger.LogInformation(
-            "ListEventsAsync (In-Memory): userId={UserId}, type={Type}, tag={Tag}, limit={Limit}, 返回={Count}, hasMore={HasMore}",
+            "ListEventsAsync (Firestore Server-side): userId={UserId}, type={Type}, tag={Tag}, limit={Limit}, 返回={Count}, hasMore={HasMore}",
             userId, type ?? "all", tag ?? "none", limit, pageItems.Count, hasMore);
 
         return new ListEventsResult
