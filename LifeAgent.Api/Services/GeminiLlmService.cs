@@ -25,12 +25,22 @@ public class GeminiLlmService : ILlmService
         _config = config;
         _logger = logger;
         
-        _apiKey = _config["Gemini:ApiKey"] ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+        // 注意：_config["Gemini:ApiKey"] 在 appsettings.json 中是空字符串 ""，不是 null
+        // 必须用 IsNullOrEmpty 判断，否则 ?? 运算符不会 fallback 到环境变量
+        var configKey = _config["Gemini:ApiKey"];
+        _apiKey = !string.IsNullOrEmpty(configKey)
+            ? configKey
+            : Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+        
         _model = _config["Gemini:Model"] ?? "gemini-2.5-flash";
 
         if (string.IsNullOrEmpty(_apiKey))
         {
             _logger.LogWarning("Gemini API Key 未配置，将导致调用失败！");
+        }
+        else
+        {
+            _logger.LogInformation("GeminiLlmService 初始化完成，Key 前缀: {Prefix}", _apiKey[..Math.Min(8, _apiKey.Length)]);
         }
     }
 
