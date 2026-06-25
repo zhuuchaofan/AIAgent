@@ -28,10 +28,21 @@ public interface ILifeEventService
         string userId,
         string? type  = null,
         int    limit  = 20,
-        string? cursor = null);
+        string? cursor = null,
+        string? tag = null);
 
     /// <summary>
     /// 根据 ID 获取事件（按用户隔离）
     /// </summary>
     Task<LifeEvent?> GetEventAsync(string userId, string eventId);
+
+    /// <summary>
+    /// 更新指定生活事件的业务字段（只允许修改业务内容，且当已软删除时禁止修改）。
+    /// </summary>
+    Task<bool> UpdateEventAsync(string userId, string eventId, LifeEvent updatedEvent);
+
+    /// <summary>
+    /// 软删除指定生活事件（将 isDeleted 设为 true，记录时间戳）。
+    /// </summary>
+    Task<bool> SoftDeleteEventAsync(string userId, string eventId);
 }

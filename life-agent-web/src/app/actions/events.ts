@@ -24,12 +24,13 @@ export async function ingestEvent(text: string, clientTimeZone: string) {
   return data;
 }
 
-export async function getEvents(cursor?: string) {
+export async function getEvents(cursor?: string, tag?: string) {
   const token = await getToken();
   if (!token) throw new Error("Unauthorized");
 
   const url = new URL(`${API_BASE}/api/life/events`);
   if (cursor) url.searchParams.append("cursor", cursor);
+  if (tag) url.searchParams.append("tag", tag);
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -42,6 +43,44 @@ export async function getEvents(cursor?: string) {
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error?.message || "Failed to fetch events");
+  }
+  return data;
+}
+
+export async function updateEvent(id: string, payload: any) {
+  const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
+
+  const res = await fetch(`${API_BASE}/api/life/events/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || "Failed to update event");
+  }
+  return data;
+}
+
+export async function deleteEvent(id: string) {
+  const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
+
+  const res = await fetch(`${API_BASE}/api/life/events/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || "Failed to delete event");
   }
   return data;
 }

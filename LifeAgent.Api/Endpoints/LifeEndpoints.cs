@@ -92,7 +92,8 @@ public static class LifeEndpoints
             ILifeEventService lifeEventService,
             string? type = "all",
             int limit = 20,
-            string? cursor = null) =>
+            string? cursor = null,
+            string? tag = null) =>
         {
             var userId = ctx.Items["userId"] as string;
             if (string.IsNullOrEmpty(userId))
@@ -101,7 +102,7 @@ public static class LifeEndpoints
             }
 
             // 调用 Service 执行带 Cursor 的翻页查询
-            var result = await lifeEventService.ListEventsAsync(userId, type, limit, cursor);
+            var result = await lifeEventService.ListEventsAsync(userId, type, limit, cursor, tag);
 
             // 映射为 DTO，过滤掉 rawLlmOutput
             var dtoList = result.Data.Select(e => new TimelineEventDto
@@ -179,5 +180,108 @@ public static class LifeEndpoints
                 Data = dto
             });
         });
+
+        // PUT /api/life/events/{id}
+        group.MapPut("/events/{id}", async (
+            string id,
+            UpdateEventRequest request,
+            HttpContext ctx,
+            ILifeEventService lifeEventService) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            // 将 request.StructuredData 中的 JsonElement 递归转换为原始 .NET 类型防止 Firestore 报错
+            var cleanedStructuredData = new Dictionary<string, object>();
+            if (request.StructuredData != null)
+            {
+                foreach (var kvp in request.StructuredData)
+                {
+                    var converted = ConvertJsonElement(kvp.Value);
+                    if (converted != null)
+                    {
+                        cleanedStructuredData[kvp.Key] = converted;
+                    }
+                }
+            }
+
+            var updatedEvent = new LifeEvent
+            {
+                Title = request.Title,
+                Content = request.Content,
+                Tags = request.Tags ?? new(),
+                Importance = request.Importance,
+                StructuredData = cleanedStructuredData,
+                Type = request.Type ?? string.Empty
+            };
+
+            var success = await lifeEventService.UpdateEventAsync(userId, id, updatedEvent);
+            if (!success)
+            {
+                throw new EventNotFoundException(id);
+            }
+
+            return Results.Ok(new { success = true, message = "更新成功" });
+        });
+
+        // DELETE /api/life/events/{id}
+        group.MapDelete("/events/{id}", async (
+            string id,
+            HttpContext ctx,
+            ILifeEventService lifeEventService) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            var success = await lifeEventService.SoftDeleteEventAsync(userId, id);
+            if (!success)
+            {
+                throw new EventNotFoundException(id);
+            }
+
+            return Results.Ok(new { success = true, message = "事件已成功软删除" });
+        });
+    }
+
+    private static object? ConvertJsonElement(object value)
+    {
+        if (value is System.Text.Json.JsonElement je)
+        {
+            switch (je.ValueKind)
+            {
+                case System.Text.Json.JsonValueKind.String:
+                    return je.GetString();
+                case System.Text.Json.JsonValueKind.Number:
+                    if (je.TryGetInt64(out long l)) return l;
+                    return je.GetDouble();
+                case System.Text.Json.JsonValueKind.True:
+                    return true;
+                case System.Text.Json.JsonValueKind.False:
+                    return false;
+                case System.Text.Json.JsonValueKind.Null:
+                    return null;
+                case System.Text.Json.JsonValueKind.Object:
+                    var dict = new Dictionary<string, object?>();
+                    foreach (var prop in je.EnumerateObject())
+                    {
+                        dict[prop.Name] = ConvertJsonElement(prop.Value);
+                    }
+                    return dict;
+                case System.Text.Json.JsonValueKind.Array:
+                    var list = new List<object?>();
+                    foreach (var item in je.EnumerateArray())
+                    {
+                        list.Add(ConvertJsonElement(item));
+                    }
+                    return list;
+            }
+        }
+        return value;
     }
 }
