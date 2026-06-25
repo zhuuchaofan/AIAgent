@@ -12,6 +12,7 @@
 *   **安全与执行规范（极重要）**：
     *   **禁止无鉴权暴露**：迁移功能绝不能作为普通的、公开的生产业务 API 暴露。推荐通过本地 CLI 工具、Cloud Run 一次性 Job 或者是仅在开发环境下启用的 Controller 执行。
     *   **密钥鉴权校验**：如果采用 Controller 线上临时调用，必须设计严格的安全准入：强制校对特定的 `X-Migration-Secret` 请求头（比对本地环境变量 `MIGRATION_SECRET`），或者仅允许特定的管理员 Firebase UID 执行，否则一律返回 `403 Forbidden`。
+    *   **迁移生命周期限制**：迁移任务执行完毕并在 Console 确认无误后，**必须将此 Controller 代码从生产路由中完全物理删除，或者通过配置环境变量 `ENABLE_MIGRATION_API=false` 默认完全禁用路由注册**，严禁线上长期暴露迁移端口。
     *   **业务逻辑特性**：
         *   **DryRun 支持**：支持传入参数 `?dryRun=true`，此时仅扫描数据库文档统计数量，绝不写入任何更改。
         *   **幂等性**：迁移操作必须是幂等的。若文档已存在 `isDeleted` 字段，直接跳过。
@@ -50,8 +51,10 @@
 ### 任务 4: 实现 Timeline 编辑 (PUT)
 *   **目标**：提供修改业务数据（title, content, tags, structuredData）的能力。
 *   **涉及文件**：`LifeController.cs`, `LifeEventService.cs`
-*   **实现细节**：增加 `PUT /api/life/events/{id}`。同样基于 `users/{uid}/life_events/{id}` 进行更新，防止覆盖系统字段。
-*   **验收方式**：能成功修改 title 或 tags，更新 `updatedAt`，且跨用户修改会报 404。
+*   **实现细节**：
+    *   增加 `PUT /api/life/events/{id}`。同样基于 `users/{uid}/life_events/{id}` 进行更新，防止覆盖系统字段。
+    *   **防御软删除编辑**：在检索出事件后，**必须先判断 `isDeleted == true`**。若该文档已被标记为已删除，接口直接中断并返回 `404 Not Found`（或 `400 Bad Request`），绝对禁止对其进行任何业务属性覆盖，防止前端由于缓存残留导致已被软删除事件“半复活”。
+*   **验收方式**：能成功修改 title 或 tags，更新 `updatedAt`，且跨用户修改会报 404。尝试编辑已删除文档会返回 404。
 
 ### 任务 5: 前端 Timeline 交互增强
 *   **目标**：前端出现编辑和删除入口。
@@ -66,6 +69,16 @@
 
 ## 🎯 Phase 2B: Reminder 提醒系统闭环
 
+### 任务 6.1: 实现公共 LLM JSON 清洗与提取方法 (ExtractJsonObject)
+*   **目标**：编写健壮的、供 Ingest 与 Daily Summary 共用的 JSON 清洗底座，增强抗噪能力。
+*   **涉及文件**：`LlmHelper.cs` 或 `GeminiLlmService.cs` 内的公共方法。
+*   **实现细节**：
+    *   定义方法：`string ExtractJsonObject(string raw)`。
+    *   **第一步：剥离 Markdown 代码块标记**。剔除首尾可能附带的 ````json`、``` 等标签与换行。
+    *   **第二步：字符匹配截取**。定位并截取字符串中第一个 `{` 到最后一个 `}` 之间的完整字符串内容，剔除 LLM 可能产生的任何前置或后置唠叨废话。
+    *   **第三步：反序列化与异常日志**。若反序列化依旧失败，捕获 JsonException 并向 `agent_runs` 记录 `status="failed"` 及脱敏后的简要错误，完整堆栈仅写入 Cloud Logging。
+    *   **第四步：限制存储大小**。绝不把完整的 LLM 原始超长响应落库，只截取前 200 字符作为 `rawResponsePreview` 保存。
+
 ### 任务 7: 新增 Reminder 模型和 Service
 *   **目标**：基础数据访问层建设。
 *   **涉及文件**：`Reminder.cs`, `ReminderService.cs`
@@ -76,12 +89,13 @@
 *   **涉及文件**：`GeminiLlmService.cs`, `ParsedEvent.cs`
 *   **实现细节**：更新 Prompt，添加 `reminder` JSON 节点，处理时间格式转换及降级逻辑（`missing_due_time`）。
 
-### 任务 9: 修改 Ingest，支持 LifeEvent 与 Reminder 双写
-*   **目标**：一次保存，双表落库。
+### 任务 9: 修改 Ingest，支持 LifeEvent 与 Reminder 原子双写 (Firestore Transaction)
+*   **目标**：一次保存，双表原子落库。
 *   **涉及文件**：`LifeController.cs`, `LifeEventService.cs`
 *   **实现细节**：
-    *   如果 LLM 返回了 `parseStatus=success` 且带有合法时间的 reminder 意图，则在同一个操作中向 `users/{uid}/reminders` 写入物理提醒条目。
-    *   如果 `parseStatus` 为 `missing_due_time` / `invalid_due_time` / `llm_parse_failed`，或者 `dueAtIso8601` 解析为空，后端将**仅创建 LifeEvent，绝不创建 Reminder 物理实体**。
+    *   **强一致性事务保障**：当 Reminder 创建条件成立时，为了保证数据一致性，LifeEvent 写入和 Reminder 写入**必须使用 Firestore WriteBatch 或 Transaction 一次性原子提交**。
+    *   杜绝只写成功 Event 但 Reminder 写入失败、或 Reminder 成功但 Event 缺少关联 ID 的半成功状态。
+    *   若为 `missing_due_time` / `invalid_due_time` / `llm_parse_failed` 时，则直接进行单文档原子写入（仅 LifeEvent，Reminder 不落库）。
     *   接收请求时使用向后兼容的 `text` 属性，校验 `clientTimeZone`，如果缺失采用默认 `Asia/Shanghai` 且在 `structuredData` 写入 `timezoneFallbackUsed: true` 审计日志。
 
 ### 任务 10: 新增 Reminder API
@@ -102,15 +116,16 @@
 ### 任务 12: 新增 DailySummary 模型
 *   **涉及文件**：`DailySummary.cs`，存储在 `users/{uid}/daily_summaries/{dateStr}`，其中 `dateStr` 格式为 `YYYY-MM-DD`。
 
-### 任务 13: 新增 AgentRunner 核心引擎与缓存/重复生成控制
-*   **目标**：提供捞取数据 -> 组装 Prompt -> 调用大模型生成总结的能力，同时实现缓存控制。
+### 任务 13: 新增 AgentRunner 核心引擎与缓存/空状态控制
+*   **目标**：提供捞取数据 -> 组装 Prompt -> 调用大模型生成总结的能力，同时实现缓存控制与空数据规避。
 *   **涉及文件**：`AgentRunner.cs`, 对应的 Prompt 配置。
 *   **实现细节**：
     *   接收前端传入的本地目标日期（`targetDate`，如 "2026-06-25"）、客户端时区（`clientTimeZone`）以及 `forceRegenerate` 标识。
-    *   **重复生成控制**：查询是否已存在 `users/{uid}/daily_summaries/{targetDate}`。如果已存在且 `forceRegenerate != true`，直接将已有数据返回，不重复调用 LLM；如果 `forceRegenerate == true`（或文档不存在），才继续执行调用 LLM 生成并覆盖旧文档。
+    *   **重复生成控制**：查询是否已存在 `users/{uid}/daily_summaries/{targetDate}`。如果已存在且 `forceRegenerate != true`，直接将已有数据返回，不重复调用 LLM；如果 `forceRegenerate == true`（或文档不存在），才继续向下执行。
     *   计算出该自然日的本地起止时间（`00:00:00` 至次日零点），并将起止时间转换为 UTC 时间（`startUtc` 和 `endUtc`）。
     *   在 `users/{uid}/life_events` 下，查询满足 `occurredAt >= startUtc && occurredAt < endUtc` 且 `isDeleted == false` 的所有事件。
-    *   调用 LLM 生成 JSON 结构的总结，同时在 `users/{uid}/agent_runs` 记录执行日志（记录 Prompt 哈希和部分预览，脱敏简要错误，完整堆栈仅写入 Cloud Logging）。
+    *   **空数据规避策略**：**若拉取的事件数量为 0，后端必须直接进行逻辑拦截，绝对不允许调用大语言模型（LLM）**。此时直接构建并向 Firestore 保存并返回一份硬编码的空状态总结文档（`summary="这一天还没有记录。"`，`highlights=[]`，`moodLabel="暂无记录"`，`moodScore=null`，`suggestions=[]`），保障性能且不浪费 Token。
+    *   若有事件，则调用 LLM 结合 `ExtractJsonObject` 生成总结，同时在 `users/{uid}/agent_runs` 记录执行日志（仅记录简要脱敏后的错误信息，完整堆栈仅写入 Cloud Logging）。
 
 ### 任务 14: 新增手动触发总结 API
 *   **涉及文件**：`AgentController.cs`

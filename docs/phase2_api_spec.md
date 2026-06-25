@@ -9,6 +9,29 @@
 
 ---
 
+## 零、 迁移相关 API (Migration - 极低频/一次性)
+
+### 1. 存量数据字段补齐迁移 (POST /api/migration/run-phase2a0)
+*   **路径**：`POST /api/migration/run-phase2a0`
+*   **功能**：对现有 Phase 1 的所有存量 life_events 补足 isDeleted/updatedAt/deletedAt 字段。
+*   **生命周期约束**：
+    该 API 为一次性数据迁移接口。迁移完成并验证通过后，迁移 Controller 的路由**必须从生产环境中移除，或通过环境变量 `ENABLE_MIGRATION_API=false` 默认禁用**。禁止在生产环境长期暴露此接口，以防给自己挖坑。
+*   **请求安全头**：需要验证 Header 中的 `X-Migration-Secret`，其值必须与后端的 `MIGRATION_SECRET` 环境变量严格相符。
+*   **Request Query**：
+    `dryRun` (可选，Boolean，默认 `false`。若为 `true` 则仅统计不写入更改)
+*   **Response** (`200 OK`)：
+    ```json
+    {
+      "success": true,
+      "scannedCount": 42,
+      "migratedCount": 35,
+      "skippedCount": 7,
+      "failedCount": 0
+    }
+    ```
+
+---
+
 ## 一、 Timeline 相关 API (LifeEvent)
 
 ### 1. 摄入事件并提取 (POST /api/life/ingest)
@@ -47,7 +70,7 @@
   - **明确禁止使用 Offset 分页**。由于 Firestore 机制，必须使用游标（Cursor）翻页。
   - **双字段排序规则**：列表必须严格按照 `occurredAt` DESC + `id` DESC（文档名 `__name__` DESC）进行双字段组合排序，以确保排序稳定性。
   - **游标格式与生命周期**：
-    - `cursor` 是一个由客户端传入的 Base64 编码的 JSON 字符串。
+    - `cursor` 是一个由客户端传入 of Base64 编码的 JSON 字符串。
     - 其 JSON 结构定义为：
       ```json
       {
@@ -94,8 +117,9 @@
     "structuredData": {}
   }
   ```
-- **后台处理**：
+- **后台处理与删除防御**：
   - 在当前用户的子集合 `users/{uid}/life_events` 中检索 `{id}` 文档。若该事件不属于该用户（即不存在于该路径），直接返回 `404 Not Found`。
+  - **已软删除的事件禁止修改**：如果检索到的事件文档中 `isDeleted == true`，**直接返回 `404 Not Found`**，绝不允许对其进行任何修改，从根本上防止因前端缓存残留导致的“半复活”现象。
   - 仅覆盖业务字段（如 title, content, tags, structuredData）。
   - **严禁**前端修改系统控制字段（如 `id`, `userId`, `createdAt`, `source` 等）。
   - 自动将 `updatedAt` 设为当前服务器 UTC 时间。
@@ -220,6 +244,15 @@
   - **Firestore 查询条件**：
     - 仅从当前登录用户的子集合 `users/{uid}/life_events` 中拉取。
     - 过滤条件：`isDeleted == false` AND `occurredAt >= startUtc` AND `occurredAt < endUtc`。
+- **“当天没有事件”的处理与返回策略**：
+  - 在查询数据库获取该用户该时间窗口内的所有 `LifeEvent` 之后，**若检索出的事件数量为 0，后端将直接拦截，绝不调用大语言模型（LLM）**。
+  - 后端将直接硬编码构建并持久化保存一份“空状态总结”文档并返回，避免模型被逼硬夸产生赛博鸡汤。
+  - **空状态总结结构**：
+    *   `summary`: "这一天还没有记录。"
+    *   `highlights`: 空数组 `[]`
+    *   `moodLabel`: "暂无记录"
+    *   `moodScore`: `null` (或 5)
+    *   `suggestions`: 空数组 `[]`
 - **Response** (`200 OK`)：
   ```json
   {

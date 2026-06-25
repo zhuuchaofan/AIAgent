@@ -85,6 +85,12 @@ Daily Summary 由当前登录用户手动调用 API 触发。后端提取通过 
 *   `moodScore` (Integer)：1 至 10 之间的整数，10 分为最高（最开心/最健康），1 分为最低。
 *   `suggestions` (Array of Strings)：大模型根据今日发生的事项，智能生成的面向次日或未来的改进与关怀建议。
 
-### 4. Fallback 策略与容错
-*   **LLM 解析失败（JSON格式错误）**：在 Daily Summary 场景下，由于是异步/后台任务，失败时不会阻塞用户主流程。后台代码捕获 JsonException，记录 `status="failed"`, `errorMsg`（保存简要脱敏后的信息）落入 `agent_runs` 集合，结束流程。不向前端抛异常。
-*   **输出自然语言包裹**：代码必须能够剔除首尾的 Markdown 标记（如存在），然后再尝试反序列化。如果仍失败，同上记录到执行日志。
+### 4. LLM 容错与 JSON 清洗提取规范 (ExtractJsonObject)
+为了防止 LLM 在输出时受到外界噪声干扰（如用 markdown 标记 ```json 包裹或头部/尾部夹杂自然语言阐述），后端将统一调用公共清洗方法 `ExtractJsonObject(string raw)` 提取合法 JSON。
+*   **提取逻辑**：
+    1. 剥离 Markdown 代码块标记（如去除 ````json` 和 ```` 符号）。
+    2. 截取字符串中第一个 `{` 到最后一个 `}` 之间的全部内容。
+*   **反序列化失败的降级**：
+    若清洗后反序列化依然失败，后台捕获 JsonException，在 `agent_runs` 记录 `status="failed"`, 将错误消息脱敏写入 `errorMsg`，结束流程，绝不向前端直接抛出 500。
+*   **空数据自然日拦截**：
+    若拉取的事件数为 0，根本不会触发 LLM 调用，由后端直接组装并缓存空状态格式。因此 Prompt 契约在无数据时不生效。
