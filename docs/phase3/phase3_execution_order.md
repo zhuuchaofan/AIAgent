@@ -15,6 +15,7 @@
   4. Spike 阶段必须实测对齐与验证：parent path 拼接格式、from collectionId=chunks 的匹配性、distanceResultField 字段定义、VectorValue 向量数值打包格式、以及后端返回 JSON parser 的正确反序列化，并核对 Cloud Run 的 IAM 权限。
 - **可验证标准 (Green Light)**：
   - **Spike 成功率 100%**：控制台或 API 返回最近邻匹配的测试 chunks，且物理路径严格隔离，没有报错抛出。**若未通过该 Spike，绝对禁止开启接下来的核心向量开发。**
+  - **Spike 结论（详见 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md)）**：确认 SDK 4.3.0 不暴露出 `VectorValue` / `FindNearest` 类型，必须使用 REST API (commit 与 runQuery) 替代高级 SDK 向量接口。
 
 ---
 
@@ -67,15 +68,16 @@
 
 ## 阶段三：向量生成与智能会话 (核心攻坚)
 
-### 步骤 5：向量化与双轨制检索 (B6, B7)
-- **目标**：计算 Chunk 向量，并执行双轨制下的最近邻检索与阈值拦截。
+### 步骤 5：向量化与 REST 检索实现 (B6, B7)
+- **目标**：计算 Chunk 向量，并执行基于 REST 接口的最近邻检索与阈值拦截。
 - **执行动作**：
-  1. 异步调用 `gemini-embedding-001` 计算 768d 向量并落库，**调用体中显式设置 outputDimensionality = 768**。
-  2. 实现双轨检索。针对 REST API 方案：**必须基于实际 Firestore `runQuery` 返回的物理报文结构组织自动化快照测试 (Snapshot Testing) 保证 Parser 解析高度正确**。
-  3. **实现相似度过滤配置化**：相似度门限不得作为常量写死。必须支持通过 `appsettings.json` 或环境变量获取配置（以余弦距离 `0.35` / 相似度得分 `0.65` 作为初始默认值）。检索时自动对超出配置距离门限的 Chunks 执行硬过滤拦截。
-  4. **记录检索审计日志**：模块运行时，必须将 topK 各个分块的实际 `distance` / `score` 指标输出至详细日志，便于生产调优。
+  1. 异步调用 `gemini-embedding-001` 计算 768d 向量并落库（**显式设置 outputDimensionality = 768**）。物理保存时，**必须使用 REST commit 接口**打包为 `mapValue`（带 `__type__ = "__vector__"` 标记）格式物理提交。
+  2. 实现向量检索：**必须基于 REST runQuery / findNearest 实现最近邻搜索**，并在 URL 中以 `users/{userId}` 锁定多租户范围。
+  3. **自动化快照测试**：必须基于 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md) 中实测返回的物理报文结构组织自动化快照测试 (Snapshot Testing) 保证 JSON Parser 解析高度正确。
+  4. **实现相似度过滤配置化**：相似度门限不得作为常量写死。必须支持通过 `appsettings.json` 或环境变量获取配置（以余弦距离 `0.35` / 相似度得分 `0.65` 作为初始默认值）。检索时自动对超出配置距离门限的 Chunks 执行硬过滤拦截。
+  5. **记录检索审计日志**：模块运行时，必须将 topK 各个分块的实际 `distance` / `score` 指标输出至详细日志，便于生产调优。
 - **可验证标准 (Green Light)**：
-  - 触发一次上传，解析落库后，Firestore 中该用户的 `chunks` 子集合中包含 embedding（类型：原生 `VectorValue`）。
+  - 触发一次上传，解析落库后，Firestore 中该用户的 `chunks` 子集合中包含 embedding 字段（类型：原生 `VectorValue`）。
   - 运行检索，系统在日志中成功打印 topK 分块的 `distance` / `score`，且只有满足配置阈值的高相关 Chunks 能够被召回，低相关的噪声 Chunks 自动被阈值拦截过滤，降级机制生效。
 
 ### 步骤 6：RAG Chat 接口闭环与会话历史衔接 (B8, B9)

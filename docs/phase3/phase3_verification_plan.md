@@ -30,16 +30,17 @@
   - **段落完整性**：分块边缘必须优先保留在自然段落或句号、分号处，严禁切断单个中文字符。
 
 ### 4. 向量化计算验证 (Embedding Verification)
-- **验证手法**：验证对 `gemini-embedding-001` 的调用。
+- **验证手法**：验证对 `gemini-embedding-001` 的调用和物理入库。
 - **验收标准**：
   - 后端在发送 Embedding 请求时，必须在 Body 中**显式指定 `outputDimensionality = 768`**。
   - 大模型 API 响应成功，返回长度正好为 768 维的浮点数数组。
-  - 向量数据成功存入 Firestore 对应的 chunk 节点中（以原生 `VectorValue` 格式）。
+  - **物理入库校验**：向量数据成功存入 Firestore 对应的 chunk 节点中。**由于高级 SDK 版本限制，物理上必须通过 `RestFirestoreVectorStore` 的 REST commit 方式进行原生 VectorValue 格式持久化。**
 
 ### 5. Firestore 向量最近邻检索验证 (Vector Search Verification)
 - **验证手法**：执行 **nearest-neighbor vector search** 相似度检索测试。
 - **验收标准**：
-  - 根据提问向量，系统能够检索出该用户子集合下 Top-5 最接近的 Chunks。
+  - **REST 查询机制**：根据提问向量，系统能够**通过 REST API 的 runQuery/findNearest 检索接口**，获取该用户子集合下 Top-5 最接近的 Chunks，排除了高级 SDK 路线。
+  - **自动化快照测试 (Snapshot Testing)**：为了规避解析错误，开发 B7 前必须基于 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md) 中捕获的真实物理 runQuery 响应报文结构编写自动化快照测试，确保 JSON Parser 的强壮度。
   - **检索相似度过滤**：通过应用程序 appsettings 或环境变量获取可配置的余弦距离门限（初始默认设为余弦距离不超过 `0.35`，相似度得分不低于 `0.65`）。任何超过配置门限的分块必须被硬过滤拦截，绝不喂给大模型。如果所有分块全部低于门限，直接判定为未命中状态，直接向前端返回“资料中未找到足够依据回答该问题”，降级成功。
   - **检索审计日志**：验证在检索过程中，系统必须在日志中详细记录 topK 的每一个分块的实际 `distance / score` 指标，便于后续生产环境参数调优。
 

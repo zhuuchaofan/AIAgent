@@ -49,7 +49,7 @@
 | `charStart` | Integer | 是 | 分块在原文中的字符起始索引 |
 | `charEnd` | Integer | 是 | 分块在原文中的字符结束索引 |
 | `content` | String | 是 | 提取切分出的文本分块原文段落 |
-| `embedding` | VectorValue | 是 | **由 gemini-embedding-001 生成的 768 维向量值（显式指定 outputDimensionality = 768）。** 物理落库必须确保使用原生 `VectorValue` 格式存储 |
+| `embedding` | VectorValue | 是 | **由 gemini-embedding-001 生成的 768 维向量值（显式指定 outputDimensionality = 768）。** 物理落库必须通过 REST commit 方式，以物理协议中 `mapValue` 封装的原生向量结构（标记 `__type__ = "__vector__"`）写入。读取时在 C# SDK 4.3.0 中会被反序列化为 `Dictionary<string, object>` |
 | `createdAt` | Timestamp| 是 | 写入时间，继承对应的 document 创建时间 |
 
 ---
@@ -66,32 +66,33 @@
 - **距离度量算法 (Distance Measure)**: **`COSINE` (余弦相似度)**
 
 ### 2. 向量索引配置 gcloud CLI 规范
-若通过 Cloud CLI 命令行或配置脚本进行索引配置部署，可以使用以下声明：
+若通过 Cloud CLI 命令行或配置脚本进行索引配置部署，可以使用以下声明（已在 Step 0 Spike 验证通过）：
 
 ```bash
 gcloud alpha firestore indexes composite create \
     --collection-group=chunks \
     --query-scope=COLLECTION \
-    --field-config=field-path=embedding,vector-config='{"dimension":"768","flat-index":{}}'
+    --field-config=field-path=embedding,vector-config='{"dimension":"768","flat":{}}'
 ```
 
 ---
 
-## 四、 向量检索统一 REST 终点规范（表述降级与 Spike 验证）
+## 四、 向量检索主线 REST 终点规范（基于 Spike 实测结论）
 
-在双轨制设计方案中，若因特定环境类库支持限制降级到 REST API 查询，后端拟定发送的 POST 请求目标父路径（Parent Path）推荐拼装为：
+由于高级 `.NET SDK (4.3.0)` 并不支持向量相关的强类型检索，本系统全面采用 `REST API` 进行最近邻检索：
 
-```http
-POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery
-```
+* **请求 Endpoint URL**:
+  ```http
+  POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery
+  ```
 
-> [!CAUTION]
-> **【表述降级与 Spike 校验限制】**：
-> 以上路径仅作为初步设计建议，**绝对不得视为未经技术验证前的最终正确路径**。
-> **该路径必须在步骤 0 (S1 Spike) 中，通过本地 HttpClient 或 curl 命令行发送真实向量匹配请求进行端到端实测验证。**
-> Spike 阶段需要核心验证并对齐以下参数和行为：
-> 1. **Parent Path 结构**：确认将 `{userId}` 拼装在 parent path 中，能否被 Firestore REST 端点正确映射，且向量相似度查询范围能够绝对局限在其子集合树下。
-> 2. **From CollectionId**：验证 `from: [{ "collectionId": "chunks", "allDescendants": false }]` 是否可以精确匹配子集合。
-> 3. **DistanceResultField**：验证 `distanceResultField` 在 C# HttpClient 调用中是否能作为结果集的有效参数返回。
-> 4. **VectorValue 格式**：验证 768d 浮点数在 StructuredQuery JSON Payload 中序列化的正确传输格式（特别是 values 节点包装）。
-> 5. **返回 JSON Parser**：验证后端接收到含有 `distance` / `embedding` 的复杂 JSON 数据后，其 JSON 反序列化解析器（JSON Parser）能否完全对齐底层结构，无异常解析出匹配的内容及分数。
+* **请求 Headers**:
+  ```http
+  Content-Type: application/json
+  Authorization: Bearer {Google_Cloud_OAuth2_Access_Token_Or_ADC_Token}
+  ```
+
+* **安全与寻址校验（基于 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md)）**：
+  1. **多租户安全锁**：通过在 Endpoint 路径中显式拼装 `{userId}`，使查询被强力局限在特定用户的子树上，天然防范数据越权。
+  2. **非递归查询**：在 structuredQuery 的 from 属性中声明 `collectionId = "chunks"` 并限制 `"allDescendants": false`。
+  3. **距离字段定义**：在 findNearest 部分配置 `"distanceResultField": "vector_distance"`。在返回结果的 document 字段集中，系统将提取与普通字段平行的 `vector_distance` 双精度浮点数值（余弦距离），以便系统进一步过滤。

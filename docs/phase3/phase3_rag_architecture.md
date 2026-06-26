@@ -2,7 +2,13 @@
 
 ## 一、 整体设计理念
 
-LifeOS Phase 3 的知识接入层专为**个人小规模知识库场景（单用户累计 Chunks 在数万条以下）**设计。本系统采用 **Google Cloud Storage (文件存储) + Firestore 原生向量检索 (相似度匹配) + Google Cloud Tasks (后台异步队列) + Gemini API** 的 Serverless 架构，预期可满足 MVP 场景，需在验证阶段确认。
+LifeOS Phase 3 的知识接入层专为**个人小规模知识库场景（单用户累计 Chunks 在数万条以下）**设计。本系统采用 **Google Cloud Storage (文件存储) + Firestore 原生向量检索 (以 REST runQuery 为核心的主线实现) + Google Cloud Tasks (后台异步队列) + Gemini API** 的 Serverless 架构。
+
+> [!NOTE]
+> **混合数据库读写机制（Spike 核心设计演进）**：
+> 鉴于 C# 高级 Firestore SDK（4.3.0）不提供 `VectorValue` 和最近邻检索 `FindNearest`，系统引入 `IFirestoreVectorStore` 与 `RestFirestoreVectorStore` 抽象。
+> - 常规的 documents / messages 元数据继续使用高效的 `Google.Cloud.Firestore SDK` 进行 CRUD 读写。
+> - Chunks 向量的高精度写入（REST commit）和相似度检索（REST runQuery/findNearest）则完全交由 `RestFirestoreVectorStore` 实现，利用 HttpClient 结合 ADC (Application Default Credentials) 令牌进行数据交互。
 
 ---
 
@@ -31,28 +37,28 @@ flowchart TD
         Parser -->|8. 语义 Chunks 文本| EmbedSvc["Embedding Service"]
         EmbedSvc -->|9. 调用 gemini-embedding-001\n(outputDimensionality=768)| GeminiAPI["Gemini Embedding API"]
         GeminiAPI -->|10. 返回 768d Vector| EmbedSvc
-        EmbedSvc -->|11. 批量写入 Chunks 与向量| FirestoreChunks["Firestore chunks 集合\n(users/{uid}/chunks)"]
-        WorkerAPI -->|12. 更新文档状态 (Status=success)| FirestoreDocs
+        EmbedSvc -->|11. 通过 RestFirestoreVectorStore\n调用 REST commit 批量写入向量| FirestoreChunks["Firestore chunks 集合\n(users/{uid}/chunks)"]
+        WorkerAPI -->|12. 使用 SDK 更新文档状态 (Status=success)| FirestoreDocs
     end
 ```
 
 ### 2. 检索问答流 (Retrieval & Query Pipeline)
 
-检索问答流严格衔接已有的会话历史，通过拉取数据库消息和双轨制 nearest-neighbor 检索、相似度阈值过滤，将高质量上下文提供给大模型：
+检索问答流严格衔接已有的会话历史，通过拉取数据库消息和 REST 模式的 nearest-neighbor 检索、相似度阈值过滤，将高质量上下文提供给大模型：
 
 ```mermaid
 flowchart TD
     User["用户提问 (Question)"] -->|1. POST /api/v1/chat/rag\n(conversationId, clientTimeZone, documentIds)| WebAPI["Web API (BFF Controller)"]
     
     subgraph "检索准备与历史恢复"
-        WebAPI -->|2. 依 conversationId 自数据库拉取最近 N 条历史消息| FirestoreMsgs["Firestore messages 集合\n(users/{uid}/conversations/.../messages)"]
+        WebAPI -->|2. 使用 SDK 依 conversationId 自数据库拉取最近 N 条历史消息| FirestoreMsgs["Firestore messages 集合\n(users/{uid}/conversations/.../messages)"]
         WebAPI -->|3. 问题向量化 gemini-embedding-001| GeminiEmbed["Gemini Embedding API\n(outputDimensionality=768)"]
     end
     
     GeminiEmbed -->|4. 返回 768d Vector| WebAPI
     
     subgraph "相似度检索与强物理过滤"
-        WebAPI -->|5. 执行 nearest-neighbor 检索| FirestoreChunks["Firestore chunks 集合\n(users/{uid}/chunks)"]
+        WebAPI -->|5. 通过 RestFirestoreVectorStore\n执行 REST runQuery/findNearest 检索| FirestoreChunks["Firestore chunks 集合\n(users/{uid}/chunks)"]
         FirestoreChunks -->|6. Top-K Chunks| ThresholdFilter{"相似度距离阈值比对\n(由配置文件 appsettings 动态调节)"}
     end
     
@@ -83,4 +89,4 @@ flowchart TD
    - 检查 GCS 物理路径前缀是否完全处于 `users/{userId}/documents/{documentId}/` 特定的多租户目录结构下，否则拒绝抽取，防止任意路径文本提取引起的注入漏洞。
 
 3. **检索日志监控与相似度阈值可配性**:
-   - 相似度距离门限不写死。通过应用程序配置文件中 `RAG:DistanceThreshold` 参数注入，并在检索日志中详细打出每一条 `topK distance / score` 审计指标，利于后续生产调优。
+   - 相似度距离门限不写死。通过应用程序配置文件中 `RAG:DistanceThreshold` 参数注入，并在检索日志中详细打出每一条 `topK distance / score` 审计指标，以便于生产调优（参见 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md)）。

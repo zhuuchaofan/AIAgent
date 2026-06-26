@@ -183,15 +183,18 @@
 
 ---
 
-## 四、 Firestore 原生 REST runQuery 候选路径表述降级
+## 四、 向量读写与检索统一 REST 终点规范（基于 Spike 实测结论）
 
-如果在双轨制方案中由于 SDK 接口不兼容需要切换到 REST API 查询，后端拟定发送的 REST API 目标路径为：
+由于高级 C# SDK 的版本限制，向量数据的物理持久化与最近邻检索**全部通过 REST 协议主线实现（并在 Step 0 Spike 中被 100% 验证，详见 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md)）**。
 
-```http
-POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery
-```
+### 1. 向量物理写入 (Commit)
 
-> [!CAUTION]
-> **【表述降级与技术 Spike 限制】**：
-> 本路径仅作为初步选定的设计建议，**绝对不得视为未经技术验证前的最终正确路径**。
-> **该路径必须在步骤 0 (S1 Spike) 中，通过本地 HttpClient 或 curl 命令行发送真实测试报文进行端到端实测验证**，重点校对父路径参数拼接、多租户子集合在 REST API 下的范围匹配度，并以此实测结果更新设计。
+- **HTTP Method**: `POST`
+- **Endpoint URL**: `https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents:commit`
+- **说明**：通过 REST commit 方式以 `mapValue`（嵌入 `__type__ = "__vector__"` 标识）的物理打包格式写入向量。
+
+### 2. 向量最近邻检索 (runQuery)
+
+- **HTTP Method**: `POST`
+- **Endpoint URL**: `https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery`
+- **说明**：通过 parent path 绑定 `{userId}` 将检索范围限制在特定用户的子集合 `users/{userId}/chunks` 内。通过 StructuredQuery Payload 中的 `findNearest` 余弦检索返回 Top-K 向量。

@@ -20,8 +20,8 @@
    在 768 维空间下，两个向量的余弦距离 (Cosine Distance) 的取值范围在 $[0, 2]$（其中 0 代表完全相同，2 代表完全相反）。相似度得分 (Similarity Score) 可简化定义为 $1.0 - \text{Cosine Distance}$。
 
 2. **可配置过滤机制（Configurable Filter Threshold）**：
-   - **动态配置化**：余弦距离 `0.35`（相似度得分下限 `0.65`）**仅作为 Phase 3 初始默认值，绝不得编码死为不可调整的常量**。设计上必须要求通过 .NET `appsettings.json`（例如 `RAG:DistanceThreshold` 属性）或环境变量进行动态注入。
-   - **过滤逻辑**：从 Firestore 检索返回 of Top-K 向量分块中，系统必须动态比对。任何余弦距离超过配置门限（如 `0.35`）的分块**一律强行过滤拦截，不得喂给大模型**。
+   - **动态配置化**：余弦距离 `0.35`（相似度得分下限 `0.65`）**仅作为 Phase 3 初始默认值，绝不得编码死为不可调整 learnings 的常量**。设计上必须要求通过 .NET `appsettings.json`（例如 `RAG:DistanceThreshold` 属性）或环境变量进行动态注入。
+   - **过滤逻辑**：从 Firestore 检索返回的 Top-K 向量分块中，系统必须动态比对。任何余弦距离超过配置门限（如 `0.35`）的分块**一律强行过滤拦截，不得喂给大模型**。
    - **空上下文降级**：如果所有检索到的 Chunks 均被阈值拦截，导致有效参考分块数为 0，系统立即判定为“未命中状态”，直接跳过大模型推理，直接向前端返回：“资料中未找到足够依据回答该问题。”，完成安全的空上下文降级。
 
 3. **检索审计日志规范**：
@@ -38,91 +38,138 @@
 
 ---
 
-## 四、 .NET 检索实现：双轨制与 REST fallback 深度设计
+## 四、 .NET 向量读写与检索实现：主线 REST 方案
 
-为防范 `Google.Cloud.Firestore` SDK 强类型向量搜索在特定 runtime 下由于版本不兼容导致构建失败，系统采用**“双轨制”最近邻（nearest-neighbor）相似度检索设计**。
+根据 **Step 0 Spike 验证（详见 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md)）**，当前项目引用的高级 `.NET SDK (Google.Cloud.Firestore 4.3.0)` 并不暴露 `VectorValue` 与 `FindNearest` 相关的类和方法。
 
-### 轨 A：Firestore .NET SDK 原生检索逻辑
-若 SDK 版本和底层类库已就绪，首选高内聚实现：
-
-```csharp
-// 伪代码，展示 SDK 检索
-public async Task<List<ChunkDocument>> SearchNearestAsync(string userId, double[] queryEmbedding, int limit = 5)
-{
-    var db = FirestoreDb.Create(_projectId);
-    var chunksCollection = db.Collection("users").Document(userId).Collection("chunks");
-
-    // 转化为 SDK 向量值
-    var queryVector = VectorValue.Create(queryEmbedding.Select(v => (float)v).ToArray());
-
-    // 使用 nearest-neighbor 机制在子集合内进行检索
-    Query query = chunksCollection.FindNearest(
-        "embedding",
-        queryVector,
-        limit,
-        DistanceMeasure.Cosine,
-        "vector_distance"
-    );
-
-    QuerySnapshot querySnapshot = await query.GetSnapshotAsync();
-    // 转换为 C# 模型并返回...
-}
-```
+因此，本系统直接确立**“混合实现”为主线方案**：
+1. **普通 CRUD 读写**：依旧采用 `.NET SDK` 强类型或 Dict 的方式处理 documents / messages / metadata 的常规业务数据。
+2. **向量写入 (Commit) 与检索 (findNearest)**：全面采用 `REST API` 进行物理封包交互。
+3. **数据读取兼容性**：经 Spike 验证，使用 Firestore SDK 直接读取包含原生向量字段的文档时，系统不会发生解析崩溃，向量会被温和反序列化为 `System.Collections.Generic.Dictionary<string, object>`。
 
 ---
 
-### 轨 B：Firestore REST API `findNearest` 降级候选伪代码 (HttpClient)
+### 1. 向量写入 (Commit) 主线 REST 设计
 
-若 C# 本地强类型 SDK 运行遇到阻碍，后端激活此 HttpClient Fallback 模块。
+我们无法在 C# 中使用 SDK 构建原生 VectorValue。因此，我们必须使用 REST commit 接口，将向量部分按照 `mapValue` 及包含 `__type__ = "__vector__"` 标记的形式进行 JSON 打包并提交：
 
-#### 1. REST 请求结构
-- **Endpoint URL**: 
+* **Endpoint URL**: 
   ```
-  POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery
+  POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents:commit
   ```
-- **请求 Headers**:
+* **Headers**:
   ```http
   Content-Type: application/json
   Authorization: Bearer {Google_Cloud_OAuth2_Access_Token_Or_ADC_Token}
   ```
-
-#### 2. REST 请求 Body Payload (StructuredQuery 候选格式)
-```json
-{
-  "structuredQuery": {
-    "from": [
+* **Payload 格式示例**:
+  ```json
+  {
+    "writes": [
       {
-        "collectionId": "chunks",
-        "allDescendants": false
+        "update": {
+          "name": "projects/{projectId}/databases/(default)/documents/users/{userId}/chunks/{chunkId}",
+          "fields": {
+            "id": { "stringValue": "{chunkId}" },
+            "userId": { "stringValue": "{userId}" },
+            "content": { "stringValue": "本周训练重点是..." },
+            "embedding": {
+              "mapValue": {
+                "fields": {
+                  "__type__": { "stringValue": "__vector__" },
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        { "doubleValue": 0.0123 },
+                        { "doubleValue": -0.0456 }
+                        // 共 768 个维度
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-    ],
-    "findNearest": {
-      "vectorField": {
-        "fieldPath": "embedding"
-      },
-      "queryVector": {
-        "values": [
-          0.0234, -0.0125, 0.0891, "...(共 768 个浮点数)"
-        ]
-      },
-      "distanceMeasure": "COSINE",
-      "limit": 5,
-      "distanceResultField": "vector_distance"
+    ]
+  }
+  ```
+
+---
+
+### 2. 向量最近邻检索 (runQuery) 主线 REST 设计
+
+* **Endpoint URL**: 
+  ```
+  POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery
+  ```
+* **Payload 格式示例**:
+  ```json
+  {
+    "structuredQuery": {
+      "from": [
+        {
+          "collectionId": "chunks",
+          "allDescendants": false
+        }
+      ],
+      "findNearest": {
+        "vectorField": {
+          "fieldPath": "embedding"
+        },
+        "queryVector": {
+          "mapValue": {
+            "fields": {
+              "__type__": { "stringValue": "__vector__" },
+              "value": {
+                "arrayValue": {
+                  "values": [
+                    { "doubleValue": 0.0234 }
+                    // 共 768 个查询向量 doubleValue
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "distanceMeasure": "COSINE",
+        "limit": 5,
+        "distanceResultField": "vector_distance"
+      }
     }
   }
+  ```
+
+* **安全边界**：URL 路径的 parent 节点强制限定到具体的 `users/{userId}`，确保多租户向量物理隔离。同时将 `"allDescendants"` 显式设定为 `false`，仅在直接子集合 `chunks` 中匹配。
+
+---
+
+### 3. 返回 JSON 解析与快照测试 (Snapshot Testing)
+
+当请求返回 HTTP 200 后，后端使用 `System.Text.Json` 的 `JsonDocument` 树形解析器，从中解析出匹配成功的文档以及回显的 `vector_distance` 字段：
+
+```csharp
+// 核心解析参考实现
+using var doc = JsonDocument.Parse(responseJson);
+if (doc.RootElement.ValueKind == JsonValueKind.Array)
+{
+    foreach (var element in doc.RootElement.EnumerateArray())
+    {
+        if (!element.TryGetProperty("document", out var document)) continue;
+        
+        string docId = document.GetProperty("name").GetString().Split('/').Last();
+        double distance = -1.0;
+        
+        if (document.TryGetProperty("fields", out var fields) &&
+            fields.TryGetProperty("vector_distance", out var distField))
+        {
+            if (distField.TryGetProperty("doubleValue", out var dv))
+                distance = dv.GetDouble();
+        }
+        // 进行 DTO 还原和阈值过滤...
+    }
 }
 ```
 
-#### 3. 局限性说明与快照测试保障 (Snapshot Testing)
-> [!CAUTION]
-> **【表述降级与 Spike 校验限制】**：
-> 这里的 REST 实现方案（包括推荐路径 `POST https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{userId}:runQuery`）与 StructuredQuery Payload、返回结果 Parser **仅作为候选设计参考，在未经 S1 Spike 本地 HttpClient / curl 验证前，绝对不代表最终的绝对正确路径与报文格式**。
-> 
-> 在步骤 0 (S1 Spike) 中必须通过本地实测，细致校对和对齐：
-> 1. **Parent Path 路径格式**：包含用户 `{userId}` 的父目录树路径是否能在 REST API 中正确寻址并实现多租户严格闭锁。
-> 2. **From CollectionId**：验证 `collectionId: chunks` 对子集合的精确匹配表现。
-> 3. **DistanceResultField**：确认 `distanceResultField` 距离返回值在 JSON payload 中返回的真实字段名。
-> 4. **VectorValue 格式**：验证 768d 数组作为 `values` 节点在 REST 传输中无精度损失的打包格式。
-> 5. **返回 JSON Parser**：确保后端解析复杂 JSON 嵌套树时，C# 的反序列化处理不会发生报错或字段截断。
->
-> 在正式集成前，**必须基于实际 Firestore `runQuery` 返回的物理报文结构，组织自动化快照测试 (Snapshot Testing) 进行报文结构与字段解析的严格校验对齐**。防止由于 GCP 字段命名在 REST 格式下的细微多态导致运行时抛出解析异常。
+为了确保解析在任何 GCP 环境微调下都能保持 100% 正确，**开发 B7 前必须基于 [spike_report.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/phase3/spike/spike_report.md) 中记录的真实 runQuery 物理报文结构组织自动化快照测试 (Snapshot Testing)**，保护解析链路不受底层字段多态影响。
