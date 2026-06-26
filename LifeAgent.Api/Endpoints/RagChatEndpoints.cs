@@ -1,0 +1,61 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using LifeAgent.Api.Models;
+using LifeAgent.Api.Services;
+
+namespace LifeAgent.Api.Endpoints;
+
+public static class RagChatEndpoints
+{
+    public static void MapRagChatEndpoints(this WebApplication app)
+    {
+        app.MapPost("/api/v1/chat/rag", ProcessRagChatAsync);
+    }
+
+    public static async Task<IResult> ProcessRagChatAsync(
+        HttpContext httpContext,
+        [FromBody] RagChatRequest request,
+        [FromServices] IRagChatService ragChatService,
+        [FromServices] ILogger<RagChatService> logger)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        if (request == null || string.IsNullOrEmpty(request.ConversationId) || string.IsNullOrEmpty(request.Message))
+        {
+            return Results.BadRequest(new { success = false, message = "Required parameters (conversationId, message) are missing." });
+        }
+
+        try
+        {
+            var response = await ragChatService.ProcessChatAsync(userId, request);
+            return Results.Ok(response);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            logger.LogWarning(ex, "Session not found or ownership mismatch for User: {UserId}, Session: {SessionId}", userId, request.ConversationId);
+            return Results.Json(new { success = false, message = "Conversation not found or access denied." }, statusCode: 404);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "Embedding dimension anomaly or execution logic exception for User: {UserId}", userId);
+            return Results.Json(new { success = false, message = ex.Message }, statusCode: 500);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error in RAG chat endpoint for User: {UserId}", userId);
+            return Results.Json(new { success = false, message = "An internal server error occurred." }, statusCode: 500);
+        }
+    }
+}
