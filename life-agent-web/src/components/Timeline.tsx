@@ -5,6 +5,16 @@ import { getEvents, updateEvent, deleteEvent } from "@/app/actions/events";
 import { format } from "date-fns";
 import { Loader2, Calendar, Trash2, Edit3, Save, X, Tag } from "lucide-react";
 
+function getTypeText(type: string): string {
+  switch(type) {
+    case "cycling": return "骑行";
+    case "cat": return "宠物猫";
+    case "home": return "家务";
+    case "life": return "生活日常";
+    default: return "未分类";
+  }
+}
+
 export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
   const [events, setEvents] = useState<any[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -125,7 +135,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
           <Calendar className="w-5 h-5 text-indigo-400" />
-          Timeline
+          生活记录
         </h2>
       </div>
 
@@ -133,7 +143,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
       <div className="mb-6 bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl">
         <div className="text-xs text-zinc-500 mb-2 font-medium flex items-center gap-1">
           <Tag className="w-3.5 h-3.5 text-zinc-400" />
-          Filter by Tag
+          按标签筛选
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -144,7 +154,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                 : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200"
             }`}
           >
-            All
+            全部
           </button>
           {allTags.map((tag) => (
             <button
@@ -168,7 +178,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
         </div>
       ) : events.length === 0 ? (
         <div className="text-center py-12 text-zinc-500 bg-zinc-900/20 border border-zinc-800 rounded-2xl">
-          No events found.
+          暂无生活记录。
         </div>
       ) : (
         <div className="space-y-4">
@@ -181,7 +191,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                 /* 编辑状态表单 */
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-1">Title</label>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-1">标题</label>
                     <input
                       type="text"
                       value={editTitle}
@@ -191,7 +201,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-1">Content</label>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-1">内容</label>
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
@@ -202,49 +212,49 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-zinc-400 mb-1">Type</label>
+                      <label className="block text-xs font-semibold text-zinc-400 mb-1">分类</label>
                       <select
                         value={editType}
                         onChange={(e) => setEditType(e.target.value)}
                         className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-indigo-500"
                       >
-                        <option value="cycling">Cycling</option>
-                        <option value="cat">Cat</option>
-                        <option value="home">Home</option>
-                        <option value="life">Life</option>
-                        <option value="unknown">Unknown</option>
+                        <option value="cycling">骑行</option>
+                        <option value="cat">宠物猫</option>
+                        <option value="home">家务</option>
+                        <option value="life">生活日常</option>
+                        <option value="unknown">未分类</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-zinc-400 mb-1">Importance (1-5)</label>
+                      <label className="block text-xs font-semibold text-zinc-400 mb-1">重要度 (1-5)</label>
                       <select
                         value={editImportance}
                         onChange={(e) => setEditImportance(Number(e.target.value))}
                         className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-indigo-500"
                       >
-                        <option value={1}>1 - Low</option>
-                        <option value={2}>2 - Info</option>
-                        <option value={3}>3 - Medium</option>
-                        <option value={4}>4 - High</option>
-                        <option value={5}>5 - Critical</option>
+                        <option value={1}>1 - 低</option>
+                        <option value={2}>2 - 提示</option>
+                        <option value={3}>3 - 中</option>
+                        <option value={4}>4 - 高</option>
+                        <option value={5}>5 - 紧急</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-1">Tags (comma separated)</label>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-1">标签 (逗号分隔)</label>
                     <input
                       type="text"
                       value={editTags}
                       onChange={(e) => setEditTags(e.target.value)}
                       className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                      placeholder="e.g. exercise, outdoors"
+                      placeholder="例如：运动，户外"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-1">Structured Data (JSON)</label>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-1">结构化数据 (JSON)</label>
                     <textarea
                       value={editStructuredData}
                       onChange={(e) => setEditStructuredData(e.target.value)}
@@ -259,14 +269,14 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                       className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-medium rounded-lg text-zinc-300 transition-colors flex items-center gap-1"
                     >
                       <X className="w-3.5 h-3.5" />
-                      Cancel
+                      取消
                     </button>
                     <button
                       onClick={() => handleSave(evt.id)}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium rounded-lg text-zinc-100 transition-colors flex items-center gap-1"
                     >
                       <Save className="w-3.5 h-3.5" />
-                      Save
+                      保存
                     </button>
                   </div>
                 </div>
@@ -283,10 +293,10 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
 
                   <div className="flex flex-wrap gap-2">
                     <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-xs rounded-md font-medium border border-zinc-700">
-                      {evt.type}
+                      {getTypeText(evt.type)}
                     </span>
                     <span className="px-2 py-0.5 bg-zinc-800/80 text-zinc-400 text-xs rounded-md font-medium border border-zinc-850">
-                      Importance: {evt.importance}
+                      重要度: {evt.importance}
                     </span>
                     {evt.tags?.map((tag: string) => (
                       <button
@@ -303,14 +313,14 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                   <div className="absolute right-4 top-4 flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => startEdit(evt)}
-                      title="Edit Event"
+                      title="编辑记录"
                       className="p-1.5 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-800 rounded-md transition-colors"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(evt.id)}
-                      title="Delete Event"
+                      title="删除记录"
                       className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -333,7 +343,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                 className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm font-medium rounded-xl text-zinc-300 transition-colors flex items-center gap-2 shadow-lg border border-zinc-700"
               >
                 {isLoadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-                Load More
+                加载更多
               </button>
             </div>
           )}

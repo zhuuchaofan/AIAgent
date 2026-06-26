@@ -65,7 +65,7 @@ export function ReminderWidget({
     <div className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-2xl backdrop-blur-md shadow-xl">
       <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2 mb-4">
         <Bell className="w-5 h-5 text-indigo-400" />
-        Reminders
+        提醒事项
       </h2>
 
       {isLoading ? (
@@ -74,7 +74,7 @@ export function ReminderWidget({
         </div>
       ) : reminders.length === 0 ? (
         <div className="text-center py-8 text-zinc-500 border border-dashed border-zinc-800 rounded-xl text-sm">
-          No pending reminders.
+          暂无待处理提醒事项。
         </div>
       ) : (
         <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
@@ -98,7 +98,7 @@ export function ReminderWidget({
                   {isOverdue && (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
                       <AlertTriangle className="w-2.5 h-2.5" />
-                      Overdue
+                      已逾期
                     </span>
                   )}
                 </div>
@@ -119,7 +119,7 @@ export function ReminderWidget({
                     <button
                       onClick={() => handleAction(reminder.id, "completed")}
                       disabled={actioningId !== null}
-                      title="Mark Completed"
+                      title="标记已完成"
                       className="p-1 rounded-md text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50 transition-colors"
                     >
                       {actioningId === reminder.id ? (
@@ -131,7 +131,7 @@ export function ReminderWidget({
                     <button
                       onClick={() => handleAction(reminder.id, "cancelled")}
                       disabled={actioningId !== null}
-                      title="Cancel Reminder"
+                      title="取消提醒"
                       className="p-1 rounded-md text-zinc-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
                     >
                       {actioningId === reminder.id ? (

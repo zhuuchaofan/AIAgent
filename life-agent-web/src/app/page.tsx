@@ -61,14 +61,14 @@ export default function Home() {
         <header className="flex justify-between items-center mb-12 border-b border-zinc-800/50 pb-6">
           <div>
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
-              Antigravity Life
+              小猪的快乐生活
             </h1>
-            <p className="text-zinc-500 text-sm mt-1">Capture your moments.</p>
+            <p className="text-zinc-500 text-sm mt-1">记录生活、管理提醒、生成每日总结</p>
           </div>
           
           {isLoggedIn ? (
             <button onClick={handleLogout} className="text-sm text-zinc-400 hover:text-white transition-colors">
-              Sign Out
+              退出登录
             </button>
           ) : null}
         </header>
@@ -80,16 +80,16 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-semibold text-white mb-2">Welcome Back</h2>
-            <p className="text-zinc-500 mb-8 max-w-sm">Sign in securely to record your life events and review your timeline.</p>
+            <h2 className="text-2xl font-semibold text-white mb-2">欢迎回来</h2>
+            <p className="text-zinc-500 mb-8 max-w-sm">安全登录以记录您的生活并回顾生活记录。</p>
             <button
               onClick={handleLogin}
               className="bg-white hover:bg-zinc-100 text-zinc-900 px-6 py-3 rounded-xl font-medium transition-colors"
             >
-              Sign in with Google
+              使用 Google 登录
             </button>
             <p className="text-xs text-zinc-600 mt-4">
-              (In dev mode without Firebase config, this acts as Mock Login)
+              （在未配置 Firebase 的开发模式下，此按钮作为模拟登录使用）
             </p>
           </div>
         ) : (

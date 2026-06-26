@@ -19,7 +19,7 @@ export function IngestForm({ onIngested }: { onIngested: () => void }) {
       setText("");
       onIngested();
     } catch (err: any) {
-      alert("Failed to ingest: " + err.message);
+      alert("记录失败: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -33,7 +33,7 @@ export function IngestForm({ onIngested }: { onIngested: () => void }) {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Tell me about your day..."
+            placeholder="记录今天发生的事情，或添加一个提醒..."
             className="w-full bg-transparent text-zinc-100 p-4 min-h-[120px] resize-none focus:outline-none placeholder:text-zinc-500"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -49,7 +49,7 @@ export function IngestForm({ onIngested }: { onIngested: () => void }) {
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              Submit
+              记录生活
             </button>
           </div>
         </div>
