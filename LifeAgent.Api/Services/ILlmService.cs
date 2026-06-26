@@ -37,5 +37,30 @@ public class ParsedEvent
     [System.Text.Json.Serialization.JsonPropertyName("reminderDescription")]
     public string? ReminderDescription { get; set; }
 
+    [System.Text.Json.Serialization.JsonPropertyName("reminder")]
+    public ReminderNode? Reminder { get; set; }
+
     public string? RawLlmOutput { get; set; }
 }
+
+/// <summary>
+/// 大模型输出的嵌套提醒节点结构，对应契约中的 reminder 对象
+/// </summary>
+public class ReminderNode
+{
+    [System.Text.Json.Serialization.JsonPropertyName("hasIntent")]
+    public bool HasIntent { get; set; } = false;
+
+    [System.Text.Json.Serialization.JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("dueAtIso8601")]
+    public string? DueAtIso8601 { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("parseStatus")]
+    public string ParseStatus { get; set; } = "none";
+}
+

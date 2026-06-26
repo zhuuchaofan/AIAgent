@@ -62,10 +62,13 @@ public class GeminiLlmService : ILlmService
   ""structuredData"": {}, // 根据 type 提取对应指标的字典
   ""extractionConfidence"": 0.85, // 你对提取结果的置信度 (0.0 到 1.0)
   ""needsReview"": false, // 如果遇到拿捏不准的数据或模糊意图，设置为 true
-  ""detectedReminderIntent"": false, // 如果用户提到'提醒我'、'记得...'、'待办...'或含有明显的未来提醒/待办意图，设置为 true
-  ""reminderTitle"": ""string"", // 当 detectedReminderIntent 为 true 时，提取要提醒事宜的简短标题（如'给猫剪指甲'），否则设为 null
-  ""reminderDueAt"": ""string"", // 当 detectedReminderIntent 为 true 时，根据用户提供的时间（结合用户当前本地时区和当前服务器时间，计算为符合 ISO8601 格式的 UTC 时间戳，如'2026-06-26T07:00:00Z'）。如果模糊或未提具体时间（如'以后提醒我'），设为 null
-  ""reminderDescription"": ""string"" // 当 detectedReminderIntent 为 true 时的提醒详细描述或补充说明（可选），否则设为 null
+  ""reminder"": {
+    ""hasIntent"": false, // 是否成功识别到用户的提醒意图。如果用户提到'提醒我'、'记得...'、'待办...'或含有明显的未来提醒/待办意图，设置为 true
+    ""title"": ""string"", // 提醒事宜的简短标题。若 hasIntent 为 false，则输出 null
+    ""description"": ""string"", // 提醒的详细描述/补充说明（可选），无则为 null
+    ""dueAtIso8601"": ""string"", // 提醒到期的 UTC ISO-8601 时间戳（如 '2026-06-26T07:00:00Z'），必须结合时区和当前 UTC 时间计算。若无明确时间，必须为 null
+    ""parseStatus"": ""string"" // 提醒解析状态，取值为：none（无提醒意图）, success（成功解析时间边界）, missing_due_time（有意图但完全缺失具体时间，如'以后提醒我'）, invalid_due_time（时间描述非法或无法计算）, llm_parse_failed（解析失败）
+  }
 }
 
 【系统字段禁令】（极其重要）
@@ -101,7 +104,7 @@ public class GeminiLlmService : ILlmService
             {
                 new
                 {
-                    parts = new[] { new { text = $"用户时区: {timeZone}\n用户输入: {text}" } }
+                    parts = new[] { new { text = $"当前时间 (UTC): {DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}\n用户本地时区: {timeZone}\n用户输入: {text}" } }
                 }
             },
             generationConfig = new
@@ -136,9 +139,14 @@ public class GeminiLlmService : ILlmService
                 .GetProperty("text");
 
             rawOutput = textElement.GetString() ?? string.Empty;
+            _logger.LogInformation("Gemini API 返回的 Raw Output:\n{Raw}", rawOutput);
             
+            // 使用 LlmHelper 进行清洗
+            string cleanedJson = LlmHelper.ExtractJsonObject(rawOutput);
+            _logger.LogInformation("清洗后的 JSON: {Cleaned}", cleanedJson);
+
             // 反序列化为 ParsedEvent
-            var parsedEvent = JsonSerializer.Deserialize<ParsedEvent>(rawOutput, _jsonOptions);
+            var parsedEvent = JsonSerializer.Deserialize<ParsedEvent>(cleanedJson, _jsonOptions);
             
             if (parsedEvent == null)
             {
@@ -148,8 +156,28 @@ public class GeminiLlmService : ILlmService
             // 保存 RawLlmOutput
             parsedEvent.RawLlmOutput = rawOutput;
 
+            // 将嵌套的 Reminder 节点属性映射至扁平字段，确保后端业务向后兼容
+            if (parsedEvent.Reminder != null)
+            {
+                _logger.LogInformation("反序列化成功: HasIntent={HasIntent}, Title={Title}, DueAt={DueAt}", 
+                    parsedEvent.Reminder.HasIntent, parsedEvent.Reminder.Title, parsedEvent.Reminder.DueAtIso8601);
+                parsedEvent.DetectedReminderIntent = parsedEvent.Reminder.HasIntent;
+                parsedEvent.ReminderTitle = parsedEvent.Reminder.Title;
+                parsedEvent.ReminderDueAtIso = parsedEvent.Reminder.DueAtIso8601;
+                parsedEvent.ReminderDescription = parsedEvent.Reminder.Description;
+            }
+            else
+            {
+                _logger.LogWarning("反序列化后的 parsedEvent.Reminder 为 null!");
+            }
+
             // 提取完毕，返回 parsedEvent
             return parsedEvent;
+        }
+        catch (TaskCanceledException)
+        {
+            _logger.LogError("Gemini API 调用超时（超过 30 秒），请检查网络状况或 API Key 有效性。");
+            throw new LlmParseFailedException("Gemini API 请求超时（30s）", rawOutput);
         }
         catch (JsonException ex)
         {

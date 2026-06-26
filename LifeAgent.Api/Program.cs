@@ -33,7 +33,11 @@ if (string.Equals(useMockLlm, "true", StringComparison.OrdinalIgnoreCase))
 }
 else
 {
-    builder.Services.AddHttpClient<ILlmService, GeminiLlmService>();
+    builder.Services.AddHttpClient<ILlmService, GeminiLlmService>(client =>
+    {
+        // Gemini API 超时保护：真实调用通常 5-15s，上限设为 30s 防止前端无限 loading
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
 }
 var app = builder.Build();
 

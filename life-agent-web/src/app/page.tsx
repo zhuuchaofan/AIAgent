@@ -6,6 +6,7 @@ import { auth } from "@/lib/firebase";
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { IngestForm } from "@/components/IngestForm";
 import { Timeline } from "@/components/Timeline";
+import { ReminderWidget } from "@/components/ReminderWidget";
 import { Loader2 } from "lucide-react";
 
 export default function Home() {
@@ -55,7 +56,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-300 p-6 md:p-12 font-sans selection:bg-indigo-500/30">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <header className="flex justify-between items-center mb-12 border-b border-zinc-800/50 pb-6">
           <div>
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
@@ -91,9 +92,14 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
-            <Timeline refreshTrigger={refreshTrigger} />
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
+              <Timeline refreshTrigger={refreshTrigger} />
+            </div>
+            <div className="lg:col-span-1">
+              <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
+            </div>
           </div>
         )}
       </div>

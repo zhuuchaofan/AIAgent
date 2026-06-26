@@ -37,6 +37,20 @@ public class LifeEventService : ILifeEventService
         lifeEvent.OccurredAt = now;       // Phase 1：默认等于 CreatedAt，不解析自然语言时间
         lifeEvent.Source     = "manual";  // Phase 1 全部为手动录入
 
+        if (lifeEvent.StructuredData != null)
+        {
+            var cleaned = new Dictionary<string, object>();
+            foreach (var kvp in lifeEvent.StructuredData)
+            {
+                var converted = LlmHelper.ConvertJsonElement(kvp.Value);
+                if (converted != null)
+                {
+                    cleaned[kvp.Key] = converted;
+                }
+            }
+            lifeEvent.StructuredData = cleaned;
+        }
+
         // ── Firestore 写入路径：users/{userId}/life_events/{eventId} ───────
         var docRef = _db
             .Collection("users")
@@ -68,6 +82,20 @@ public class LifeEventService : ILifeEventService
         lifeEvent.CreatedAt  = now;
         lifeEvent.OccurredAt = now;
         lifeEvent.Source     = "manual";
+
+        if (lifeEvent.StructuredData != null)
+        {
+            var cleaned = new Dictionary<string, object>();
+            foreach (var kvp in lifeEvent.StructuredData)
+            {
+                var converted = LlmHelper.ConvertJsonElement(kvp.Value);
+                if (converted != null)
+                {
+                    cleaned[kvp.Key] = converted;
+                }
+            }
+            lifeEvent.StructuredData = cleaned;
+        }
 
         Reminder? reminder = null;
 

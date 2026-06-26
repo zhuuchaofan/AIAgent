@@ -77,6 +77,15 @@ public class MockLlmService : ILlmService
             }
             result.ReminderDueAtIso = utcTomorrow3Pm.ToString("yyyy-MM-ddTHH:mm:ssZ");
             result.ReminderDescription = "给猫剪指甲";
+
+            result.Reminder = new ReminderNode
+            {
+                HasIntent = true,
+                Title = result.ReminderTitle,
+                Description = result.ReminderDescription,
+                DueAtIso8601 = result.ReminderDueAtIso,
+                ParseStatus = "success"
+            };
         }
         else if (text.Contains("买一本新书") && text.Contains("以后记得提醒"))
         {
@@ -84,6 +93,15 @@ public class MockLlmService : ILlmService
             result.ReminderTitle = "买一本新书";
             result.ReminderDueAtIso = null;
             result.ReminderDescription = "买一本新书";
+
+            result.Reminder = new ReminderNode
+            {
+                HasIntent = true,
+                Title = result.ReminderTitle,
+                Description = result.ReminderDescription,
+                DueAtIso8601 = null,
+                ParseStatus = "missing_due_time"
+            };
         }
         else if (text.Contains("测试非法时间"))
         {
@@ -91,6 +109,23 @@ public class MockLlmService : ILlmService
             result.ReminderTitle = "测试非法时间";
             result.ReminderDueAtIso = "INVALID_TIME";
             result.ReminderDescription = "测试非法时间";
+
+            result.Reminder = new ReminderNode
+            {
+                HasIntent = true,
+                Title = result.ReminderTitle,
+                Description = result.ReminderDescription,
+                DueAtIso8601 = "INVALID_TIME",
+                ParseStatus = "invalid_due_time"
+            };
+        }
+        else
+        {
+            result.Reminder = new ReminderNode
+            {
+                HasIntent = false,
+                ParseStatus = "none"
+            };
         }
 
         _logger.LogInformation(
