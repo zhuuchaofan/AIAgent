@@ -240,4 +240,46 @@ public class MockLlmService : ILlmService
         // 取文本前 20 字作为标题
         result.Title = text.Length <= 20 ? text : text[..20] + "…";
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SummarizeAsync — Mock 每日总结（用于本地验证）
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    public Task<SummarizedDay> SummarizeAsync(List<LifeAgent.Api.Models.LifeEvent> events, string date, string timeZone)
+    {
+        _logger.LogInformation("MockLlmService SummarizeAsync 调用，日期={Date}，事件数={Count}", date, events.Count);
+
+        // 根据事件 type 提炼高光
+        var highlights = events
+            .Take(3)
+            .Select(e => e.Title)
+            .ToList();
+
+        // 简单 Mock 情绪：有超过 2 个 cycling 事件 → 积极
+        var typeGroups = events.GroupBy(e => e.Type).ToDictionary(g => g.Key, g => g.Count());
+        string moodLabel = "平静";
+        double moodScore = 6.5;
+        if (typeGroups.TryGetValue("cycling", out int cycCount) && cycCount >= 2)
+        {
+            moodLabel = "积极";
+            moodScore = 8.0;
+        }
+        else if (typeGroups.TryGetValue("cat", out _))
+        {
+            moodLabel = "愉快";
+            moodScore = 7.5;
+        }
+
+        var result = new SummarizedDay
+        {
+            Summary = $"（Mock）{date} 共记录了 {events.Count} 条生活事件。" +
+                       "今天充实而有意义，你认真地记录了自己的生活点滴。",
+            Highlights = highlights,
+            MoodLabel = moodLabel,
+            MoodScore = moodScore,
+            Suggestions = new List<string> { "继续保持记录习惯，让每一天都有迹可循。" }
+        };
+
+        return Task.FromResult(result);
+    }
 }

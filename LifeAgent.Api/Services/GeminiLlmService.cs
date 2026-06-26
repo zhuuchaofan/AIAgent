@@ -190,4 +190,100 @@ public class GeminiLlmService : ILlmService
             throw new LlmParseFailedException($"解析失败: {ex.Message}", rawOutput);
         }
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SummarizeAsync — 每日总结
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    public async Task<SummarizedDay> SummarizeAsync(List<LifeEvent> events, string date, string timeZone)
+    {
+        _logger.LogInformation("GeminiLlmService 开始生成每日总结，日期={Date}，事件数={Count}", date, events.Count);
+
+        // 将事件列表转为易读的文本格式，传给 LLM
+        var eventLines = events.Select((e, i) =>
+            $"{i + 1}. [{e.Type}] {e.Title}：{e.Content}" +
+            (e.Tags.Count > 0 ? $"（标签：{string.Join("、", e.Tags)}）" : ""));
+        var eventsText = string.Join("\n", eventLines);
+
+        string systemPrompt = @"
+你是一位温暖、洞察力强的生活记录助手。你的任务是对用户今天的生活记录进行总结，提炼亮点，评估情绪状态，并给出实用的小建议。
+请**严格只输出一个合法的 JSON 对象**，绝不要在输出中包含 markdown 代码块标记（如 ```json）。
+
+输出的 JSON 必须符合以下结构：
+{
+  ""summary"": ""string"",       // 2-4 句话的自然语言总结，温暖亲切，提炼当天最重要的经历
+  ""highlights"": [""string""],  // 1-3 条最值得纪念的高光时刻（简短短语）
+  ""moodLabel"": ""string"",     // 一个词概括当天情绪，如：积极、平静、充实、疲惫、愉快
+  ""moodScore"": number,         // 情绪评分 1-10（1=极差，10=极好），基于事件内容推断
+  ""suggestions"": [""string""]  // 1-2 条基于当天记录的个性化小建议（可为空数组 []）
+}
+";
+
+        var userContent = $"日期：{date}\n用户时区：{timeZone}\n\n今天的生活记录（共 {events.Count} 条）：\n{eventsText}";
+
+        var requestBody = new
+        {
+            system_instruction = new
+            {
+                parts = new[] { new { text = systemPrompt } }
+            },
+            contents = new[]
+            {
+                new { parts = new[] { new { text = userContent } } }
+            },
+            generationConfig = new
+            {
+                responseMimeType = "application/json"
+            }
+        };
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={_apiKey}";
+        var response = await _httpClient.PostAsJsonAsync(url, requestBody, _jsonOptions);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Gemini SummarizeAsync 调用失败: {Status} {Err}", response.StatusCode, err);
+            throw new LlmParseFailedException($"Gemini API 返回错误: {response.StatusCode}", err);
+        }
+
+        var jsonResponse = await response.Content.ReadAsStringAsync();
+        string rawOutput = string.Empty;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonResponse);
+            var textElement = doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text");
+
+            rawOutput = textElement.GetString() ?? string.Empty;
+            _logger.LogInformation("SummarizeAsync Raw Output:\n{Raw}", rawOutput);
+
+            string cleanedJson = LlmHelper.ExtractJsonObject(rawOutput);
+            var result = JsonSerializer.Deserialize<SummarizedDay>(cleanedJson, _jsonOptions);
+
+            if (result == null)
+                throw new LlmParseFailedException("SummarizeAsync 反序列化结果为空", rawOutput);
+
+            return result;
+        }
+        catch (TaskCanceledException)
+        {
+            _logger.LogError("SummarizeAsync 调用超时（超过 30 秒）");
+            throw new LlmParseFailedException("Gemini 每日总结请求超时（30s）", rawOutput);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError("SummarizeAsync JSON 解析失败: {Msg}. Raw: {Raw}", ex.Message, rawOutput);
+            throw new LlmParseFailedException($"每日总结 JSON 结构错误: {ex.Message}", rawOutput);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SummarizeAsync 发生未知异常");
+            throw new LlmParseFailedException($"每日总结解析失败: {ex.Message}", rawOutput);
+        }
+    }
 }

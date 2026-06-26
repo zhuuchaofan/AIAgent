@@ -14,6 +14,14 @@ public interface ILlmService
     /// <param name="text">用户原始输入</param>
     /// <param name="timeZone">用户时区（IANA），用于未来自然语言时间解析</param>
     Task<ParsedEvent> ParseAsync(string text, string timeZone);
+
+    /// <summary>
+    /// 对指定日期的生活事件列表生成每日总结。
+    /// </summary>
+    /// <param name="events">当天的 LifeEvent 列表（非空）</param>
+    /// <param name="date">日期字符串，格式 YYYY-MM-DD（用户本地时区）</param>
+    /// <param name="timeZone">用户时区（IANA）</param>
+    Task<SummarizedDay> SummarizeAsync(List<LifeEvent> events, string date, string timeZone);
 }
 
 /// <summary>LLM 解析结果（中间层，不直接写 Firestore）</summary>
@@ -64,3 +72,23 @@ public class ReminderNode
     public string ParseStatus { get; set; } = "none";
 }
 
+/// <summary>
+/// LLM 每日总结输出（中间层，用于 DailySummaryService 转换后写入 Firestore）
+/// </summary>
+public class SummarizedDay
+{
+    [System.Text.Json.Serialization.JsonPropertyName("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("highlights")]
+    public List<string> Highlights { get; set; } = new();
+
+    [System.Text.Json.Serialization.JsonPropertyName("moodLabel")]
+    public string MoodLabel { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("moodScore")]
+    public double? MoodScore { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("suggestions")]
+    public List<string> Suggestions { get; set; } = new();
+}

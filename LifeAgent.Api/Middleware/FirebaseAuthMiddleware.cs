@@ -29,12 +29,36 @@ public class FirebaseAuthMiddleware
 
         // ── Mock 模式（本地开发提速）──────────────────────────────
         // 环境变量 USE_MOCK_AUTH=true 时跳过 Firebase 验签
-        // 注入固定测试用户，无需任何 Token
+        // 注入固定测试用户，支持多用户和未登录测试
         var useMockAuth = Environment.GetEnvironmentVariable("USE_MOCK_AUTH");
         if (string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
         {
-            context.Items["userId"] = "test_user_01";
-            _logger.LogDebug("MockAuth 模式已启用，注入测试用户 test_user_01");
+            var mockAuthHeader = context.Request.Headers["Authorization"].ToString();
+            if (string.IsNullOrWhiteSpace(mockAuthHeader) || !mockAuthHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedException("缺少 Authorization: Bearer <token> 请求头");
+            }
+
+            var mockIdToken = mockAuthHeader["Bearer ".Length..].Trim();
+            if (string.IsNullOrEmpty(mockIdToken))
+            {
+                throw new UnauthorizedException("Bearer Token 不能为空");
+            }
+
+            if (mockIdToken == "mock_local_token_123")
+            {
+                context.Items["userId"] = "test_user_01";
+            }
+            else if (mockIdToken == "mock_local_token_456")
+            {
+                context.Items["userId"] = "test_user_02";
+            }
+            else
+            {
+                context.Items["userId"] = $"mock_{mockIdToken}";
+            }
+
+            _logger.LogDebug("MockAuth 模式已启用，注入测试用户 {UserId}", context.Items["userId"]);
             await _next(context);
             return;
         }

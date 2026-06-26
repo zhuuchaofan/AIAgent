@@ -7,6 +7,7 @@ import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { IngestForm } from "@/components/IngestForm";
 import { Timeline } from "@/components/Timeline";
 import { ReminderWidget } from "@/components/ReminderWidget";
+import { DailySummaryCard } from "@/components/DailySummaryCard";
 import { Loader2 } from "lucide-react";
 
 export default function Home() {
@@ -97,8 +98,9 @@ export default function Home() {
               <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
               <Timeline refreshTrigger={refreshTrigger} />
             </div>
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-6">
               <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
+              <DailySummaryCard refreshTrigger={refreshTrigger} />
             </div>
           </div>
         )}
