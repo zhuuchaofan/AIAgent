@@ -34,14 +34,7 @@ public class GeminiLlmService : ILlmService
         
         _model = _config["Gemini:Model"] ?? "gemini-2.5-flash";
 
-        if (string.IsNullOrEmpty(_apiKey))
-        {
-            _logger.LogWarning("Gemini API Key 未配置，将导致调用失败！");
-        }
-        else
-        {
-            _logger.LogInformation("GeminiLlmService 初始化完成，Key 前缀: {Prefix}", _apiKey[..Math.Min(8, _apiKey.Length)]);
-        }
+        _logger.LogInformation("GeminiLlmService 初始化完成，GEMINI_API_KEY configured: {Configured}", !string.IsNullOrEmpty(_apiKey));
     }
 
     public async Task<ParsedEvent> ParseAsync(string text, string timeZone)
