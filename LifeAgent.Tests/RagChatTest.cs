@@ -269,7 +269,7 @@ public class RagChatTest
     }
 
     [Fact]
-    public async Task ProcessChatAsync_SessionNotBelongsToUser_ThrowsKeyNotFoundException()
+    public async Task ProcessChatAsync_SessionNotBelongsToUser_AutoCreatesNewSessionForUser()
     {
         // Arrange
         var userId = "user_123";
@@ -280,13 +280,20 @@ public class RagChatTest
         var request = new RagChatRequest
         {
             ConversationId = "conv_1",
-            Message = "非法会话提问"
+            Message = "我应该骑行几公里？"
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => 
-            _chatService.ProcessChatAsync(userId, request)
-        );
+        var chunk = new KnowledgeChunk { Id = "chunk_1", DocumentId = "doc_1", DocumentName = "doc.txt", Content = "内容" };
+        _vectorStore.ChunksToReturn.Add(new VectorSearchResult { Chunk = chunk, Distance = 0.1 });
+        _answerGenerator.AnswerToReturn = "回答内容";
+
+        // Act
+        var result = await _chatService.ProcessChatAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        // Verify a brand-new session was auto-created for user_123 in the repo
+        Assert.True(_sessionRepo.Sessions.ContainsKey("user_123_conv_1"));
     }
 
     [Fact]
@@ -448,6 +455,79 @@ public class RagChatTest
         var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
         Assert.Equal(404, jsonResult.StatusCode);
     }
+
+    [Fact]
+    public async Task GetRagChatHistoryAsync_ValidRequest_Returns200WithMessages()
+    {
+        // Arrange
+        var userId = "user_123";
+        var conversationId = "conv_123";
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = userId;
+
+        var repo = new FakeChatSessionRepository();
+        repo.Sessions[$"{userId}_{conversationId}"] = new ChatSession { Id = conversationId, Title = "Test Title" };
+        repo.SessionMessages[$"{userId}_{conversationId}"] = new List<ChatMessage>
+        {
+            new ChatMessage { Id = "msg_1", Role = "user", Content = "Hello", CreatedAt = DateTime.UtcNow.AddMinutes(-1) },
+            new ChatMessage { Id = "msg_2", Role = "assistant", Content = "Hi there", CreatedAt = DateTime.UtcNow }
+        };
+
+        // Act
+        var result = await RagChatEndpoints.GetRagChatHistoryAsync(conversationId, context, repo, NullLogger<RagChatService>.Instance);
+
+        // Assert
+        var okResult = Assert.IsAssignableFrom<IValueHttpResult>(result);
+        Assert.NotNull(okResult.Value);
+
+        var value = okResult.Value;
+        var successProp = value?.GetType().GetProperty("success")?.GetValue(value) as bool?;
+        var dataProp = value?.GetType().GetProperty("data")?.GetValue(value) as List<ChatMessage>;
+
+        Assert.True(successProp);
+        Assert.NotNull(dataProp);
+        Assert.Equal(2, dataProp.Count);
+        Assert.Equal("Hello", dataProp[0].Content);
+        Assert.Equal("Hi there", dataProp[1].Content);
+    }
+
+    [Fact]
+    public async Task GetRagChatHistoryAsync_SessionNotFoundOrDifferentUser_Returns404()
+    {
+        // Arrange
+        var userId = "user_123";
+        var conversationId = "conv_123";
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = userId;
+
+        var repo = new FakeChatSessionRepository();
+        // Set up the session for a DIFFERENT user "user_999"
+        repo.Sessions[$"user_999_{conversationId}"] = new ChatSession { Id = conversationId, Title = "Other User's Chat" };
+
+        // Act
+        var result = await RagChatEndpoints.GetRagChatHistoryAsync(conversationId, context, repo, NullLogger<RagChatService>.Instance);
+
+        // Assert
+        var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(404, jsonResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetRagChatHistoryAsync_Unauthenticated_Returns401()
+    {
+        // Arrange
+        var conversationId = "conv_123";
+        var context = new DefaultHttpContext(); // No userId in Items -> Unauthenticated
+
+        var repo = new FakeChatSessionRepository();
+
+        // Act
+        var result = await RagChatEndpoints.GetRagChatHistoryAsync(conversationId, context, repo, NullLogger<RagChatService>.Instance);
+
+        // Assert
+        var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(401, jsonResult.StatusCode);
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -464,6 +544,19 @@ public class FakeChatSessionRepository : IChatSessionRepository
     public Task<ChatSession?> GetSessionAsync(string userId, string sessionId)
     {
         Sessions.TryGetValue($"{userId}_{sessionId}", out var session);
+        return Task.FromResult(session);
+    }
+
+    public Task<ChatSession> CreateSessionAsync(string userId, string sessionId)
+    {
+        var session = new ChatSession
+        {
+            Id = sessionId,
+            Title = "New Chat",
+            CreatedAt = DateTime.UtcNow,
+            LastMessageAt = DateTime.UtcNow
+        };
+        Sessions[$"{userId}_{sessionId}"] = session;
         return Task.FromResult(session);
     }
 

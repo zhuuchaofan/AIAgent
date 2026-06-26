@@ -10,7 +10,7 @@ import {
   FileText,
   Sparkles
 } from "lucide-react";
-import { getDocuments, sendRagMessage } from "@/app/actions/knowledge";
+import { getDocuments, sendRagMessage, getRagChatHistory } from "@/app/actions/knowledge";
 
 interface KnowledgeDocument {
   id: string;
@@ -50,8 +50,9 @@ export function RagChat() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 初始化会话 ID 并在组件挂载时拉取文档列表
+  // 初始化会话 ID 并在组件挂载时拉取文档列表与历史对话
   useEffect(() => {
+    const hasExistingSession = !!sessionStorage.getItem("rag_conv_id");
     // 每次会话生成或沿用一个唯一的会话 ID
     let currentConvId = sessionStorage.getItem("rag_conv_id");
     if (!currentConvId) {
@@ -61,20 +62,38 @@ export function RagChat() {
     // 异步推迟 setConvId 从而避开同步 set-state-in-effect 检测
     Promise.resolve().then(() => setConvId(currentConvId));
 
-    const fetchDocsForChat = async () => {
-      try {
-        const res = await getDocuments();
+    const initChat = async () => {
+      // 1. 并行加载可检索文档列表
+      const docsPromise = getDocuments().then(res => {
         if (res.success && Array.isArray(res.data)) {
           // 只有状态为 success 的文档才能用于 RAG 问答
           const successDocs = (res.data as KnowledgeDocument[]).filter(d => d.status === "success");
           setDocs(successDocs);
         }
-      } catch (err) {
+      }).catch(err => {
         console.error("Fetch docs for RAG chat failed:", err);
+      });
+
+      // 2. 如果存在已有会话，并行拉取云端历史记录并渲染
+      let historyPromise = Promise.resolve();
+      if (hasExistingSession && currentConvId) {
+        historyPromise = getRagChatHistory(currentConvId).then(historyRes => {
+          if (historyRes.success && Array.isArray(historyRes.data) && historyRes.data.length > 0) {
+            const mappedMessages: Message[] = historyRes.data.map((m: { role: string; content: string }) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content
+            }));
+            setMessages(mappedMessages);
+          }
+        }).catch(err => {
+          console.error("Fetch chat history failed:", err);
+        });
       }
+
+      await Promise.all([docsPromise, historyPromise]);
     };
 
-    fetchDocsForChat();
+    initChat();
   }, []);
 
   // 自动滚动到聊天底部

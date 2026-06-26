@@ -14,6 +14,7 @@ public static class RagChatEndpoints
     public static void MapRagChatEndpoints(this WebApplication app)
     {
         app.MapPost("/api/v1/chat/rag", ProcessRagChatAsync);
+        app.MapGet("/api/v1/chat/rag/{conversationId}/messages", GetRagChatHistoryAsync);
     }
 
     public static async Task<IResult> ProcessRagChatAsync(
@@ -55,6 +56,43 @@ public static class RagChatEndpoints
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error in RAG chat endpoint for User: {UserId}", userId);
+            return Results.Json(new { success = false, message = "An internal server error occurred." }, statusCode: 500);
+        }
+    }
+
+    public static async Task<IResult> GetRagChatHistoryAsync(
+        string conversationId,
+        HttpContext httpContext,
+        [FromServices] IChatSessionRepository sessionRepository,
+        [FromServices] ILogger<RagChatService> logger)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        if (string.IsNullOrEmpty(conversationId))
+        {
+            return Results.BadRequest(new { success = false, message = "Required parameter (conversationId) is missing." });
+        }
+
+        try
+        {
+            // Verify session existence to validate ownership/access
+            var session = await sessionRepository.GetSessionAsync(userId, conversationId);
+            if (session == null)
+            {
+                return Results.Json(new { success = false, message = "Conversation not found or access denied." }, statusCode: 404);
+            }
+
+            // Retrieve recent messages (up to 50 for history display)
+            var messages = await sessionRepository.GetRecentMessagesAsync(userId, conversationId, 50);
+            return Results.Ok(new { success = true, data = messages });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error retrieving chat history for User: {UserId}, Session: {SessionId}", userId, conversationId);
             return Results.Json(new { success = false, message = "An internal server error occurred." }, statusCode: 500);
         }
     }
