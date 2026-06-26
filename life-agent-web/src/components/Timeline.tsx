@@ -94,7 +94,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
       let parsedStructuredData = {};
       try {
         parsedStructuredData = JSON.parse(editStructuredData);
-      } catch (e) {
+      } catch {
         alert("结构化数据 (Structured Data) 格式不合法，请输入正确的 JSON");
         return;
       }
