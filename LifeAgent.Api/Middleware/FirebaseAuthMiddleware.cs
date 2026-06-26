@@ -20,8 +20,10 @@ public class FirebaseAuthMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // /health 不需要鉴权，直接放行
-        if (context.Request.Path.StartsWithSegments("/health"))
+        // /health 和 /internal 不需要 Firebase 鉴权，直接放行
+        // /internal 端点使用 Cloud Tasks OIDC token，由端点自身进行验证
+        if (context.Request.Path.StartsWithSegments("/health") ||
+            context.Request.Path.StartsWithSegments("/internal"))
         {
             await _next(context);
             return;

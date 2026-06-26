@@ -28,6 +28,20 @@ public class FirestoreChatSessionRepository : IChatSessionRepository
         return snap.Exists ? snap.ConvertTo<ChatSession>() : null;
     }
 
+    public async Task<ChatSession> CreateSessionAsync(string userId, string sessionId)
+    {
+        var docRef = GetSessionRef(userId, sessionId);
+        var session = new ChatSession
+        {
+            Id = sessionId,
+            Title = "New Chat",
+            CreatedAt = DateTime.UtcNow,
+            LastMessageAt = DateTime.UtcNow
+        };
+        await docRef.CreateAsync(session);
+        return session;
+    }
+
     public async Task<List<ChatMessage>> GetRecentMessagesAsync(string userId, string sessionId, int limit)
     {
         var messagesRef = GetSessionRef(userId, sessionId).Collection("messages");

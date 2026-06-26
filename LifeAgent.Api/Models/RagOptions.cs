@@ -13,4 +13,5 @@ public class RagOptions
     public string CloudTasksQueueName { get; set; } = "";
     public string CloudTasksLocation { get; set; } = "";
     public string InternalProcessAudience { get; set; } = "";
+    public string CloudTasksServiceAccountEmail { get; set; } = "";
 }

@@ -45,11 +45,12 @@ public class RagChatService : IRagChatService
             throw new ArgumentException("Conversation ID and message are required.");
         }
 
-        // 1. 验证会话存在且属于该用户
+        // 1. 验证/创建会话 — 首条消息时自动创建
         var session = await _sessionRepository.GetSessionAsync(userId, request.ConversationId);
         if (session == null)
         {
-            throw new KeyNotFoundException($"Session {request.ConversationId} not found or does not belong to User {userId}.");
+            session = await _sessionRepository.CreateSessionAsync(userId, request.ConversationId);
+            _logger.LogInformation("Auto-created chat session {SessionId} for User {UserId}", request.ConversationId, userId);
         }
 
         // 2. 生成问题的 Embedding 向量并校验

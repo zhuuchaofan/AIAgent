@@ -51,11 +51,10 @@ public class CloudTasksService : ICloudTasksService
                     var audience = _ragOptions.InternalProcessAudience;
                     if (string.IsNullOrEmpty(audience))
                     {
-                        audience = "http://localhost:5000/";
+                        audience = "http://localhost:5000";
                     }
-                    if (!audience.EndsWith("/")) audience += "/";
 
-                    var localUrl = $"{audience}internal/api/v1/documents/process";
+                    var localUrl = $"{audience.TrimEnd('/')}/internal/api/v1/documents/process";
                     var payload = new
                     {
                         documentId,
@@ -98,9 +97,8 @@ public class CloudTasksService : ICloudTasksService
             {
                 throw new InvalidOperationException("InternalProcessAudience is not configured in RagOptions.");
             }
-            if (!audience.EndsWith("/")) audience += "/";
 
-            var workerUrl = $"{audience}internal/api/v1/documents/process";
+            var workerUrl = $"{audience.TrimEnd('/')}/internal/api/v1/documents/process";
 
             var task = new Google.Cloud.Tasks.V2.Task
             {
@@ -117,6 +115,7 @@ public class CloudTasksService : ICloudTasksService
                     })),
                     OidcToken = new Google.Cloud.Tasks.V2.OidcToken
                     {
+                        ServiceAccountEmail = _ragOptions.CloudTasksServiceAccountEmail,
                         Audience = audience
                     }
                 }

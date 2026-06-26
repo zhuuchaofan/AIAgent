@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Google;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -176,7 +177,15 @@ public static class DocumentEndpoints
             // 物理删除 GCS 中的源文件
             if (!string.IsNullOrEmpty(doc.GcsPath))
             {
-                await storageService.DeleteFileByPathAsync(doc.GcsPath);
+                try
+                {
+                    await storageService.DeleteFileByPathAsync(doc.GcsPath);
+                }
+                catch (GoogleApiException gex) when (gex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    // 文件已被上游清理（如上传失败时的回滚），正常放行
+                    logger.LogWarning("GCS file already deleted for Document {DocId}, skipping GCS cleanup: {GcsPath}", documentId, doc.GcsPath);
+                }
             }
 
             // 删除元数据
