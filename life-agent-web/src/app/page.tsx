@@ -9,10 +9,13 @@ import { Timeline } from "@/components/Timeline";
 import { ReminderWidget } from "@/components/ReminderWidget";
 import { DailySummaryCard } from "@/components/DailySummaryCard";
 import { Loader2 } from "lucide-react";
+import { KnowledgeBase } from "@/components/KnowledgeBase";
+import { RagChat } from "@/components/RagChat";
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeTab, setActiveTab] = useState<"assistant" | "knowledge" | "chat">("assistant");
 
   useEffect(() => {
     // Check initial auth state from cookies
@@ -58,12 +61,12 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-300 p-6 md:p-12 font-sans selection:bg-indigo-500/30">
       <div className="max-w-6xl mx-auto">
-        <header className="flex justify-between items-center mb-12 border-b border-zinc-800/50 pb-6">
+        <header className="flex justify-between items-center mb-8 border-b border-zinc-800/50 pb-6">
           <div>
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
               小猪的快乐生活
             </h1>
-            <p className="text-zinc-500 text-sm mt-1">记录生活、管理提醒、生成每日总结</p>
+            <p className="text-zinc-500 text-sm mt-1">记录生活、管理提醒、生成每日总结与个人知识库 RAG</p>
           </div>
           
           {isLoggedIn ? (
@@ -93,15 +96,71 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
-              <Timeline refreshTrigger={refreshTrigger} />
+          <div className="space-y-6">
+            {/* Tab 导航 */}
+            <div className="flex border-b border-zinc-800/40 pb-px mb-8 gap-6 text-sm font-semibold select-none">
+              <button
+                onClick={() => setActiveTab("assistant")}
+                className={`pb-4 transition-all duration-300 relative ${
+                  activeTab === "assistant" 
+                    ? "text-white" 
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                生活助理
+                {activeTab === "assistant" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("knowledge")}
+                className={`pb-4 transition-all duration-300 relative ${
+                  activeTab === "knowledge" 
+                    ? "text-white" 
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                知识库管理
+                {activeTab === "knowledge" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`pb-4 transition-all duration-300 relative ${
+                  activeTab === "chat" 
+                    ? "text-white" 
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                知识库问答 (RAG)
+                {activeTab === "chat" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
+                )}
+              </button>
             </div>
-            <div className="lg:col-span-1 space-y-6">
-              <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
-              <DailySummaryCard refreshTrigger={refreshTrigger} />
-            </div>
+
+            {/* 内容区 */}
+            {activeTab === "assistant" && (
+              <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-6">
+                  <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
+                  <Timeline refreshTrigger={refreshTrigger} />
+                </div>
+                <div className="lg:col-span-1 space-y-6">
+                  <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
+                  <DailySummaryCard refreshTrigger={refreshTrigger} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "knowledge" && (
+              <KnowledgeBase />
+            )}
+
+            {activeTab === "chat" && (
+              <RagChat />
+            )}
           </div>
         )}
       </div>
