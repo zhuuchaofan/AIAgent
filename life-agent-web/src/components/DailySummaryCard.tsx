@@ -16,6 +16,7 @@ import {
   Lightbulb,
   BookOpen,
 } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Props {
   refreshTrigger: number;
@@ -41,6 +42,7 @@ function getGeneratedByLabel(by: string): string {
 }
 
 export function DailySummaryCard({ refreshTrigger }: Props) {
+  const { user } = useAuth();
   const [summary, setSummary] = useState<DailySummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -65,9 +67,18 @@ export function DailySummaryCard({ refreshTrigger }: Props) {
   }, [todayDate]);
 
   useEffect(() => {
-    setIsLoading(true);
-    fetchTodaySummary().finally(() => setIsLoading(false));
-  }, [fetchTodaySummary, refreshTrigger]);
+    if (!user) return;
+    const load = async () => {
+      await Promise.resolve();
+      setIsLoading(true);
+      try {
+        await fetchTodaySummary();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, [fetchTodaySummary, refreshTrigger, user]);
 
   const handleGenerate = async (force = false) => {
     if (isGenerating) return;

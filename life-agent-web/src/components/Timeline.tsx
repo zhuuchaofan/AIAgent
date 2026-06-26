@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { getEvents, updateEvent, deleteEvent } from "@/app/actions/events";
 import { format } from "date-fns";
 import { Loader2, Calendar, Trash2, Edit3, Save, X, Tag } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 function getTypeText(type: string): string {
   switch(type) {
@@ -16,6 +17,7 @@ function getTypeText(type: string): string {
 }
 
 export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
+  const { user } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,9 +50,18 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    fetchEvents(undefined, selectedTag).finally(() => setIsLoading(false));
-  }, [fetchEvents, selectedTag, refreshTrigger]);
+    if (!user) return;
+    const load = async () => {
+      await Promise.resolve();
+      setIsLoading(true);
+      try {
+        await fetchEvents(undefined, selectedTag);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, [fetchEvents, selectedTag, refreshTrigger, user]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm("确定要删除此事件吗？删除后将无法恢复。")) {

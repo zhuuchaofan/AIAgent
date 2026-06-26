@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { getReminders, updateReminder } from "@/app/actions/reminders";
 import { format } from "date-fns";
 import { Loader2, Bell, Clock, Check, X, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Reminder {
   id: string;
@@ -26,6 +27,7 @@ export function ReminderWidget({
   refreshTrigger: number;
   onUpdated: () => void;
 }) {
+  const { user } = useAuth();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actioningId, setActioningId] = useState<string | null>(null);
@@ -42,9 +44,18 @@ export function ReminderWidget({
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    fetchReminders().finally(() => setIsLoading(false));
-  }, [fetchReminders, refreshTrigger]);
+    if (!user) return;
+    const load = async () => {
+      await Promise.resolve();
+      setIsLoading(true);
+      try {
+        await fetchReminders();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, [fetchReminders, refreshTrigger, user]);
 
   const handleAction = async (id: string, status: "completed" | "cancelled") => {
     if (actioningId) return;

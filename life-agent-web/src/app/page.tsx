@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { login, logout, getToken } from "./actions/auth";
-import { auth } from "@/lib/firebase";
-import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
+import { useState } from "react";
+import { useAuth } from "@/providers/AuthProvider";
 import { IngestForm } from "@/components/IngestForm";
 import { Timeline } from "@/components/Timeline";
 import { ReminderWidget } from "@/components/ReminderWidget";
@@ -13,50 +11,35 @@ import { KnowledgeBase } from "@/components/KnowledgeBase";
 import { RagChat } from "@/components/RagChat";
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<"assistant" | "knowledge" | "chat">("assistant");
 
-  useEffect(() => {
-    // Check initial auth state from cookies
-    getToken().then((token) => setIsLoggedIn(!!token));
-  }, []);
-
   const handleLogin = async () => {
     try {
-      // 1. Google SignIn via Firebase
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      
-      // 2. Get ID Token
-      const idToken = await result.user.getIdToken();
-      
-      // 3. Send to Server Action to set HttpOnly Cookie
-      await login(idToken);
-      setIsLoggedIn(true);
+      await loginWithGoogle();
     } catch (error) {
       console.error("Login failed:", error);
-      // Fallback for local testing if Firebase config is missing
-      if (process.env.NODE_ENV === "development") {
-        await login("mock_local_token_123");
-        setIsLoggedIn(true);
-      }
     }
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    await logout();
-    setIsLoggedIn(false);
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
 
-  if (isLoggedIn === null) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
       </div>
     );
   }
+
+  const isLoggedIn = !!user;
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-300 p-6 md:p-12 font-sans selection:bg-indigo-500/30">

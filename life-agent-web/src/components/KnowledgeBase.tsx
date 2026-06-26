@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Upload, 
-  Trash2, 
-  Loader2, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
+import {
+  Upload,
+  Trash2,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
   FileText,
   RefreshCw
 } from "lucide-react";
 import { getDocuments, uploadDocument, deleteDocument } from "@/app/actions/knowledge";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface KnowledgeDocument {
   id: string;
@@ -28,6 +29,7 @@ interface KnowledgeDocument {
 }
 
 export function KnowledgeBase() {
+  const { user } = useAuth();
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -77,12 +79,14 @@ export function KnowledgeBase() {
 
   // 初始化获取
   useEffect(() => {
+    if (!user) return;
     fetchDocs();
     return () => stopPolling();
-  }, []);
+  }, [user]);
 
   // 轮询管理：检查是否有文档处于 processing 或 deleting 状态
   useEffect(() => {
+    if (!user) return;
     const hasActiveStates = documents.some(
       doc => doc.status === "processing" || doc.status === "deleting"
     );
@@ -93,7 +97,7 @@ export function KnowledgeBase() {
       stopPolling();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documents]);
+  }, [documents, user]);
 
   // 处理拖拽
   const handleDrag = (e: React.DragEvent) => {

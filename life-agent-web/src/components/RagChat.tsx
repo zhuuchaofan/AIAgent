@@ -1,16 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Send, 
-  BookOpen, 
-  Loader2, 
-  Info, 
+import {
+  Send,
+  BookOpen,
+  Loader2,
+  Info,
   AlertTriangle,
   FileText,
   Sparkles
 } from "lucide-react";
 import { getDocuments, sendRagMessage, getRagChatHistory } from "@/app/actions/knowledge";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface KnowledgeDocument {
   id: string;
@@ -36,6 +37,7 @@ interface Message {
 }
 
 export function RagChat() {
+  const { user } = useAuth();
   const [docs, setDocs] = useState<KnowledgeDocument[]>([]);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([
@@ -52,6 +54,8 @@ export function RagChat() {
 
   // 初始化会话 ID 并在组件挂载时拉取文档列表与历史对话
   useEffect(() => {
+    if (!user) return;
+
     const hasExistingSession = !!sessionStorage.getItem("rag_conv_id");
     // 每次会话生成或沿用一个唯一的会话 ID
     let currentConvId = sessionStorage.getItem("rag_conv_id");
@@ -94,7 +98,7 @@ export function RagChat() {
     };
 
     initChat();
-  }, []);
+  }, [user]);
 
   // 自动滚动到聊天底部
   useEffect(() => {
