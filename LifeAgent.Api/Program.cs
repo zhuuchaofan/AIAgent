@@ -23,9 +23,16 @@ var firebaseProjectId = builder.Configuration["Firebase:ProjectId"]
 builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
 
 // ── 业务 Service 注册 ─────────────────────────────────────────
+builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.Rag));
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
 builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddScoped<IDailySummaryService, DailySummaryService>();
+builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>();
+
+builder.Services.AddSingleton<FileValidator>();
+builder.Services.AddSingleton<ICloudStorageService, GoogleCloudStorageService>();
+builder.Services.AddSingleton<IDocumentTextExtractor, PdfPigDocumentTextExtractor>();
+builder.Services.AddSingleton<IChunker, BasicChunker>();
 
 var useMockLlm = Environment.GetEnvironmentVariable("USE_MOCK_LLM");
 if (string.Equals(useMockLlm, "true", StringComparison.OrdinalIgnoreCase))
