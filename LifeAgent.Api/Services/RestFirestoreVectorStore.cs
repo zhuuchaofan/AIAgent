@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Google.Cloud.Firestore;
 using LifeAgent.Api.Models;
 
 namespace LifeAgent.Api.Services;
@@ -12,17 +13,20 @@ namespace LifeAgent.Api.Services;
 public class RestFirestoreVectorStore : IFirestoreVectorStore
 {
     private readonly HttpClient _httpClient;
+    private readonly FirestoreDb _db;
     private readonly RagOptions _ragOptions;
     private readonly ILogger<RestFirestoreVectorStore> _logger;
     private readonly string _projectId;
 
     public RestFirestoreVectorStore(
         HttpClient httpClient,
+        FirestoreDb db,
         IOptions<RagOptions> ragOptions,
         IConfiguration config,
         ILogger<RestFirestoreVectorStore> logger)
     {
         _httpClient = httpClient;
+        _db = db;
         _ragOptions = ragOptions.Value;
         _logger = logger;
         _projectId = config["Firestore:ProjectId"] ?? "copper-affinity-467409-k7";
@@ -107,6 +111,43 @@ public class RestFirestoreVectorStore : IFirestoreVectorStore
         }
 
         return filteredResults;
+    }
+
+    public async Task DeleteChunksByDocumentIdAsync(string userId, string documentId)
+    {
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(documentId))
+        {
+            return;
+        }
+
+        var chunksRef = _db.Collection("users").Document(userId).Collection("chunks");
+        var query = chunksRef.WhereEqualTo("documentId", documentId);
+        var snapshot = await query.GetSnapshotAsync();
+
+        if (snapshot.Count == 0)
+        {
+            return;
+        }
+
+        var batch = _db.StartBatch();
+        int count = 0;
+        foreach (var doc in snapshot.Documents)
+        {
+            batch.Delete(doc.Reference);
+            count++;
+            if (count >= 500)
+            {
+                await batch.CommitAsync();
+                batch = _db.StartBatch();
+                count = 0;
+            }
+        }
+        if (count > 0)
+        {
+            await batch.CommitAsync();
+        }
+
+        _logger.LogInformation("Deleted {Count} legacy chunks for document {DocId}", snapshot.Count, documentId);
     }
 
     // ────────────────────────────────────────────────────────────────────────

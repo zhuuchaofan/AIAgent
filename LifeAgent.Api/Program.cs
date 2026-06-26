@@ -6,6 +6,8 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Endpoints;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("LifeAgent.Tests")]
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Firestore 初始化（注册为单例）────────────────────────────────
@@ -28,11 +30,26 @@ builder.Services.AddScoped<ILifeEventService, LifeEventService>();
 builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddScoped<IDailySummaryService, DailySummaryService>();
 builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>();
+builder.Services.AddScoped<IRagChatService, RagChatService>();
 
 builder.Services.AddSingleton<FileValidator>();
 builder.Services.AddSingleton<ICloudStorageService, GoogleCloudStorageService>();
 builder.Services.AddSingleton<IDocumentTextExtractor, PdfPigDocumentTextExtractor>();
 builder.Services.AddSingleton<IChunker, BasicChunker>();
+builder.Services.AddScoped<IDocumentRepository, FirestoreDocumentRepository>();
+builder.Services.AddScoped<IChatSessionRepository, FirestoreChatSessionRepository>();
+builder.Services.AddHttpClient<ICloudTasksService, CloudTasksService>();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<IEmbeddingService, MockEmbeddingService>();
+    builder.Services.AddSingleton<IRagAnswerGenerator, MockRagAnswerGenerator>();
+}
+else
+{
+    builder.Services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
+    builder.Services.AddHttpClient<IRagAnswerGenerator, GeminiRagAnswerGenerator>();
+}
 
 var useMockLlm = Environment.GetEnvironmentVariable("USE_MOCK_LLM");
 if (string.Equals(useMockLlm, "true", StringComparison.OrdinalIgnoreCase))
@@ -74,6 +91,9 @@ app.MapLifeEndpoints();
 app.MapReminderEndpoints();
 app.MapDailySummaryEndpoints();
 app.MapMigrationEndpoints();
+app.MapDocumentEndpoints();
+app.MapInternalDocumentEndpoints();
+app.MapRagChatEndpoints();
 
 // GET /health — 无需鉴权
 app.MapGet("/health", () => Results.Ok("healthy"));
