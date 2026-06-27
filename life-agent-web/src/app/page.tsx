@@ -80,13 +80,13 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Tab 导航 */}
-            <div className="flex border-b border-zinc-800/40 pb-px mb-8 gap-6 text-sm font-semibold select-none">
+            {/* Tab 导航 — 桌面端可见 */}
+            <div className="hidden lg:flex border-b border-zinc-800/40 pb-px mb-8 gap-6 text-sm font-semibold select-none">
               <button
                 onClick={() => setActiveTab("assistant")}
                 className={`pb-4 transition-all duration-300 relative ${
-                  activeTab === "assistant" 
-                    ? "text-white" 
+                  activeTab === "assistant"
+                    ? "text-white"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
@@ -98,8 +98,8 @@ export default function Home() {
               <button
                 onClick={() => setActiveTab("knowledge")}
                 className={`pb-4 transition-all duration-300 relative ${
-                  activeTab === "knowledge" 
-                    ? "text-white" 
+                  activeTab === "knowledge"
+                    ? "text-white"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
@@ -111,8 +111,8 @@ export default function Home() {
               <button
                 onClick={() => setActiveTab("chat")}
                 className={`pb-4 transition-all duration-300 relative ${
-                  activeTab === "chat" 
-                    ? "text-white" 
+                  activeTab === "chat"
+                    ? "text-white"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
@@ -123,27 +123,38 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 内容区 */}
-            {activeTab === "assistant" && (
-              <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                  <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
-                  <Timeline refreshTrigger={refreshTrigger} />
+            {/* 桌面端：Tab 切换内容区 */}
+            <div className="hidden lg:contents">
+              {activeTab === "assistant" && (
+                <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-6">
+                    <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
+                    <Timeline refreshTrigger={refreshTrigger} />
+                  </div>
+                  <div className="lg:col-span-1 space-y-6">
+                    <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
+                    <DailySummaryCard refreshTrigger={refreshTrigger} />
+                  </div>
                 </div>
-                <div className="lg:col-span-1 space-y-6">
-                  <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
-                  <DailySummaryCard refreshTrigger={refreshTrigger} />
-                </div>
-              </div>
-            )}
+              )}
 
-            {activeTab === "knowledge" && (
+              {activeTab === "knowledge" && (
+                <KnowledgeBase />
+              )}
+
+              {activeTab === "chat" && (
+                <RagChat />
+              )}
+            </div>
+
+            {/* 窄屏端：全部模块纵向堆叠，按优先级排序 */}
+            <div className="lg:hidden space-y-6 animate-in fade-in duration-500">
+              <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
+              <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
+              <DailySummaryCard refreshTrigger={refreshTrigger} />
               <KnowledgeBase />
-            )}
-
-            {activeTab === "chat" && (
               <RagChat />
-            )}
+            </div>
           </div>
         )}
       </div>

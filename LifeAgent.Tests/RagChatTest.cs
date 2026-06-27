@@ -530,6 +530,77 @@ public class RagChatTest
         var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
         Assert.Equal(401, jsonResult.StatusCode);
     }
+
+    [Fact]
+    public async Task ClearRagChatHistoryAsync_ValidRequest_Returns200AndClearsMessages()
+    {
+        // Arrange
+        var userId = "user_123";
+        var conversationId = "conv_123";
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = userId;
+
+        var repo = new FakeChatSessionRepository();
+        repo.Sessions[$"{userId}_{conversationId}"] = new ChatSession { Id = conversationId, Title = "Test Title" };
+        repo.SessionMessages[$"{userId}_{conversationId}"] = new List<ChatMessage>
+        {
+            new ChatMessage { Id = "msg_1", Role = "user", Content = "Hello", CreatedAt = DateTime.UtcNow.AddMinutes(-1) },
+            new ChatMessage { Id = "msg_2", Role = "assistant", Content = "Hi there", CreatedAt = DateTime.UtcNow }
+        };
+
+        // Act
+        var result = await RagChatEndpoints.ClearRagChatHistoryAsync(conversationId, context, repo, NullLogger<RagChatService>.Instance);
+
+        // Assert
+        Assert.True(repo.DeleteAllMessagesCalled);
+        Assert.False(repo.SessionMessages.ContainsKey($"{userId}_{conversationId}"));
+
+        var okResult = Assert.IsAssignableFrom<IValueHttpResult>(result);
+        Assert.NotNull(okResult.Value);
+        var value = okResult.Value;
+        var successProp = value?.GetType().GetProperty("success")?.GetValue(value) as bool?;
+        Assert.True(successProp);
+    }
+
+    [Fact]
+    public async Task ClearRagChatHistoryAsync_SessionNotFound_Returns404()
+    {
+        // Arrange
+        var userId = "user_123";
+        var conversationId = "missing_conv";
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = userId;
+
+        var repo = new FakeChatSessionRepository();
+        // Session for a different user
+        repo.Sessions[$"user_999_{conversationId}"] = new ChatSession { Id = conversationId };
+
+        // Act
+        var result = await RagChatEndpoints.ClearRagChatHistoryAsync(conversationId, context, repo, NullLogger<RagChatService>.Instance);
+
+        // Assert
+        Assert.False(repo.DeleteAllMessagesCalled);
+        var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(404, jsonResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ClearRagChatHistoryAsync_Unauthenticated_Returns401()
+    {
+        // Arrange
+        var conversationId = "conv_123";
+        var context = new DefaultHttpContext(); // No userId
+
+        var repo = new FakeChatSessionRepository();
+
+        // Act
+        var result = await RagChatEndpoints.ClearRagChatHistoryAsync(conversationId, context, repo, NullLogger<RagChatService>.Instance);
+
+        // Assert
+        Assert.False(repo.DeleteAllMessagesCalled);
+        var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(401, jsonResult.StatusCode);
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -542,6 +613,7 @@ public class FakeChatSessionRepository : IChatSessionRepository
     public Dictionary<string, List<ChatMessage>> SessionMessages { get; } = new();
     public bool SaveCalled { get; set; }
     public List<ChatMessage> SavedMessages { get; set; } = new();
+    public bool DeleteAllMessagesCalled { get; set; }
 
     public Task<ChatSession?> GetSessionAsync(string userId, string sessionId)
     {
@@ -589,6 +661,14 @@ public class FakeChatSessionRepository : IChatSessionRepository
             session.LastMessageAt = updateTime;
         }
 
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAllMessagesAsync(string userId, string sessionId)
+    {
+        DeleteAllMessagesCalled = true;
+        var key = $"{userId}_{sessionId}";
+        SessionMessages.Remove(key);
         return Task.CompletedTask;
     }
 }

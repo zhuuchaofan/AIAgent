@@ -90,7 +90,7 @@ public class FirestoreChatSessionRepository : IChatSessionRepository
         var desensitizedUserId = string.IsNullOrEmpty(userId) ? "" : (userId.Length > 6 ? userId.Substring(0, 6) : userId);
         var sessionRef = GetSessionRef(userId, sessionId);
         var messagesRef = sessionRef.Collection("messages");
-        
+
         var path = $"users/{userId}/chat_sessions/{sessionId}/messages";
         _logger.LogInformation("[Firestore Repository] SaveMessagesAsync Writing. Path: {Path} | Count: {Count}", $"users/{desensitizedUserId}.../chat_sessions/{sessionId}/messages", messages.Count);
 
@@ -106,5 +106,30 @@ public class FirestoreChatSessionRepository : IChatSessionRepository
 
         await batch.CommitAsync();
         _logger.LogInformation("[Firestore Repository] SaveMessagesAsync Commit Success. Session: {Session}", sessionId);
+    }
+
+    public async Task DeleteAllMessagesAsync(string userId, string sessionId)
+    {
+        var desensitizedUserId = string.IsNullOrEmpty(userId) ? "" : (userId.Length > 6 ? userId.Substring(0, 6) : userId);
+        var messagesRef = GetSessionRef(userId, sessionId).Collection("messages");
+
+        _logger.LogInformation("[Firestore Repository] DeleteAllMessagesAsync. Path: users/{User}.../chat_sessions/{Session}/messages",
+            desensitizedUserId, sessionId);
+
+        var snap = await messagesRef.GetSnapshotAsync();
+        if (snap.Documents.Count == 0)
+        {
+            _logger.LogInformation("[Firestore Repository] DeleteAllMessagesAsync — no messages to delete.");
+            return;
+        }
+
+        var batch = _db.StartBatch();
+        foreach (var doc in snap.Documents)
+        {
+            batch.Delete(doc.Reference);
+        }
+        await batch.CommitAsync();
+
+        _logger.LogInformation("[Firestore Repository] DeleteAllMessagesAsync Success. Deleted {Count} messages.", snap.Documents.Count);
     }
 }

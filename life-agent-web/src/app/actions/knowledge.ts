@@ -136,3 +136,26 @@ export async function getRagChatHistory(conversationId: string) {
     return { success: false, message: errMsg || "拉取历史消息连接服务器失败" };
   }
 }
+
+export async function clearRagChatHistory(conversationId: string) {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}/api/v1/chat/rag/${conversationId}/messages`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || "清空历史会话失败" };
+    }
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "清空历史消息连接服务器失败" };
+  }
+}

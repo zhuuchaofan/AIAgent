@@ -15,6 +15,7 @@ public static class RagChatEndpoints
     {
         app.MapPost("/api/v1/chat/rag", ProcessRagChatAsync);
         app.MapGet("/api/v1/chat/rag/{conversationId}/messages", GetRagChatHistoryAsync);
+        app.MapDelete("/api/v1/chat/rag/{conversationId}/messages", ClearRagChatHistoryAsync);
     }
 
     public static async Task<IResult> ProcessRagChatAsync(
@@ -82,7 +83,7 @@ public static class RagChatEndpoints
             return Results.BadRequest(new { success = false, message = "Required parameter (conversationId) is missing." });
         }
 
-        logger.LogInformation("[RAG Endpoint] GET GetRagChatHistoryAsync. User: {User}... | Session: {Session}", 
+        logger.LogInformation("[RAG Endpoint] GET GetRagChatHistoryAsync. User: {User}... | Session: {Session}",
             desensitizedUserId, conversationId);
 
         try
@@ -101,6 +102,48 @@ public static class RagChatEndpoints
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error retrieving chat history for User: {UserId}, Session: {SessionId}", userId, conversationId);
+            return Results.Json(new { success = false, message = "An internal server error occurred." }, statusCode: 500);
+        }
+    }
+
+    public static async Task<IResult> ClearRagChatHistoryAsync(
+        string conversationId,
+        HttpContext httpContext,
+        [FromServices] IChatSessionRepository sessionRepository,
+        [FromServices] ILogger<RagChatService> logger)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        var desensitizedUserId = string.IsNullOrEmpty(userId) ? "" : (userId.Length > 6 ? userId.Substring(0, 6) : userId);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        if (string.IsNullOrEmpty(conversationId))
+        {
+            return Results.BadRequest(new { success = false, message = "Required parameter (conversationId) is missing." });
+        }
+
+        logger.LogInformation("[RAG Endpoint] DELETE ClearRagChatHistoryAsync. User: {User}... | Session: {Session}",
+            desensitizedUserId, conversationId);
+
+        try
+        {
+            // Verify session exists and belongs to user
+            var session = await sessionRepository.GetSessionAsync(userId, conversationId);
+            if (session == null)
+            {
+                return Results.Json(new { success = false, message = "Conversation not found or access denied." }, statusCode: 404);
+            }
+
+            await sessionRepository.DeleteAllMessagesAsync(userId, conversationId);
+
+            logger.LogInformation("[RAG Endpoint] Successfully cleared messages for Session: {Session}", conversationId);
+            return Results.Ok(new { success = true, message = "Conversation cleared successfully." });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error clearing chat history for User: {UserId}, Session: {SessionId}", userId, conversationId);
             return Results.Json(new { success = false, message = "An internal server error occurred." }, statusCode: 500);
         }
     }

@@ -8,9 +8,10 @@ import {
   Info,
   AlertTriangle,
   FileText,
-  Sparkles
+  Sparkles,
+  Trash2
 } from "lucide-react";
-import { getDocuments, sendRagMessage, getRagChatHistory } from "@/app/actions/knowledge";
+import { getDocuments, sendRagMessage, getRagChatHistory, clearRagChatHistory } from "@/app/actions/knowledge";
 import { useAuth } from "@/providers/AuthProvider";
 import { Markdown } from "./Markdown";
 
@@ -138,6 +139,39 @@ export function RagChat() {
     }
   };
 
+  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // 清除当前对话
+  const handleClearConversation = async () => {
+    if (clearing) return;
+    setClearing(true);
+    try {
+      // 调用后端清空接口
+      await clearRagChatHistory(convId);
+      // 重置前端 state 为仅保留欢迎消息
+      setMessages([
+        {
+          role: "assistant",
+          content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+        }
+      ]);
+      setHistoryError(null);
+    } catch (err: unknown) {
+      console.error("Clear conversation failed:", err);
+      // 即使后端清空失败，也清空前端状态
+      setMessages([
+        {
+          role: "assistant",
+          content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+        }
+      ]);
+    } finally {
+      setClearing(false);
+      setShowClearConfirm(false);
+    }
+  };
+
   // 发送消息
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,22 +268,33 @@ export function RagChat() {
       </div>
 
       {/* 右侧聊天窗口 */}
-      <div className="lg:col-span-3 bg-zinc-900/10 border border-zinc-800/40 rounded-2xl flex flex-col overflow-hidden shadow-2xl min-h-[500px]">
+      <div className="lg:col-span-3 bg-zinc-900/10 border border-zinc-800/40 rounded-2xl flex flex-col overflow-hidden shadow-2xl min-h-[500px] min-w-0 relative">
         {/* 聊天窗头部 */}
         <div className="px-5 py-4 border-b border-zinc-800/40 bg-zinc-900/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-400" />
             <h3 className="text-sm font-semibold text-white">RAG 知识库检索对话</h3>
           </div>
-          {selectedDocIds.length > 0 && (
-            <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded font-medium">
-              限定 {selectedDocIds.length} 个文档进行回答
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {selectedDocIds.length > 0 && (
+              <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded font-medium">
+                限定 {selectedDocIds.length} 个文档进行回答
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              disabled={loading || clearing}
+              className="text-zinc-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              title="清除当前对话记录"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* 消息历史滚动区 */}
-        <div className="flex-1 p-5 overflow-y-auto space-y-5 min-h-[380px] max-h-[480px]">
+        <div className="flex-1 p-5 overflow-y-auto space-y-5 min-h-[380px] max-h-[480px] min-w-0">
           {historyError && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl flex items-center justify-between gap-3 animate-in fade-in duration-300">
               <div className="flex items-center gap-2 text-xs">
@@ -269,7 +314,7 @@ export function RagChat() {
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex gap-3 max-w-[85%] ${
+              className={`flex gap-3 max-w-[85%] min-w-0 ${
                 msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
               }`}
             >
@@ -283,39 +328,39 @@ export function RagChat() {
               </div>
 
               {/* 消息体卡片 */}
-              <div className="space-y-2">
-                <div className={`p-3.5 rounded-2xl ${
+              <div className="space-y-2 min-w-0 flex-1">
+                <div className={`p-3.5 rounded-2xl min-w-0 ${
                   msg.role === "user"
                     ? "bg-indigo-600 text-white rounded-tr-none shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
                     : "bg-zinc-900/60 border border-zinc-800/50 rounded-tl-none"
                 }`}>
                   {msg.role === "user"
-                    ? <p className="whitespace-pre-wrap leading-relaxed text-sm text-white">{msg.content}</p>
+                    ? <p className="whitespace-pre-wrap leading-relaxed text-sm text-white break-words [overflow-wrap:anywhere]">{msg.content}</p>
                     : <Markdown content={msg.content} citations={msg.citations} />
                   }
                 </div>
 
                 {/* 引用来源列表 (assistant only) */}
                 {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
-                  <div className="mt-2.5 pt-2.5 border-t border-zinc-800/60 text-xs text-zinc-400 space-y-2">
+                  <div className="mt-2.5 pt-2.5 border-t border-zinc-800/60 text-xs text-zinc-400 space-y-2 min-w-0">
                     <div className="font-semibold text-zinc-300 flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                       <span>引用来源</span>
                     </div>
-                    <ul className="list-none pl-0 space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                    <ul className="list-none pl-0 space-y-2 max-h-[200px] overflow-y-auto pr-1 min-w-0">
                       {msg.citations.map((c) => (
-                        <li key={c.index} className="flex items-start gap-2 hover:text-zinc-200 transition-colors">
+                        <li key={c.index} className="flex items-start gap-2 hover:text-zinc-200 transition-colors min-w-0">
                           <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded shrink-0 mt-0.5">
                             {c.index}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-zinc-300 truncate block text-xs" title={c.documentName}>
+                            <span className="font-medium text-zinc-300 break-all block text-xs" title={c.documentName}>
                               {c.documentName || c.documentId}
                             </span>
                             <span className="text-[10px] text-zinc-500 block font-mono">
                               Page {c.pageNumber} | Chunk {c.chunkIndex}
                             </span>
-                            <span className="text-zinc-400 text-[11px] leading-normal italic block mt-0.5 line-clamp-2">
+                            <span className="text-zinc-400 text-[11px] leading-normal italic block mt-0.5 line-clamp-2 break-all">
                               &ldquo;{c.snippetPreview}&rdquo;
                             </span>
                           </div>
@@ -345,11 +390,11 @@ export function RagChat() {
           )}
 
           {loading && (
-            <div className="flex gap-3 max-w-[80%] mr-auto items-center animate-pulse">
+            <div className="flex gap-3 max-w-[80%] mr-auto items-center animate-pulse min-w-0">
               <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center text-xs font-bold shrink-0">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               </div>
-              <div className="bg-zinc-900/40 border border-zinc-800/30 p-3.5 rounded-2xl rounded-tl-none text-xs text-zinc-500">
+              <div className="bg-zinc-900/40 border border-zinc-800/30 p-3.5 rounded-2xl rounded-tl-none text-xs text-zinc-500 min-w-0">
                 正在进行深度向量检索并生成可信回复...
               </div>
             </div>
@@ -360,6 +405,42 @@ export function RagChat() {
 
         {/* 输入框输入区 */}
         <form onSubmit={handleSend} className="p-4 border-t border-zinc-800/40 bg-zinc-900/20 flex gap-2">
+
+        {/* 清除确认弹窗 */}
+        {showClearConfirm && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm rounded-2xl z-10">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <h4 className="text-sm font-semibold text-white mb-2">清除当前对话记录</h4>
+              <p className="text-xs text-zinc-400 leading-relaxed mb-5">
+                此操作将清除当前 RAG 对话窗口中的所有历史消息。<br />
+                <span className="text-zinc-500">（不会删除已上传的文档和知识库文件）</span>
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(false)}
+                  disabled={clearing}
+                  className="px-4 py-2 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearConversation}
+                  disabled={clearing}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {clearing ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> 清除中...</>
+                  ) : (
+                    "确认清除"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
           <input
             type="text"
             value={inputValue}

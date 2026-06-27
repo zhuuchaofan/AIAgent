@@ -142,43 +142,43 @@ export function Markdown({ content, citations = [] }: MarkdownProps) {
   const citationCounter = { current: 0 };
 
   return (
-    <div className="text-zinc-200 text-sm">
+    <div className="text-zinc-200 text-sm min-w-0 overflow-hidden">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           // ---- Block-level elements ----
           p: ({ children }) => (
-            <p className="mb-2 last:mb-0 leading-relaxed">
+            <p className="mb-2 last:mb-0 leading-relaxed break-words [overflow-wrap:anywhere]">
               {renderChildrenWithCitations(children, citations, citationCounter)}
             </p>
           ),
           h1: ({ children }) => (
-            <h1 className="text-lg font-bold text-white mt-4 mb-2 border-b border-zinc-800 pb-1">
+            <h1 className="text-lg font-bold text-white mt-4 mb-2 border-b border-zinc-800 pb-1 break-words">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-base font-semibold text-white mt-3 mb-1.5">
+            <h2 className="text-base font-semibold text-white mt-3 mb-1.5 break-words">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-sm font-semibold text-white mt-2.5 mb-1">
+            <h3 className="text-sm font-semibold text-white mt-2.5 mb-1 break-words">
               {children}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 className="text-sm font-medium text-zinc-100 mt-2 mb-1">
+            <h4 className="text-sm font-medium text-zinc-100 mt-2 mb-1 break-words">
               {children}
             </h4>
           ),
           h5: ({ children }) => (
-            <h5 className="text-xs font-medium text-zinc-100 mt-2 mb-1">
+            <h5 className="text-xs font-medium text-zinc-100 mt-2 mb-1 break-words">
               {children}
             </h5>
           ),
           h6: ({ children }) => (
-            <h6 className="text-xs font-medium text-zinc-200 mt-2 mb-1">
+            <h6 className="text-xs font-medium text-zinc-200 mt-2 mb-1 break-words">
               {children}
             </h6>
           ),
@@ -198,7 +198,7 @@ export function Markdown({ content, citations = [] }: MarkdownProps) {
             </li>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-indigo-500 bg-indigo-500/5 pl-4 py-1.5 my-3 rounded-r italic text-zinc-400">
+            <blockquote className="border-l-4 border-indigo-500 bg-indigo-500/5 pl-4 py-1.5 my-3 rounded-r italic text-zinc-400 min-w-0 break-words">
               {children}
             </blockquote>
           ),
@@ -219,7 +219,7 @@ export function Markdown({ content, citations = [] }: MarkdownProps) {
 
           // ---- Code ----
           pre: ({ children }) => (
-            <pre className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 my-3 overflow-x-auto text-xs font-mono text-zinc-300 shadow-inner">
+            <pre className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 my-3 overflow-x-auto text-xs font-mono text-zinc-300 shadow-inner max-w-full">
               {children}
             </pre>
           ),
@@ -246,8 +246,8 @@ export function Markdown({ content, citations = [] }: MarkdownProps) {
 
           // ---- Table ----
           table: ({ children }) => (
-            <div className="overflow-x-auto my-3 border border-zinc-800 rounded-xl">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="overflow-x-auto my-3 border border-zinc-800 rounded-xl max-w-full">
+              <table className="min-w-full text-left border-collapse text-xs">
                 {children}
               </table>
             </div>
@@ -278,7 +278,7 @@ export function Markdown({ content, citations = [] }: MarkdownProps) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors"
+              className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors break-all"
             >
               {children}
             </a>
