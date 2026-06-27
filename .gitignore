@@ -30,3 +30,7 @@ life-web/.env*.local
 
 # 日志
 *.log
+
+# 本地工具配置
+.claude/settings.local.json
+.vscode/launch.json
