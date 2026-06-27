@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { getDocuments, sendRagMessage, getRagChatHistory } from "@/app/actions/knowledge";
 import { useAuth } from "@/providers/AuthProvider";
+import { Markdown } from "./Markdown";
 
 interface KnowledgeDocument {
   id: string;
@@ -58,9 +59,11 @@ export function RagChat() {
       const historyRes = await getRagChatHistory(convId);
       if (historyRes.success) {
         if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
-          const mappedMessages: Message[] = historyRes.data.map((m: { role: string; content: string }) => ({
+          const mappedMessages: Message[] = historyRes.data.map((m: { role: string; content: string; citations?: CitationNode[]; citationIntegrity?: string }) => ({
             role: m.role as "user" | "assistant",
-            content: m.content
+            content: m.content,
+            citations: m.citations || [],
+            citationIntegrity: m.citationIntegrity
           }));
           setMessages([
             {
@@ -120,9 +123,9 @@ export function RagChat() {
 
   // 文档勾选逻辑
   const handleToggleDoc = (docId: string) => {
-    setSelectedDocIds(prev => 
-      prev.includes(docId) 
-        ? prev.filter(id => id !== docId) 
+    setSelectedDocIds(prev =>
+      prev.includes(docId)
+        ? prev.filter(id => id !== docId)
         : [...prev, docId]
     );
   };
@@ -175,75 +178,9 @@ export function RagChat() {
     }
   };
 
-  // 正则解析并渲染文本中的 Citation 脚标 `[1]`, `[2]`, `[3]`
-  const renderMessageContent = (content: string, citations: CitationNode[] = []) => {
-    if (!citations || citations.length === 0) {
-      return <p className="whitespace-pre-wrap leading-relaxed text-zinc-200">{content}</p>;
-    }
-
-    // 正则表达式匹配 `[数字]`，进行切片拆分
-    const citationRegex = /\[([1-9][0-9]?)\]/g;
-    const parts = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = citationRegex.exec(content)) !== null) {
-      const matchIndex = match.index;
-      const citationNumber = parseInt(match[1], 10);
-
-      // 匹配前置文本
-      if (matchIndex > lastIndex) {
-        parts.push(content.substring(lastIndex, matchIndex));
-      }
-
-      // 匹配到的脚标节点，关联 citations 列表
-      const matchedNode = citations.find(c => c.index === citationNumber);
-      if (matchedNode) {
-        parts.push(
-          <span key={`citation-${matchIndex}`} className="relative inline-block group mx-0.5">
-            {/* 脚标按钮 */}
-            <button className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-md transition-all align-middle select-none focus:outline-none">
-              {citationNumber}
-            </button>
-
-            {/* Hover 悬浮气泡框 (Tooltip) */}
-            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 shadow-2xl z-50 text-xs">
-              <span className="flex items-center gap-1.5 font-semibold text-white border-b border-zinc-800 pb-1.5 mb-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span className="truncate">{matchedNode.documentName}</span>
-                <span className="text-[10px] text-zinc-500 font-mono ml-auto">
-                  Page {matchedNode.pageNumber} | Chunk {matchedNode.chunkIndex}
-                </span>
-              </span>
-              <span className="block text-zinc-400 leading-normal line-clamp-4 italic">
-                &ldquo;{matchedNode.snippetPreview}&rdquo;
-              </span>
-              <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-zinc-900"></span>
-            </span>
-          </span>
-        );
-      } else {
-        // 如果没有找到对应的 citation 信息，原样展示脚标
-        parts.push(match[0]);
-      }
-
-      lastIndex = citationRegex.lastIndex;
-    }
-
-    if (lastIndex < content.length) {
-      parts.push(content.substring(lastIndex));
-    }
-
-    return (
-      <div className="whitespace-pre-wrap leading-relaxed text-zinc-200">
-        {parts.map((p, i) => <React.Fragment key={i}>{p}</React.Fragment>)}
-      </div>
-    );
-  };
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 min-h-[580px] animate-in fade-in slide-in-from-bottom-3 duration-500">
-      
+
       {/* 左侧文档筛选面板 */}
       <div className="lg:col-span-1 bg-zinc-900/20 border border-zinc-800/50 rounded-2xl p-4 flex flex-col space-y-4 shadow-lg">
         <div className="flex items-center gap-2 border-b border-zinc-800/40 pb-3">
@@ -267,8 +204,8 @@ export function RagChat() {
             </button>
             <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
               {docs.map(doc => (
-                <label 
-                  key={doc.id} 
+                <label
+                  key={doc.id}
                   className={`flex items-center gap-2.5 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
                     selectedDocIds.includes(doc.id)
                       ? "bg-indigo-500/5 border-indigo-500/30 text-zinc-200"
@@ -330,16 +267,16 @@ export function RagChat() {
           )}
 
           {messages.map((msg, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className={`flex gap-3 max-w-[85%] ${
                 msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
               }`}
             >
               {/* 头像 */}
               <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-bold text-xs select-none ${
-                msg.role === "user" 
-                  ? "bg-zinc-800 text-zinc-300" 
+                msg.role === "user"
+                  ? "bg-zinc-800 text-zinc-300"
                   : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
               }`}>
                 {msg.role === "user" ? "U" : "AI"}
@@ -352,11 +289,41 @@ export function RagChat() {
                     ? "bg-indigo-600 text-white rounded-tr-none shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
                     : "bg-zinc-900/60 border border-zinc-800/50 rounded-tl-none"
                 }`}>
-                  {msg.role === "user" 
+                  {msg.role === "user"
                     ? <p className="whitespace-pre-wrap leading-relaxed text-sm text-white">{msg.content}</p>
-                    : renderMessageContent(msg.content, msg.citations)
+                    : <Markdown content={msg.content} citations={msg.citations} />
                   }
                 </div>
+
+                {/* 引用来源列表 (assistant only) */}
+                {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
+                  <div className="mt-2.5 pt-2.5 border-t border-zinc-800/60 text-xs text-zinc-400 space-y-2">
+                    <div className="font-semibold text-zinc-300 flex items-center gap-1">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span>引用来源</span>
+                    </div>
+                    <ul className="list-none pl-0 space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                      {msg.citations.map((c) => (
+                        <li key={c.index} className="flex items-start gap-2 hover:text-zinc-200 transition-colors">
+                          <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded shrink-0 mt-0.5">
+                            {c.index}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-zinc-300 truncate block text-xs" title={c.documentName}>
+                              {c.documentName || c.documentId}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 block font-mono">
+                              Page {c.pageNumber} | Chunk {c.chunkIndex}
+                            </span>
+                            <span className="text-zinc-400 text-[11px] leading-normal italic block mt-0.5 line-clamp-2">
+                              &ldquo;{c.snippetPreview}&rdquo;
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* 越界引用提示 (invalid_cleaned) */}
                 {msg.role === "assistant" && msg.citationIntegrity === "invalid_cleaned" && (
@@ -399,8 +366,8 @@ export function RagChat() {
             onChange={(e) => setInputValue(e.target.value)}
             disabled={loading}
             placeholder={
-              docs.length === 0 
-                ? "请先在知识库管理中上传解析文档..." 
+              docs.length === 0
+                ? "请先在知识库管理中上传解析文档..."
                 : "输入您关于个人知识库文档的问题，回车发送..."
             }
             className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"

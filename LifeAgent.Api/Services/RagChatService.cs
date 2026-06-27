@@ -250,6 +250,8 @@ public class RagChatService : IRagChatService
                 Id = $"msg_{Guid.NewGuid():N}",
                 Role = "assistant",
                 Content = cleanedResponse,
+                Citations = citations,
+                CitationIntegrity = integrity,
                 CreatedAt = DateTime.UtcNow
             }
         };

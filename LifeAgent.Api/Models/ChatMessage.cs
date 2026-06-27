@@ -1,4 +1,6 @@
 using Google.Cloud.Firestore;
+using System;
+using System.Collections.Generic;
 
 namespace LifeAgent.Api.Models;
 
@@ -13,6 +15,12 @@ public class ChatMessage
 
     [FirestoreProperty("content")]
     public string Content { get; set; } = "";
+
+    [FirestoreProperty("citations")]
+    public List<CitationNode>? Citations { get; set; }
+
+    [FirestoreProperty("citationIntegrity")]
+    public string? CitationIntegrity { get; set; }
 
     [FirestoreProperty("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
