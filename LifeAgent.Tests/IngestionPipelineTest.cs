@@ -433,6 +433,237 @@ public class IngestionPipelineTest
         Assert.Equal("doc_retry_clean", _vectorStore.LastDeletedDocId);
         Assert.True(_vectorStore.WriteCalled);
     }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Phase 3.5: Chunk 数量限制集成测试
+    // ────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProcessDocumentAsync_BelowChunkLimit_IsTruncatedFalse()
+    {
+        // Arrange: FixedCountChunker 产生 3 个 chunk，MaxChunksPerDocument = 5 → 不截断
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Authorization = "Bearer dev-token";
+
+        var doc = new KnowledgeDocument
+        {
+            Id = "doc_below_limit",
+            UserId = "user_abc",
+            Status = "processing",
+            FileName = "small.txt",
+            MimeType = "text/plain",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_below_limit/small.txt"
+        };
+        await _repo.CreateAsync(doc);
+
+        var request = new ProcessDocumentRequest
+        {
+            DocumentId = "doc_below_limit",
+            UserId = "user_abc",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_below_limit/small.txt"
+        };
+        var fakeEnv = new FakeWebHostEnvironment { EnvironmentName = "Development" };
+
+        var fixedChunker = new FixedCountChunker(desiredCount: 3);
+        var options = new RagOptions
+        {
+            MaxFileSizeMb = 10,
+            MaxChunksPerDocument = 5,
+            GcsBucketName = "test-bucket",
+            InternalProcessAudience = "https://copper-affinity-467409-k7.appspot.com/"
+        };
+        var limitedOptions = Options.Create(options);
+
+        // Act
+        var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
+            context, request, _repo, _storage, _extractor, fixedChunker,
+            _embeddingService, _vectorStore, fakeEnv, limitedOptions,
+            NullLoggerFactory.Instance);
+
+        // Assert
+        var okResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+
+        var updated = await _repo.GetAsync("user_abc", "doc_below_limit");
+        Assert.NotNull(updated);
+        Assert.Equal("success", updated.Status);
+        Assert.Equal(3, updated.ChunkCount);
+        Assert.False(updated.IsTruncated);
+    }
+
+    [Fact]
+    public async Task ProcessDocumentAsync_AtChunkLimit_IsTruncatedFalse()
+    {
+        // Arrange: FixedCountChunker 产生恰好 5 个 chunk，MaxChunksPerDocument = 5 → 不截断
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Authorization = "Bearer dev-token";
+
+        var doc = new KnowledgeDocument
+        {
+            Id = "doc_at_limit",
+            UserId = "user_abc",
+            Status = "processing",
+            FileName = "exact.txt",
+            MimeType = "text/plain",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_at_limit/exact.txt"
+        };
+        await _repo.CreateAsync(doc);
+
+        var request = new ProcessDocumentRequest
+        {
+            DocumentId = "doc_at_limit",
+            UserId = "user_abc",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_at_limit/exact.txt"
+        };
+        var fakeEnv = new FakeWebHostEnvironment { EnvironmentName = "Development" };
+
+        // FixedCountChunker: 当 maxChunks >= desiredCount 时返回 desiredCount 个 chunk
+        // 传入 maxChunks+1=6 >= 5 → 返回 5 个 chunk → 5 == maxChunks → 不截断
+        var fixedChunker = new FixedCountChunker(desiredCount: 5);
+        var options = new RagOptions
+        {
+            MaxFileSizeMb = 10,
+            MaxChunksPerDocument = 5,
+            GcsBucketName = "test-bucket",
+            InternalProcessAudience = "https://copper-affinity-467409-k7.appspot.com/"
+        };
+        var limitedOptions = Options.Create(options);
+
+        // Act
+        var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
+            context, request, _repo, _storage, _extractor, fixedChunker,
+            _embeddingService, _vectorStore, fakeEnv, limitedOptions,
+            NullLoggerFactory.Instance);
+
+        // Assert
+        var okResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+
+        var updated = await _repo.GetAsync("user_abc", "doc_at_limit");
+        Assert.NotNull(updated);
+        Assert.Equal("success", updated.Status);
+        Assert.Equal(5, updated.ChunkCount);
+        Assert.False(updated.IsTruncated);
+
+        // 全部 5 个 chunk 应被写入
+        Assert.True(_vectorStore.WriteCalled);
+        Assert.NotNull(_vectorStore.LastWrittenChunks);
+        Assert.Equal(5, _vectorStore.LastWrittenChunks.Count);
+    }
+
+    [Fact]
+    public async Task ProcessDocumentAsync_ExceedsChunkLimit_IsTruncatedTrueAndChunksLimited()
+    {
+        // Arrange: FixedCountChunker 产生 8 个 chunk，MaxChunksPerDocument = 5 → 截断到 5
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Authorization = "Bearer dev-token";
+
+        var doc = new KnowledgeDocument
+        {
+            Id = "doc_truncated",
+            UserId = "user_abc",
+            Status = "processing",
+            FileName = "large.txt",
+            MimeType = "text/plain",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_truncated/large.txt"
+        };
+        await _repo.CreateAsync(doc);
+
+        var request = new ProcessDocumentRequest
+        {
+            DocumentId = "doc_truncated",
+            UserId = "user_abc",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_truncated/large.txt"
+        };
+        var fakeEnv = new FakeWebHostEnvironment { EnvironmentName = "Development" };
+
+        // FixedCountChunker(desiredCount: 8):
+        //   传入 maxChunks+1=6 → 8 > 6 → chunker 截断到 6 个返回
+        //   worker: 6 > maxChunks(5) → isTruncated = true → Take(5)
+        var fixedChunker = new FixedCountChunker(desiredCount: 8);
+        var options = new RagOptions
+        {
+            MaxFileSizeMb = 10,
+            MaxChunksPerDocument = 5,
+            GcsBucketName = "test-bucket",
+            InternalProcessAudience = "https://copper-affinity-467409-k7.appspot.com/"
+        };
+        var limitedOptions = Options.Create(options);
+
+        // Act
+        var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
+            context, request, _repo, _storage, _extractor, fixedChunker,
+            _embeddingService, _vectorStore, fakeEnv, limitedOptions,
+            NullLoggerFactory.Instance);
+
+        // Assert
+        var okResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+
+        var updated = await _repo.GetAsync("user_abc", "doc_truncated");
+        Assert.NotNull(updated);
+        Assert.Equal("success", updated.Status);
+        Assert.Equal(5, updated.ChunkCount);
+        Assert.True(updated.IsTruncated);
+
+        // 只写入 5 个 chunk（而非 8 个）
+        Assert.True(_vectorStore.WriteCalled);
+        Assert.NotNull(_vectorStore.LastWrittenChunks);
+        Assert.Equal(5, _vectorStore.LastWrittenChunks.Count);
+    }
+
+    [Fact]
+    public async Task ProcessDocumentAsync_MissingMaxChunksConfig_DefaultsTo200()
+    {
+        // Arrange: MaxChunksPerDocument = 0（未配置），应默认使用 200
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Authorization = "Bearer dev-token";
+
+        var doc = new KnowledgeDocument
+        {
+            Id = "doc_default_limit",
+            UserId = "user_abc",
+            Status = "processing",
+            FileName = "default.txt",
+            MimeType = "text/plain",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_default_limit/default.txt"
+        };
+        await _repo.CreateAsync(doc);
+
+        var request = new ProcessDocumentRequest
+        {
+            DocumentId = "doc_default_limit",
+            UserId = "user_abc",
+            GcsPath = "gs://test-bucket/users/user_abc/documents/doc_default_limit/default.txt"
+        };
+        var fakeEnv = new FakeWebHostEnvironment { EnvironmentName = "Development" };
+
+        // MaxChunksPerDocument = 0 → 应 fallback 到 200
+        var options = new RagOptions
+        {
+            MaxFileSizeMb = 10,
+            MaxChunksPerDocument = 0,
+            GcsBucketName = "test-bucket",
+            InternalProcessAudience = "https://copper-affinity-467409-k7.appspot.com/"
+        };
+        var defaultOptions = Options.Create(options);
+
+        // Act: 使用默认 extractor（只产生 1 个 chunk），不应截断
+        var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
+            context, request, _repo, _storage, _extractor, _chunker,
+            _embeddingService, _vectorStore, fakeEnv, defaultOptions,
+            NullLoggerFactory.Instance);
+
+        // Assert
+        var okResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+
+        var updated = await _repo.GetAsync("user_abc", "doc_default_limit");
+        Assert.NotNull(updated);
+        Assert.Equal("success", updated.Status);
+        Assert.Equal(1, updated.ChunkCount);
+        Assert.False(updated.IsTruncated);
+    }
 }
 
 public class BadEmbeddingService : IEmbeddingService
@@ -453,5 +684,102 @@ public class ZeroChunker : IChunker
     public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, List<PageTextInfo> pages)
     {
         return new List<KnowledgeChunk>();
+    }
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, string text, int maxChunks)
+    {
+        return new List<KnowledgeChunk>();
+    }
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, List<PageTextInfo> pages, int maxChunks)
+    {
+        return new List<KnowledgeChunk>();
+    }
+}
+
+/// <summary>
+/// 产生大量文本的 Fake Extractor，用于测试 chunk 截断。
+/// 生成 ~30 个段落，预计产生 5+ 个 chunk（TargetSize=800 字符/chunk）。
+/// </summary>
+public class LargeTextFakeExtractor : IDocumentTextExtractor
+{
+    public Task<ExtractionResult> ExtractTextAsync(Stream stream, string mimeType)
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int i = 1; i <= 30; i++)
+        {
+            sb.AppendLine($"这是第{i}个自然段落，用于产生足够多的文本内容以触发多次分块。每个段落大约一百个字符左右，确保文本总量足够大，以便分块器产生足够多的 chunks 用于测试截断行为。");
+        }
+        var text = sb.ToString();
+
+        var res = new ExtractionResult
+        {
+            Success = true,
+            RawText = text
+        };
+        res.Pages.Add(new PageTextInfo
+        {
+            PageNumber = 1,
+            Text = text,
+            CharStart = 0,
+            CharEnd = text.Length
+        });
+        return Task.FromResult(res);
+    }
+}
+
+/// <summary>
+/// 产生固定数量 chunk 的 Fake Chunker，用于精确测试截断边界。
+/// desiredCount: 期望产生的 chunk 总数（如果 maxChunks >= desiredCount 则返回 desiredCount 个，否则截断到 maxChunks）。
+/// </summary>
+public class FixedCountChunker : IChunker
+{
+    private readonly int _desiredCount;
+
+    public FixedCountChunker(int desiredCount)
+    {
+        _desiredCount = desiredCount;
+    }
+
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, string text)
+    {
+        return GenerateChunks(userId, documentId, documentName, _desiredCount);
+    }
+
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, List<PageTextInfo> pages)
+    {
+        return GenerateChunks(userId, documentId, documentName, _desiredCount);
+    }
+
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, string text, int maxChunks)
+    {
+        var count = Math.Min(_desiredCount, maxChunks);
+        return GenerateChunks(userId, documentId, documentName, count);
+    }
+
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, List<PageTextInfo> pages, int maxChunks)
+    {
+        var count = Math.Min(_desiredCount, maxChunks);
+        return GenerateChunks(userId, documentId, documentName, count);
+    }
+
+    private static List<KnowledgeChunk> GenerateChunks(string userId, string documentId, string documentName, int count)
+    {
+        var chunks = new List<KnowledgeChunk>();
+        for (int i = 0; i < count; i++)
+        {
+            chunks.Add(new KnowledgeChunk
+            {
+                Id = $"{documentId}_{i}",
+                UserId = userId,
+                DocumentId = documentId,
+                DocumentName = documentName,
+                ChunkIndex = i,
+                PageNumber = 1,
+                CharStart = i * 800,
+                CharEnd = (i + 1) * 800,
+                Content = $"Chunk {i} content for testing.",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        return chunks;
     }
 }

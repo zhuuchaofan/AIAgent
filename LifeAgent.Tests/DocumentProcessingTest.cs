@@ -224,4 +224,119 @@ public class DocumentProcessingTest
         // Assert
         Assert.Empty(chunks);
     }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 5. Chunk 数量限制测试 (Phase 3.5)
+    // ────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Chunker_BelowLimit_ShouldNotTruncate()
+    {
+        // Arrange: 生成足够的文本以产生多个 chunk（每段约 100 字符 × 20 段 = ~2000 字符 → ~2-3 chunks）
+        var chunker = new BasicChunker();
+        var sb = new StringBuilder();
+        for (int i = 1; i <= 20; i++)
+        {
+            sb.AppendLine($"这是第{i}个自然段落。本段内容用于测试分块器在限制范围内是否正常工作，不应触发截断逻辑。分块器应保持原有行为。");
+        }
+        var text = sb.ToString();
+
+        // Act: 限制为 10 个 chunk，实际产生的 chunk 数应远小于 10
+        var chunks = chunker.SplitDocument("user_1", "doc_below", "below.txt", text, maxChunks: 10);
+
+        // Assert
+        Assert.NotEmpty(chunks);
+        Assert.True(chunks.Count < 10, $"Expected fewer than 10 chunks, got {chunks.Count}");
+
+        // 无截断时，所有 chunk 的 ChunkIndex 应连续
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            Assert.Equal(i, chunks[i].ChunkIndex);
+            Assert.Equal($"doc_below_{i}", chunks[i].Id);
+        }
+    }
+
+    [Fact]
+    public void Chunker_AtLimit_ShouldNotTruncate()
+    {
+        // Arrange: 生成大量文本，预期产生 5+ 个 chunk，maxChunks 设为刚好等于实际数量
+        var chunker = new BasicChunker();
+        var sb = new StringBuilder();
+        for (int i = 1; i <= 50; i++)
+        {
+            sb.AppendLine($"这是第{i}个自然段落，用于产生足够多的文本内容以触发多次分块。每个段落大约一百个字符左右，确保文本总量足够大。");
+        }
+        var text = sb.ToString();
+
+        // 先无限制地分块一次，确定实际 chunk 数
+        var allChunks = chunker.SplitDocument("user_1", "doc_at", "at.txt", text);
+        var actualCount = allChunks.Count;
+        Assert.True(actualCount >= 3, $"Expected at least 3 chunks from 50 paragraphs, got {actualCount}");
+
+        // Act: 限制恰好等于实际数量
+        var limitedChunks = chunker.SplitDocument("user_1", "doc_at", "at.txt", text, maxChunks: actualCount);
+
+        // Assert: 应产生相同数量的 chunk，内容相同
+        Assert.Equal(actualCount, limitedChunks.Count);
+        for (int i = 0; i < actualCount; i++)
+        {
+            Assert.Equal(allChunks[i].Content, limitedChunks[i].Content);
+        }
+    }
+
+    [Fact]
+    public void Chunker_AboveLimit_ShouldTruncateAndNotExceedMaxChunks()
+    {
+        // Arrange: 生成大量文本，确保 chunk 数量 > maxChunks
+        var chunker = new BasicChunker();
+        var sb = new StringBuilder();
+        for (int i = 1; i <= 50; i++)
+        {
+            sb.AppendLine($"这是第{i}个自然段落，用于产生足够多的文本内容以触发截断。每个段落大约一百个字符左右，确保文本总量足够大，以便分块器产生足够多的 chunks 用于测试截断行为。");
+        }
+        var text = sb.ToString();
+
+        // 先无限制地分块，确认实际 chunk 数
+        var allChunks = chunker.SplitDocument("user_1", "doc_above", "above.txt", text);
+        Assert.True(allChunks.Count >= 3, $"Expected at least 3 chunks, got {allChunks.Count}");
+
+        var limit = 2; // 设置一个较低的限制
+
+        // Act
+        var truncatedChunks = chunker.SplitDocument("user_1", "doc_above", "above.txt", text, maxChunks: limit);
+
+        // Assert: 只返回 limit 个 chunk
+        Assert.Equal(limit, truncatedChunks.Count);
+
+        // 前 limit 个 chunk 应与无限制版本内容一致
+        for (int i = 0; i < limit; i++)
+        {
+            Assert.Equal(allChunks[i].Content, truncatedChunks[i].Content);
+            Assert.Equal(i, truncatedChunks[i].ChunkIndex);
+        }
+    }
+
+    [Fact]
+    public void Chunker_DefaultOverload_ShouldNotApplyLimit()
+    {
+        // Arrange: 确保无 maxChunks 参数的重载行为与旧版一致
+        var chunker = new BasicChunker();
+        var sb = new StringBuilder();
+        for (int i = 1; i <= 30; i++)
+        {
+            sb.AppendLine($"这是第{i}个自然段落，用于确认无限制重载方法不施加任何数量限制，保持向后兼容。");
+        }
+        var text = sb.ToString();
+
+        // Act
+        var chunksDefault = chunker.SplitDocument("user_1", "doc_compat", "compat.txt", text);
+        var chunksExplicit = chunker.SplitDocument("user_1", "doc_compat", "compat.txt", text, maxChunks: int.MaxValue);
+
+        // Assert: 两个重载应返回完全相同的结果
+        Assert.Equal(chunksExplicit.Count, chunksDefault.Count);
+        for (int i = 0; i < chunksDefault.Count; i++)
+        {
+            Assert.Equal(chunksExplicit[i].Content, chunksDefault[i].Content);
+        }
+    }
 }

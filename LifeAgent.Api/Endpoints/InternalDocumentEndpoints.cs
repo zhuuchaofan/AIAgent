@@ -148,8 +148,26 @@ public static class InternalDocumentEndpoints
                 throw new IngestionException(extractionResult.ErrorMessage ?? "Failed to extract text from document.");
             }
 
-            // 3. 调用 IChunker 生成 chunks
-            var chunks = chunker.SplitDocument(request.UserId, request.DocumentId, doc.FileName, extractionResult.Pages);
+            // 3. 调用 IChunker 生成 chunks（Phase 3.5: 应用最大 chunk 数量限制）
+            var maxChunks = options.MaxChunksPerDocument > 0 ? options.MaxChunksPerDocument : 200;
+
+            // 传入 maxChunks + 1 探测文档是否真正超限：
+            //   - 返回数量 > maxChunks → 文档确实超限，需要截断
+            //   - 返回数量 == maxChunks → 恰好等于上限，不截断
+            //   - 返回数量 < maxChunks → 未达上限，不截断
+            var allChunks = chunker.SplitDocument(request.UserId, request.DocumentId, doc.FileName, extractionResult.Pages, maxChunks + 1);
+
+            var isTruncated = allChunks.Count > maxChunks;
+
+            if (isTruncated)
+            {
+                logger.LogWarning("Document {DocId} generated {TotalChunks} chunks, exceeding the limit of {Limit}. Truncating.",
+                    request.DocumentId, allChunks.Count, maxChunks);
+            }
+
+            // 截断时只保留前 maxChunks 个，后续 chunk 不做 embedding、不写入
+            var chunks = isTruncated ? allChunks.Take(maxChunks).ToList() : allChunks;
+
             if (chunks == null || chunks.Count == 0)
             {
                 throw new IngestionException("No valid content or chunks could be generated from the document.");
@@ -177,6 +195,7 @@ public static class InternalDocumentEndpoints
             // 6. 更新 document metadata 为 success
             doc.Status = "success";
             doc.ChunkCount = chunks.Count;
+            doc.IsTruncated = isTruncated;
             doc.UpdatedAt = DateTime.UtcNow;
             doc.ErrorMessage = null;
 

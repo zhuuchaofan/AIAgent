@@ -29,6 +29,9 @@ public class KnowledgeDocument
     [FirestoreProperty("chunkCount")]
     public int ChunkCount { get; set; }
 
+    [FirestoreProperty("isTruncated")]
+    public bool IsTruncated { get; set; }
+
     [FirestoreProperty("errorMessage")]
     public string? ErrorMessage { get; set; }
 

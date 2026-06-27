@@ -10,6 +10,11 @@ public class BasicChunker : IChunker
 
     public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, string text)
     {
+        return SplitDocument(userId, documentId, documentName, text, maxChunks: int.MaxValue);
+    }
+
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, string text, int maxChunks)
+    {
         var pages = new List<PageTextInfo>
         {
             new PageTextInfo
@@ -20,10 +25,15 @@ public class BasicChunker : IChunker
                 CharEnd = text?.Length ?? 0
             }
         };
-        return SplitDocument(userId, documentId, documentName, pages);
+        return SplitDocument(userId, documentId, documentName, pages, maxChunks);
     }
 
     public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, List<PageTextInfo> pages)
+    {
+        return SplitDocument(userId, documentId, documentName, pages, maxChunks: int.MaxValue);
+    }
+
+    public List<KnowledgeChunk> SplitDocument(string userId, string documentId, string documentName, List<PageTextInfo> pages, int maxChunks)
     {
         var chunks = new List<KnowledgeChunk>();
         if (pages == null || pages.Count == 0) return chunks;
@@ -63,6 +73,11 @@ public class BasicChunker : IChunker
                     var chunkContent = currentChunkText.ToString();
                     chunks.Add(CreateChunk(userId, documentId, documentName, chunkIndex++, page.PageNumber, currentChunkStart, currentChunkEnd, chunkContent));
 
+                    if (chunks.Count >= maxChunks)
+                    {
+                        return chunks;
+                    }
+
                     var overlapText = GetOverlapText(chunkContent, OverlapSize);
                     currentChunkText.Clear();
                     currentChunkText.Append(overlapText);
@@ -76,6 +91,11 @@ public class BasicChunker : IChunker
                 if (!string.IsNullOrWhiteSpace(remainingText))
                 {
                     chunks.Add(CreateChunk(userId, documentId, documentName, chunkIndex++, page.PageNumber, currentChunkStart, currentChunkEnd, remainingText));
+
+                    if (chunks.Count >= maxChunks)
+                    {
+                        return chunks;
+                    }
                 }
             }
         }

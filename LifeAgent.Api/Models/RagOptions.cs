@@ -9,6 +9,7 @@ public class RagOptions
     public double DistanceThreshold { get; set; } = 0.35;
     public int TopK { get; set; } = 5;
     public int MaxFileSizeMb { get; set; } = 10;
+    public int MaxChunksPerDocument { get; set; } = 200;
     public string GcsBucketName { get; set; } = "";
     public string CloudTasksQueueName { get; set; } = "";
     public string CloudTasksLocation { get; set; } = "";
