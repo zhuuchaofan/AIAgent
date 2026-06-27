@@ -48,25 +48,51 @@ export function RagChat() {
   ]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
-  const [convId, setConvId] = useState("");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const convId = "rag_default_session";
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 初始化会话 ID 并在组件挂载时拉取文档列表与历史对话
+  const loadHistory = async () => {
+    try {
+      const historyRes = await getRagChatHistory(convId);
+      if (historyRes.success) {
+        if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
+          const mappedMessages: Message[] = historyRes.data.map((m: { role: string; content: string }) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content
+          }));
+          setMessages([
+            {
+              role: "assistant",
+              content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+            },
+            ...mappedMessages
+          ]);
+        } else {
+          setMessages([
+            {
+              role: "assistant",
+              content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+            }
+          ]);
+        }
+      } else {
+        setHistoryError("拉取历史记录失败：" + (historyRes.message || "未知错误"));
+      }
+    } catch (err: unknown) {
+      console.error("Fetch chat history failed:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setHistoryError("拉取历史记录连接异常：" + errMsg);
+    }
+  };
+
+  // 初始化会话并在组件挂载时拉取文档列表与历史对话
   useEffect(() => {
     if (!user) return;
 
-    const hasExistingSession = !!sessionStorage.getItem("rag_conv_id");
-    // 每次会话生成或沿用一个唯一的会话 ID
-    let currentConvId = sessionStorage.getItem("rag_conv_id");
-    if (!currentConvId) {
-      currentConvId = "conv_" + Math.random().toString(36).substring(2, 11);
-      sessionStorage.setItem("rag_conv_id", currentConvId);
-    }
-    // 异步推迟 setConvId 从而避开同步 set-state-in-effect 检测
-    Promise.resolve().then(() => setConvId(currentConvId));
-
     const initChat = async () => {
+      setHistoryError(null);
       // 1. 并行加载可检索文档列表
       const docsPromise = getDocuments().then(res => {
         if (res.success && Array.isArray(res.data)) {
@@ -78,21 +104,8 @@ export function RagChat() {
         console.error("Fetch docs for RAG chat failed:", err);
       });
 
-      // 2. 如果存在已有会话，并行拉取云端历史记录并渲染
-      let historyPromise = Promise.resolve();
-      if (hasExistingSession && currentConvId) {
-        historyPromise = getRagChatHistory(currentConvId).then(historyRes => {
-          if (historyRes.success && Array.isArray(historyRes.data) && historyRes.data.length > 0) {
-            const mappedMessages: Message[] = historyRes.data.map((m: { role: string; content: string }) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content
-            }));
-            setMessages(mappedMessages);
-          }
-        }).catch(err => {
-          console.error("Fetch chat history failed:", err);
-        });
-      }
+      // 2. 并行拉取云端历史记录并渲染
+      const historyPromise = loadHistory();
 
       await Promise.all([docsPromise, historyPromise]);
     };
@@ -300,6 +313,22 @@ export function RagChat() {
 
         {/* 消息历史滚动区 */}
         <div className="flex-1 p-5 overflow-y-auto space-y-5 min-h-[380px] max-h-[480px]">
+          {historyError && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl flex items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{historyError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={loadHistory}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs px-2.5 py-1 rounded-lg transition-colors font-medium shrink-0"
+              >
+                重试加载
+              </button>
+            </div>
+          )}
+
           {messages.map((msg, index) => (
             <div 
               key={index} 
@@ -339,6 +368,14 @@ export function RagChat() {
               </div>
             </div>
           ))}
+
+          {messages.length === 1 && !loading && (
+            <div className="border border-dashed border-zinc-800 rounded-2xl p-6 text-center text-zinc-500 max-w-md mx-auto my-4 space-y-2">
+              <Sparkles className="w-8 h-8 text-zinc-700 mx-auto animate-pulse" />
+              <p className="text-xs font-medium text-zinc-400">新建问答会话</p>
+              <p className="text-[11px]">当前会话暂无历史问答记录。请在下方输入框中输入您的问题，开启基于个人知识库的深度问答。</p>
+            </div>
+          )}
 
           {loading && (
             <div className="flex gap-3 max-w-[80%] mr-auto items-center animate-pulse">

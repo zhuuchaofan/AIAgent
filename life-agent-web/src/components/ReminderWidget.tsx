@@ -65,8 +65,9 @@ export function ReminderWidget({
       // 成功后前端本地过滤掉该提醒，并回调父组件刷新 Timeline
       setReminders((prev) => prev.filter((r) => r.id !== id));
       onUpdated();
-    } catch (err: any) {
-      alert("更新提醒失败: " + err.message);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert("更新提醒失败: " + errMsg);
     } finally {
       setActioningId(null);
     }

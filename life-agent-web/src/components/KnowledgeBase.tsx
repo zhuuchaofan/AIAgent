@@ -67,6 +67,8 @@ export function KnowledgeBase() {
       const res = await getDocuments();
       if (res.success && Array.isArray(res.data)) {
         setDocuments(res.data);
+      } else {
+        setError("获取文档列表失败：" + (res.message || "未知错误"));
       }
     } catch (err: unknown) {
       console.error("Fetch documents failed:", err);
@@ -156,6 +158,8 @@ export function KnowledgeBase() {
       if (res.success) {
         setSuccessMsg(`文件「${file.name}」已提交上传，正在解析切片中...`);
         fetchDocs(true);
+      } else {
+        setError("上传失败：" + (res.message || "未知错误"));
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -183,6 +187,9 @@ export function KnowledgeBase() {
       const res = await deleteDocument(docId);
       if (res.success) {
         setSuccessMsg("文档已成功删除。");
+        fetchDocs(true);
+      } else {
+        setError("删除文档失败：" + (res.message || "未知错误"));
         fetchDocs(true);
       }
     } catch (err: unknown) {

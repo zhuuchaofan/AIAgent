@@ -18,8 +18,9 @@ export function IngestForm({ onIngested }: { onIngested: () => void }) {
       await ingestEvent(text, tz);
       setText("");
       onIngested();
-    } catch (err: any) {
-      alert("记录失败: " + err.message);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert("记录失败: " + errMsg);
     } finally {
       setIsSubmitting(false);
     }

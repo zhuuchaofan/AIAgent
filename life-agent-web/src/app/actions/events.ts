@@ -4,6 +4,31 @@ import { getToken } from "./auth";
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:5140";
 
+export interface LifeEvent {
+  id: string;
+  userId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
+  type: string;
+  schemaVersion?: string;
+  title: string;
+  content: string;
+  occurredAt: string;
+  timeZone?: string;
+  tags: string[];
+  importance: number;
+  source?: string;
+  structuredData?: Record<string, unknown>;
+  extractionConfidence?: number;
+  needsReview?: boolean;
+  reminderIntentDetected?: boolean;
+  reminderParseStatus?: string;
+  reminderParseNote?: string;
+  createdReminderId?: string;
+}
+
 export async function ingestEvent(text: string, clientTimeZone: string) {
   const token = await getToken();
   if (!token) throw new Error("Unauthorized");
@@ -47,7 +72,7 @@ export async function getEvents(cursor?: string, tag?: string) {
   return data;
 }
 
-export async function updateEvent(id: string, payload: any) {
+export async function updateEvent(id: string, payload: Partial<LifeEvent>) {
   const token = await getToken();
   if (!token) throw new Error("Unauthorized");
 

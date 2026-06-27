@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getEvents, updateEvent, deleteEvent } from "@/app/actions/events";
+import { getEvents, updateEvent, deleteEvent, type LifeEvent } from "@/app/actions/events";
 import { format } from "date-fns";
 import { Loader2, Calendar, Trash2, Edit3, Save, X, Tag } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
@@ -18,7 +18,7 @@ function getTypeText(type: string): string {
 
 export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
   const { user } = useAuth();
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<LifeEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -44,7 +44,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
         }
         setNextCursor(data.nextCursor);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Fetch events error:", err);
     }
   }, []);
@@ -68,16 +68,17 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
       try {
         await deleteEvent(id);
         setEvents((prev) => prev.filter((e) => e.id !== id));
-      } catch (err: any) {
-        alert("删除失败: " + err.message);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        alert("删除失败: " + errMsg);
       }
     }
   };
 
-  const startEdit = (evt: any) => {
+  const startEdit = (evt: LifeEvent) => {
     setEditingId(evt.id);
-    setEditTitle(evt.title);
-    setEditContent(evt.content);
+    setEditTitle(evt.title || "");
+    setEditContent(evt.content || "");
     setEditTags(evt.tags?.join(", ") || "");
     setEditImportance(evt.importance || 3);
     setEditStructuredData(JSON.stringify(evt.structuredData || {}, null, 2));
@@ -126,8 +127,9 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
         )
       );
       setEditingId(null);
-    } catch (err: any) {
-      alert("保存失败: " + err.message);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert("保存失败: " + errMsg);
     }
   };
 
