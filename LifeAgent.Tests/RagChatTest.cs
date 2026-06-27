@@ -76,8 +76,8 @@ public class RagChatTest
 
         // Check LLM was not called
         Assert.Null(_answerGenerator.LastUserPrompt);
-        // Check message not saved to database on empty chunks
-        Assert.False(_sessionRepo.SaveCalled);
+        // Check message is saved to database on empty chunks
+        Assert.True(_sessionRepo.SaveCalled);
     }
 
     [Fact]
@@ -354,13 +354,15 @@ public class RagChatTest
             NullLogger<RagChatService>.Instance
         );
 
-        // Act & Assert
-        await Assert.ThrowsAsync<HttpRequestException>(() => 
-            chatSvcWithFailingLlm.ProcessChatAsync(userId, request)
-        );
+        // Act
+        var result = await chatSvcWithFailingLlm.ProcessChatAsync(userId, request);
 
-        // Verify no message saved to database
-        Assert.False(_sessionRepo.SaveCalled);
+        // Assert
+        Assert.Equal("抱歉，问答服务遇到异常，生成回复失败。", result.Response);
+        Assert.Equal("invalid", result.CitationIntegrity);
+        
+        // Verify message was saved to database
+        Assert.True(_sessionRepo.SaveCalled);
     }
 
     [Fact]

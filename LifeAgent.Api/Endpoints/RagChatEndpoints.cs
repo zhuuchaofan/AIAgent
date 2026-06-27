@@ -24,6 +24,7 @@ public static class RagChatEndpoints
         [FromServices] ILogger<RagChatService> logger)
     {
         var userId = httpContext.Items["userId"] as string;
+        var desensitizedUserId = string.IsNullOrEmpty(userId) ? "" : (userId.Length > 6 ? userId.Substring(0, 6) : userId);
         if (string.IsNullOrEmpty(userId))
         {
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
@@ -33,6 +34,9 @@ public static class RagChatEndpoints
         {
             return Results.BadRequest(new { success = false, message = "Required parameters (conversationId, message) are missing." });
         }
+
+        logger.LogInformation("[RAG Endpoint] POST ProcessRagChatAsync. User: {User}... | Session: {Session} | MessageLen: {MsgLen}", 
+            desensitizedUserId, request.ConversationId, request.Message.Length);
 
         try
         {
@@ -67,6 +71,7 @@ public static class RagChatEndpoints
         [FromServices] ILogger<RagChatService> logger)
     {
         var userId = httpContext.Items["userId"] as string;
+        var desensitizedUserId = string.IsNullOrEmpty(userId) ? "" : (userId.Length > 6 ? userId.Substring(0, 6) : userId);
         if (string.IsNullOrEmpty(userId))
         {
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
@@ -76,6 +81,9 @@ public static class RagChatEndpoints
         {
             return Results.BadRequest(new { success = false, message = "Required parameter (conversationId) is missing." });
         }
+
+        logger.LogInformation("[RAG Endpoint] GET GetRagChatHistoryAsync. User: {User}... | Session: {Session}", 
+            desensitizedUserId, conversationId);
 
         try
         {

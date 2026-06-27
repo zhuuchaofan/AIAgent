@@ -45,6 +45,10 @@ public class RagChatService : IRagChatService
             throw new ArgumentException("Conversation ID and message are required.");
         }
 
+        var desensitizedUserId = string.IsNullOrEmpty(userId) ? "" : (userId.Length > 6 ? userId.Substring(0, 6) : userId);
+        _logger.LogInformation("[RAG Process] Start. User: {User}... | Session: {Session} | MessageLen: {MsgLen} | SelectedDocs: {DocsCount}", 
+            desensitizedUserId, request.ConversationId, request.Message?.Length ?? 0, request.DocumentIds?.Count ?? 0);
+
         // 1. 验证/创建会话 — 首条消息时自动创建
         var session = await _sessionRepository.GetSessionAsync(userId, request.ConversationId);
         if (session == null)
@@ -62,6 +66,7 @@ public class RagChatService : IRagChatService
 
         // 3. 向量最近邻检索
         var searchResults = await _vectorStore.FindNearestAsync(userId, queryVector, _ragOptions.TopK);
+        _logger.LogInformation("[RAG Process] Vector search completed. Found {Count} raw chunks.", searchResults?.Count ?? 0);
 
         // 4. 二次过滤与阈值过滤
         // TODO: RestFirestoreVectorStore 目前不支持在 Firestore REST runQuery 端进行前置的复合字段条件过滤 (documentIds)。
@@ -86,14 +91,38 @@ public class RagChatService : IRagChatService
                 retrievedChunks.Add(chunk);
             }
         }
+        _logger.LogInformation("[RAG Process] Post-filtering completed. Retained {Count} valid chunks within threshold {Threshold}.", 
+            retrievedChunks.Count, _ragOptions.DistanceThreshold);
 
-        // 5. 若有效 chunks 为空，直接拒答
+        // 5. 若有效 chunks 为空，直接拒答并保存历史
         if (retrievedChunks.Count == 0)
         {
-            _logger.LogInformation("No relevant chunks found above distance threshold {Threshold}. Refusing to answer.", _ragOptions.DistanceThreshold);
+            _logger.LogInformation("[RAG Process] No chunks branch executed. Saving refuse message.");
+            
+            var refuseAnswer = "资料中未找到足够依据回答该问题";
+            var refuseMessages = new List<ChatMessage>
+            {
+                new ChatMessage
+                {
+                    Id = $"msg_{Guid.NewGuid():N}",
+                    Role = "user",
+                    Content = request.Message,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new ChatMessage
+                {
+                    Id = $"msg_{Guid.NewGuid():N}",
+                    Role = "assistant",
+                    Content = refuseAnswer,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+
+            await _sessionRepository.SaveMessagesAsync(userId, request.ConversationId, refuseMessages, DateTime.UtcNow);
+
             return new RagChatResponse
             {
-                Response = "资料中未找到足够依据回答该问题",
+                Response = refuseAnswer,
                 CitationIntegrity = "valid",
                 Citations = new List<CitationNode>()
             };
@@ -164,7 +193,44 @@ public class RagChatService : IRagChatService
         contextBuilder.AppendLine(request.Message);
 
         // 8. 调用 LLM 生成回答
-        var rawAnswer = await _answerGenerator.GenerateAnswerAsync(systemPrompt, contextBuilder.ToString(), history);
+        string rawAnswer;
+        try
+        {
+            _logger.LogInformation("[RAG Process] Calling LLM Answer Generator for Session {Session}", request.ConversationId);
+            rawAnswer = await _answerGenerator.GenerateAnswerAsync(systemPrompt, contextBuilder.ToString(), history);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[RAG Process] Gemini LLM Generation failed for Session {Session}", request.ConversationId);
+            
+            var errResponse = "抱歉，问答服务遇到异常，生成回复失败。";
+            var errorMessages = new List<ChatMessage>
+            {
+                new ChatMessage
+                {
+                    Id = $"msg_{Guid.NewGuid():N}",
+                    Role = "user",
+                    Content = request.Message,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new ChatMessage
+                {
+                    Id = $"msg_{Guid.NewGuid():N}",
+                    Role = "assistant",
+                    Content = errResponse,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+
+            await _sessionRepository.SaveMessagesAsync(userId, request.ConversationId, errorMessages, DateTime.UtcNow);
+
+            return new RagChatResponse
+            {
+                Response = errResponse,
+                CitationIntegrity = "invalid",
+                Citations = new List<CitationNode>()
+            };
+        }
 
         // 9. Citation 校验与清洗
         var (cleanedResponse, integrity, citations) = CitationProcessor.Process(rawAnswer, retrievedChunks);
@@ -188,7 +254,10 @@ public class RagChatService : IRagChatService
             }
         };
 
+        _logger.LogInformation("[RAG Process] Saving messages. User: {User}... | Session: {Session} | Messages count: {MsgCount}", 
+            desensitizedUserId, request.ConversationId, messagesToSave.Count);
         await _sessionRepository.SaveMessagesAsync(userId, request.ConversationId, messagesToSave, DateTime.UtcNow);
+        _logger.LogInformation("[RAG Process] Successfully saved messages to Firestore.");
 
         return new RagChatResponse
         {
