@@ -16,7 +16,7 @@ public static class DocumentEndpoints
         var group = app.MapGroup("/api/v1/documents")
             .WithTags("documents");
 
-        group.MapPost("/", UploadDocumentAsync).DisableAntiforgery();
+        group.MapPost("/", UploadDocumentAsync).DisableAntiforgery().RequireRateLimiting("high-cost");
         group.MapGet("/", GetDocumentsAsync);
         group.MapDelete("/{documentId}", DeleteDocumentAsync);
     }

@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
@@ -75,6 +76,87 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
 });
 
+// ── 速率限制（Rate Limiting）─────────────────────────────────────
+var rateLimitConfig = builder.Configuration
+    .GetSection(RagOptions.Rag)
+    .GetSection("RateLimiting")
+    .Get<RateLimitingOptions>() ?? new RateLimitingOptions();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+
+    // 自定义 429 响应格式，与 ExceptionMiddleware 风格一致
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            success = false,
+            error = new
+            {
+                code = "RATE_LIMIT_EXCEEDED",
+                message = "请求过于频繁，请稍后重试。"
+            }
+        }, cancellationToken);
+    };
+
+    // ── Partition key 提供器：优先 userId，降级 IP ──
+    string GetPartitionKey(HttpContext ctx)
+    {
+        var userId = ctx.Items["userId"] as string;
+        return !string.IsNullOrEmpty(userId) ? $"user:{userId}" : $"ip:{ctx.Connection.RemoteIpAddress}";
+    }
+
+    // Global IP 限流（未认证请求兜底）
+    options.AddPolicy("global-ip", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPartitionKey(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimitConfig.GlobalIp.PermitLimit,
+                Window = TimeSpan.FromSeconds(rateLimitConfig.GlobalIp.WindowSeconds),
+                QueueLimit = rateLimitConfig.GlobalIp.QueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // 已认证用户限流
+    options.AddPolicy("auth-user", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPartitionKey(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimitConfig.AuthenticatedUser.PermitLimit,
+                Window = TimeSpan.FromSeconds(rateLimitConfig.AuthenticatedUser.WindowSeconds),
+                QueueLimit = rateLimitConfig.AuthenticatedUser.QueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // 高成本端点限流
+    options.AddPolicy("high-cost", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPartitionKey(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimitConfig.HighCost.PermitLimit,
+                Window = TimeSpan.FromSeconds(rateLimitConfig.HighCost.WindowSeconds),
+                QueueLimit = rateLimitConfig.HighCost.QueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // Internal 端点限流（按 IP 分区，不依赖 Firebase Auth）
+    options.AddPolicy("internal", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"internal:{httpContext.Connection.RemoteIpAddress}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimitConfig.Internal.PermitLimit,
+                Window = TimeSpan.FromSeconds(rateLimitConfig.Internal.WindowSeconds),
+                QueueLimit = rateLimitConfig.Internal.QueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+});
+
 var app = builder.Build();
 app.Logger.LogInformation("MaxRequestBodySize set to {SizeMb} MB", maxRequestBodySizeMb);
 
@@ -96,6 +178,7 @@ if (!string.Equals(useMockAuth, "true", StringComparison.OrdinalIgnoreCase))
 // ── 中间件注册 ─────────────────────────────────────────────────
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseMiddleware<FirebaseAuthMiddleware>();
+app.UseRateLimiter();
 
 // ── 路由 ──────────────────────────────────────────────────────
 

@@ -30,4 +30,24 @@ public class RagOptions
     public string CloudTasksLocation { get; set; } = "";
     public string InternalProcessAudience { get; set; } = "";
     public string CloudTasksServiceAccountEmail { get; set; } = "";
+
+    /// <summary>速率限制配置。</summary>
+    public RateLimitingOptions RateLimiting { get; set; } = new();
+}
+
+/// <summary>速率限制配置项。</summary>
+public class RateLimitingOptions
+{
+    public RateLimitPolicyOptions GlobalIp { get; set; } = new() { PermitLimit = 30 };
+    public RateLimitPolicyOptions AuthenticatedUser { get; set; } = new() { PermitLimit = 60 };
+    public RateLimitPolicyOptions HighCost { get; set; } = new() { PermitLimit = 10 };
+    public RateLimitPolicyOptions Internal { get; set; } = new() { PermitLimit = 20 };
+}
+
+/// <summary>单个限流策略的配置。</summary>
+public class RateLimitPolicyOptions
+{
+    public int PermitLimit { get; set; } = 60;
+    public int WindowSeconds { get; set; } = 60;
+    public int QueueLimit { get; set; } = 0;
 }

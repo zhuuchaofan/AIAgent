@@ -53,7 +53,7 @@ public static class DailySummaryEndpoints
                 cached  = cached,
                 data    = MapToDto(summary)
             }, statusCode: 201);
-        });
+        }).RequireRateLimiting("high-cost");
 
         // ─────────────────────────────────────────────────────────────
         // GET /api/daily-summaries/{date}

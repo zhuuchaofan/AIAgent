@@ -106,7 +106,7 @@ public static class LifeEndpoints
                     ReminderId = createdReminder?.Id
                 }
             });
-        });
+        }).RequireRateLimiting("high-cost");
 
         // GET /api/life/events
         group.MapGet("/events", async (

@@ -141,7 +141,7 @@ public static class MigrationEndpoints
                 SkippedCount = skippedCount,
                 FailedCount = failedCount
             });
-        });
+        }).RequireRateLimiting("high-cost");
     }
 }
 

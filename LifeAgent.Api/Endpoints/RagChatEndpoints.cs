@@ -15,7 +15,7 @@ public static class RagChatEndpoints
 {
     public static void MapRagChatEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/v1/chat/rag", ProcessRagChatAsync);
+        app.MapPost("/api/v1/chat/rag", ProcessRagChatAsync).RequireRateLimiting("high-cost");
         app.MapGet("/api/v1/chat/rag/{conversationId}/messages", GetRagChatHistoryAsync);
         app.MapDelete("/api/v1/chat/rag/{conversationId}/messages", ClearRagChatHistoryAsync);
     }

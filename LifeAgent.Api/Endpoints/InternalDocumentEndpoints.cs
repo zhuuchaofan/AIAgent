@@ -23,7 +23,8 @@ public static class InternalDocumentEndpoints
     public static void MapInternalDocumentEndpoints(this WebApplication app)
     {
         // 注册私有后台回调端点
-        app.MapPost("/internal/api/v1/documents/process", ProcessDocumentAsync);
+        app.MapPost("/internal/api/v1/documents/process", ProcessDocumentAsync)
+            .RequireRateLimiting("internal");
     }
 
     public static async Task<IResult> ProcessDocumentAsync(
