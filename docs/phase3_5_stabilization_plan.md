@@ -471,6 +471,8 @@ Phase 3.5 明确**不做**以下事项：
 - 遇到新风险或阻塞时，在对应任务下添加备注
 - Phase 3.5 全部完成后，更新 `docs/lifeos_project_roadmap.md` 中 Phase 3.5 的状态为 ✅
 
+**已沉淀 Skill**：`.claude/skills/lifeagent-phase-guard/SKILL.md` — 用于后续阶段推进、P0 收尾、部署验证和冒烟检查复用。
+
 ---
 
 ## 参考文档
