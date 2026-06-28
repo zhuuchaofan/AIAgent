@@ -147,13 +147,71 @@ export default function Home() {
               )}
             </div>
 
-            {/* 窄屏端：全部模块纵向堆叠，按优先级排序 */}
-            <div className="lg:hidden space-y-6 animate-in fade-in duration-500">
-              <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
-              <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
-              <DailySummaryCard refreshTrigger={refreshTrigger} />
-              <KnowledgeBase />
-              <RagChat />
+            {/* 窄屏端：Tab 导航 — 仅在 lg:hidden 下可见 */}
+            <div className="lg:hidden flex border-b border-zinc-800/40 pb-px mb-6 gap-2 text-sm font-semibold select-none">
+              <button
+                onClick={() => setActiveTab("assistant")}
+                className={`flex-1 pb-3 text-center transition-all duration-300 relative ${
+                  activeTab === "assistant"
+                    ? "text-white"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                生活助理
+                {activeTab === "assistant" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("knowledge")}
+                className={`flex-1 pb-3 text-center transition-all duration-300 relative ${
+                  activeTab === "knowledge"
+                    ? "text-white"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                知识库
+                {activeTab === "knowledge" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`flex-1 pb-3 text-center transition-all duration-300 relative ${
+                  activeTab === "chat"
+                    ? "text-white"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                问答
+                {activeTab === "chat" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
+                )}
+              </button>
+            </div>
+
+            {/* 窄屏端：Tab 切换内容区 */}
+            <div className="lg:hidden">
+              {activeTab === "assistant" && (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                  <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
+                  <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
+                  <DailySummaryCard refreshTrigger={refreshTrigger} />
+                  <Timeline refreshTrigger={refreshTrigger} />
+                </div>
+              )}
+
+              {activeTab === "knowledge" && (
+                <div className="animate-in fade-in duration-500">
+                  <KnowledgeBase />
+                </div>
+              )}
+
+              {activeTab === "chat" && (
+                <div className="animate-in fade-in duration-500">
+                  <RagChat />
+                </div>
+              )}
             </div>
           </div>
         )}
