@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   Upload,
   Trash2,
@@ -11,27 +11,10 @@ import {
   FileText,
   RefreshCw
 } from "lucide-react";
-import { getDocuments, uploadDocument, deleteDocument } from "@/app/actions/knowledge";
-import { useAuth } from "@/providers/AuthProvider";
-
-interface KnowledgeDocument {
-  id: string;
-  userId: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
-  gcsPath: string;
-  status: string; // processing, success, failed, deleting
-  chunkCount: number;
-  errorMessage: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+import { useDocuments } from "@/providers/DocumentProvider";
 
 export function KnowledgeBase() {
-  const { user } = useAuth();
-  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { documents, loading, fetchDocs, uploadDoc, deleteDoc } = useDocuments();
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,67 +22,6 @@ export function KnowledgeBase() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // 轮询管理助手方法（移动到 Effect 之前声明以符合使用前声明规则）
-  const startPolling = () => {
-    if (pollTimerRef.current) return;
-    pollTimerRef.current = setInterval(() => {
-      fetchDocs(true);
-    }, 3000); // 每 3 秒轮询一次
-  };
-
-  const stopPolling = () => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  };
-
-  // 获取文档列表
-  const fetchDocs = async (silent = false) => {
-    if (!silent) {
-      // 避免同步在 Effect 核心调度内调用 setState
-      await Promise.resolve();
-      setLoading(true);
-    }
-    try {
-      const res = await getDocuments();
-      if (res.success && Array.isArray(res.data)) {
-        setDocuments(res.data);
-      } else {
-        setError("获取文档列表失败：" + (res.message || "未知错误"));
-      }
-    } catch (err: unknown) {
-      console.error("Fetch documents failed:", err);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      setError("获取文档列表失败：" + errMsg);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  };
-
-  // 初始化获取
-  useEffect(() => {
-    if (!user) return;
-    fetchDocs();
-    return () => stopPolling();
-  }, [user]);
-
-  // 轮询管理：检查是否有文档处于 processing 或 deleting 状态
-  useEffect(() => {
-    if (!user) return;
-    const hasActiveStates = documents.some(
-      doc => doc.status === "processing" || doc.status === "deleting"
-    );
-
-    if (hasActiveStates) {
-      startPolling();
-    } else {
-      stopPolling();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documents, user]);
 
   // 处理拖拽
   const handleDrag = (e: React.DragEvent) => {
@@ -150,14 +72,11 @@ export function KnowledgeBase() {
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
-      const res = await uploadDocument(formData);
+      const res = await uploadDoc(file);
       if (res.success) {
         setSuccessMsg(`文件「${file.name}」已提交上传，正在解析切片中...`);
-        fetchDocs(true);
       } else {
         setError("上传失败：" + (res.message || "未知错误"));
       }
@@ -178,24 +97,16 @@ export function KnowledgeBase() {
     setError(null);
     setSuccessMsg(null);
 
-    // 先在前端更新文档状态为 deleting
-    setDocuments(prev => 
-      prev.map(doc => doc.id === docId ? { ...doc, status: "deleting" } : doc)
-    );
-
     try {
-      const res = await deleteDocument(docId);
+      const res = await deleteDoc(docId);
       if (res.success) {
         setSuccessMsg("文档已成功删除。");
-        fetchDocs(true);
       } else {
         setError("删除文档失败：" + (res.message || "未知错误"));
-        fetchDocs(true);
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setError("删除文档失败：" + errMsg);
-      fetchDocs(true);
     }
   };
 

@@ -11,15 +11,10 @@ import {
   Sparkles,
   Trash2
 } from "lucide-react";
-import { getDocuments, sendRagMessage, getRagChatHistory, clearRagChatHistory } from "@/app/actions/knowledge";
+import { sendRagMessage, getRagChatHistory, clearRagChatHistory } from "@/app/actions/knowledge";
 import { useAuth } from "@/providers/AuthProvider";
 import { Markdown } from "./Markdown";
-
-interface KnowledgeDocument {
-  id: string;
-  fileName: string;
-  status: string;
-}
+import { useDocuments } from "@/providers/DocumentProvider";
 
 interface CitationNode {
   index: number;
@@ -40,7 +35,8 @@ interface Message {
 
 export function RagChat() {
   const { user } = useAuth();
-  const [docs, setDocs] = useState<KnowledgeDocument[]>([]);
+  const { documents } = useDocuments();
+  const docs = documents.filter(d => d.status === "success");
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -91,27 +87,13 @@ export function RagChat() {
     }
   };
 
-  // 初始化会话并在组件挂载时拉取文档列表与历史对话
+  // 初始化会话并在组件挂载时拉取历史对话
   useEffect(() => {
     if (!user) return;
 
     const initChat = async () => {
       setHistoryError(null);
-      // 1. 并行加载可检索文档列表
-      const docsPromise = getDocuments().then(res => {
-        if (res.success && Array.isArray(res.data)) {
-          // 只有状态为 success 的文档才能用于 RAG 问答
-          const successDocs = (res.data as KnowledgeDocument[]).filter(d => d.status === "success");
-          setDocs(successDocs);
-        }
-      }).catch(err => {
-        console.error("Fetch docs for RAG chat failed:", err);
-      });
-
-      // 2. 并行拉取云端历史记录并渲染
-      const historyPromise = loadHistory();
-
-      await Promise.all([docsPromise, historyPromise]);
+      await loadHistory();
     };
 
     initChat();
