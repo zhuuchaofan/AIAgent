@@ -33,6 +33,7 @@ builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>(
 builder.Services.AddScoped<IRagChatService, RagChatService>();
 
 builder.Services.AddSingleton<FileValidator>();
+builder.Services.AddSingleton<IDailyQuotaService, DailyQuotaService>();
 builder.Services.AddSingleton<ICloudStorageService, GoogleCloudStorageService>();
 builder.Services.AddSingleton<IDocumentTextExtractor, PdfPigDocumentTextExtractor>();
 builder.Services.AddSingleton<IChunker, BasicChunker>();
@@ -64,7 +65,18 @@ else
         client.Timeout = TimeSpan.FromSeconds(30);
     });
 }
+
+// ── 请求体大小限制（防止超大文件绕过前端限制）────────────────
+var maxRequestBodySizeMb = builder.Configuration.GetSection("Rag").GetValue<int>("MaxRequestBodySizeMb");
+if (maxRequestBodySizeMb <= 0) maxRequestBodySizeMb = 15;
+var maxRequestBodyBytes = (long)maxRequestBodySizeMb * 1024L * 1024L;
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
+});
+
 var app = builder.Build();
+app.Logger.LogInformation("MaxRequestBodySize set to {SizeMb} MB", maxRequestBodySizeMb);
 
 // ── Firebase App 初始化（非 Mock 模式才需要）───────────────────
 var useMockAuth = Environment.GetEnvironmentVariable("USE_MOCK_AUTH");

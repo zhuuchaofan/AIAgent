@@ -22,6 +22,7 @@ public class IngestionPipelineTest
     private readonly IEmbeddingService _embeddingService;
     private readonly FakeFirestoreVectorStore _vectorStore;
     private readonly IOptions<RagOptions> _ragOptions;
+    private readonly DailyQuotaService _unlimitedQuota;
 
     public IngestionPipelineTest()
     {
@@ -39,6 +40,12 @@ public class IngestionPipelineTest
             InternalProcessAudience = "https://copper-affinity-467409-k7.appspot.com/"
         };
         _ragOptions = Options.Create(options);
+        _unlimitedQuota = new DailyQuotaService(Options.Create(new RagOptions
+        {
+            DailyLlmCallLimit = 0,
+            DailyEmbeddingCallLimit = 0,
+            DailyDocumentProcessLimit = 0
+        }));
     }
 
     [Fact]
@@ -79,6 +86,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -166,6 +174,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -223,6 +232,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -278,6 +288,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -331,6 +342,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -378,6 +390,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -423,6 +436,7 @@ public class IngestionPipelineTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -478,6 +492,7 @@ public class IngestionPipelineTest
         var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
             context, request, _repo, _storage, _extractor, fixedChunker,
             _embeddingService, _vectorStore, fakeEnv, limitedOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -533,6 +548,7 @@ public class IngestionPipelineTest
         var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
             context, request, _repo, _storage, _extractor, fixedChunker,
             _embeddingService, _vectorStore, fakeEnv, limitedOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -594,6 +610,7 @@ public class IngestionPipelineTest
         var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
             context, request, _repo, _storage, _extractor, fixedChunker,
             _embeddingService, _vectorStore, fakeEnv, limitedOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -652,6 +669,7 @@ public class IngestionPipelineTest
         var result = await InternalDocumentEndpoints.ProcessDocumentAsync(
             context, request, _repo, _storage, _extractor, _chunker,
             _embeddingService, _vectorStore, fakeEnv, defaultOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert

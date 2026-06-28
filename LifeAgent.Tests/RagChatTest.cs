@@ -24,6 +24,7 @@ public class RagChatTest
     private readonly InspectableAnswerGenerator _answerGenerator;
     private readonly IOptions<RagOptions> _ragOptions;
     private readonly RagChatService _chatService;
+    private readonly DailyQuotaService _unlimitedQuota;
 
     public RagChatTest()
     {
@@ -48,6 +49,13 @@ public class RagChatTest
             _ragOptions,
             NullLogger<RagChatService>.Instance
         );
+
+        _unlimitedQuota = new DailyQuotaService(Options.Create(new RagOptions
+        {
+            DailyLlmCallLimit = 0,
+            DailyEmbeddingCallLimit = 0,
+            DailyDocumentProcessLimit = 0
+        }));
     }
 
     [Fact]
@@ -376,7 +384,7 @@ public class RagChatTest
         var mockService = new FakeRagChatServiceThrowSessionNotFound();
 
         // Act
-        var result = await RagChatEndpoints.ProcessRagChatAsync(context, request, mockService, NullLogger<RagChatService>.Instance);
+        var result = await RagChatEndpoints.ProcessRagChatAsync(context, request, mockService, _unlimitedQuota, NullLogger<RagChatService>.Instance);
 
         // Assert
         var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
@@ -451,7 +459,7 @@ public class RagChatTest
         var mockService = new FakeRagChatServiceThrowSessionNotFound();
 
         // Act
-        var result = await RagChatEndpoints.ProcessRagChatAsync(context, request, mockService, NullLogger<RagChatService>.Instance);
+        var result = await RagChatEndpoints.ProcessRagChatAsync(context, request, mockService, _unlimitedQuota, NullLogger<RagChatService>.Instance);
 
         // Assert
         var jsonResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);

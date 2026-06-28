@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
+using LifeAgent.Api.Models.Exceptions;
+using static LifeAgent.Api.Services.DailyQuotaService;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -22,6 +24,7 @@ public static class RagChatEndpoints
         HttpContext httpContext,
         [FromBody] RagChatRequest request,
         [FromServices] IRagChatService ragChatService,
+        [FromServices] IDailyQuotaService quotaService,
         [FromServices] ILogger<RagChatService> logger)
     {
         var userId = httpContext.Items["userId"] as string;
@@ -36,7 +39,17 @@ public static class RagChatEndpoints
             return Results.BadRequest(new { success = false, message = "Required parameters (conversationId, message) are missing." });
         }
 
-        logger.LogInformation("[RAG Endpoint] POST ProcessRagChatAsync. User: {User}... | Session: {Session} | MessageLen: {MsgLen}", 
+        // RAG 问答同时消耗 1 次 Embedding + 1 次 LLM，需双重配额检查
+        if (!quotaService.CheckAndIncrement(userId, QuotaTypeEmbedding))
+        {
+            return Results.Json(new { success = false, message = "今日 AI 调用次数已达上限，请明天再试。" }, statusCode: 429);
+        }
+        if (!quotaService.CheckAndIncrement(userId, QuotaTypeLlm))
+        {
+            return Results.Json(new { success = false, message = "今日 AI 调用次数已达上限，请明天再试。" }, statusCode: 429);
+        }
+
+        logger.LogInformation("[RAG Endpoint] POST ProcessRagChatAsync. User: {User}... | Session: {Session} | MessageLen: {MsgLen}",
             desensitizedUserId, request.ConversationId, request.Message.Length);
 
         try

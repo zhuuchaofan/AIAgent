@@ -24,6 +24,7 @@ public class DocumentApiAndWorkerTest
     private readonly IChunker _chunker;
     private readonly IEmbeddingService _embeddingService;
     private readonly FakeFirestoreVectorStore _vectorStore;
+    private readonly DailyQuotaService _unlimitedQuota;
 
     public DocumentApiAndWorkerTest()
     {
@@ -42,6 +43,12 @@ public class DocumentApiAndWorkerTest
         _chunker = new BasicChunker();
         _embeddingService = new MockEmbeddingService();
         _vectorStore = new FakeFirestoreVectorStore();
+        _unlimitedQuota = new DailyQuotaService(Options.Create(new RagOptions
+        {
+            DailyLlmCallLimit = 0,
+            DailyEmbeddingCallLimit = 0,
+            DailyDocumentProcessLimit = 0
+        }));
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -208,6 +215,7 @@ public class DocumentApiAndWorkerTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -247,6 +255,7 @@ public class DocumentApiAndWorkerTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -286,6 +295,7 @@ public class DocumentApiAndWorkerTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert
@@ -324,6 +334,7 @@ public class DocumentApiAndWorkerTest
             _vectorStore,
             fakeEnv,
             _ragOptions,
+            _unlimitedQuota,
             NullLoggerFactory.Instance);
 
         // Assert

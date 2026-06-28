@@ -1,6 +1,7 @@
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Models.Exceptions;
+using static LifeAgent.Api.Services.DailyQuotaService;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -17,11 +18,17 @@ public static class DailySummaryEndpoints
         group.MapPost("/generate", async (
             GenerateSummaryRequest request,
             HttpContext ctx,
-            IDailySummaryService summaryService) =>
+            IDailySummaryService summaryService,
+            IDailyQuotaService quotaService) =>
         {
             var userId = ctx.Items["userId"] as string;
             if (string.IsNullOrEmpty(userId))
                 throw new UnauthorizedException();
+
+            if (!quotaService.CheckAndIncrement(userId, QuotaTypeLlm))
+            {
+                throw new QuotaExceededException("每日总结生成", quotaService.GetRemaining(userId, QuotaTypeLlm));
+            }
 
             // 验证 targetDate 格式
             if (string.IsNullOrWhiteSpace(request.TargetDate) ||

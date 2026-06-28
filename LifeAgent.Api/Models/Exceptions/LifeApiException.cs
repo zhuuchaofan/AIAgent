@@ -55,6 +55,15 @@ public class SchemaValidationFailedException : LifeApiException
 
 public class ReminderNotFoundException : LifeApiException
 {
-    public ReminderNotFoundException(string id) 
+    public ReminderNotFoundException(string id)
         : base($"提醒 {id} 不存在", "REMINDER_NOT_FOUND", 404, new { id }) { }
+}
+
+public class QuotaExceededException : LifeApiException
+{
+    public QuotaExceededException(string quotaType, int remaining = 0)
+        : base($"今日 {quotaType} 调用次数已达上限，请明天再试。",
+               "QUOTA_EXCEEDED",
+               429,
+               new { quotaType, remaining }) { }
 }

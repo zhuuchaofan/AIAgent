@@ -1,6 +1,7 @@
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Models.Exceptions;
+using static LifeAgent.Api.Services.DailyQuotaService;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -15,7 +16,8 @@ public static class LifeEndpoints
             IngestRequest request,
             HttpContext ctx,
             ILifeEventService lifeEventService,
-            ILlmService llmService) =>
+            ILlmService llmService,
+            IDailyQuotaService quotaService) =>
         {
             if (string.IsNullOrWhiteSpace(request.Text))
             {
@@ -26,6 +28,11 @@ public static class LifeEndpoints
             if (string.IsNullOrEmpty(userId))
             {
                 throw new UnauthorizedException();
+            }
+
+            if (!quotaService.CheckAndIncrement(userId, QuotaTypeLlm))
+            {
+                throw new QuotaExceededException("AI 文本解析", quotaService.GetRemaining(userId, QuotaTypeLlm));
             }
 
             // 优先使用请求体中的时区，缺失时暂时默认 Asia/Tokyo

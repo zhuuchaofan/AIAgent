@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Google.Apis.Auth;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
+using static LifeAgent.Api.Services.DailyQuotaService;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -36,6 +37,7 @@ public static class InternalDocumentEndpoints
         [FromServices] IFirestoreVectorStore vectorStore,
         [FromServices] IWebHostEnvironment env,
         [FromServices] IOptions<RagOptions> ragOptions,
+        [FromServices] IDailyQuotaService quotaService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger("InternalDocumentEndpoints");
@@ -131,6 +133,13 @@ public static class InternalDocumentEndpoints
             return Results.BadRequest(new { success = false, message = $"Conflict: Document is in state '{doc.Status}'." });
         }
 
+        // D. 每日文档处理配额检查
+        if (!quotaService.CheckAndIncrement(request.UserId, QuotaTypeDocument))
+        {
+            logger.LogWarning("User {UserId} exceeded daily document processing limit.", request.UserId);
+            return Results.Json(new { success = false, message = "今日文档处理次数已达上限，请明天再试。" }, statusCode: 429);
+        }
+
         logger.LogInformation("All checks passed. Starting real Ingestion Pipeline for Document {DocId}", request.DocumentId);
 
         try
@@ -171,6 +180,20 @@ public static class InternalDocumentEndpoints
             if (chunks == null || chunks.Count == 0)
             {
                 throw new IngestionException("No valid content or chunks could be generated from the document.");
+            }
+
+            // 3.5. Embedding 配额检查（基于实际 chunk 数量）
+            var remainingEmbeddings = quotaService.GetRemaining(request.UserId, QuotaTypeEmbedding);
+            if (chunks.Count > remainingEmbeddings)
+            {
+                logger.LogWarning("User {UserId} embedding quota insufficient for Document {DocId}. Need {Need}, remaining {Remain}.",
+                    request.UserId, request.DocumentId, chunks.Count, remainingEmbeddings);
+                return Results.Json(new { success = false, message = "今日 Embedding 调用次数已达上限，请明天再试。" }, statusCode: 429);
+            }
+            // 逐个 chunk 消耗 embedding 配额
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                quotaService.CheckAndIncrement(request.UserId, QuotaTypeEmbedding);
             }
 
             // 4. 调用 IEmbeddingService 生成 768 维向量
