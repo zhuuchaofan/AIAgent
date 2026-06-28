@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ================================================================
+    // HELPER FUNCTIONS
+    // ================================================================
+
+    // Returns true if the requesting user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Returns true if the authenticated user's UID matches the given userId
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate a string field is present and non-empty
+    function hasRequiredString(field) {
+      return request.resource.data[field] is string
+        && request.resource.data[field].size() > 0;
+    }
+
+    // Validate a field is a number in range [min, max]
+    function isNumberInRange(field, min, max) {
+      return request.resource.data[field] is number
+        && request.resource.data[field] >= min
+        && request.resource.data[field] <= max;
+    }
+
+    // ================================================================
+    // LIFE EVENTS — users/{userId}/life_events/{eventId}
+    // Source model: LifeEvent.cs
+    // ================================================================
+    match /users/{userId}/life_events/{eventId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && hasRequiredString('type')
+        && hasRequiredString('content')
+        && hasRequiredString('title')
+        && request.resource.data['userId'] == userId
+        && request.resource.data['isDeleted'] == false
+        && isNumberInRange('importance', 1, 5);
+      allow update: if isOwner(userId)
+        // userId and createdAt are immutable after creation
+        && request.resource.data['userId'] == resource.data['userId']
+        && request.resource.data['createdAt'] == resource.data['createdAt'];
+      allow delete: if isOwner(userId);
+    }
+
+    // ================================================================
+    // REMINDERS — users/{userId}/reminders/{reminderId}
+    // Source model: Reminder.cs
+    // ================================================================
+    match /users/{userId}/reminders/{reminderId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && hasRequiredString('title')
+        && hasRequiredString('status')
+        && request.resource.data['userId'] == userId
+        && request.resource.data['status'] in ['pending', 'completed', 'cancelled'];
+      allow update: if isOwner(userId)
+        && request.resource.data['userId'] == resource.data['userId']
+        && request.resource.data['createdAt'] == resource.data['createdAt']
+        && request.resource.data['status'] in ['pending', 'completed', 'cancelled'];
+      allow delete: if isOwner(userId);
+    }
+
+    // ================================================================
+    // CHAT SESSIONS — users/{userId}/chat_sessions/{sessionId}
+    // Source model: ChatSession.cs
+    // ================================================================
+    match /users/{userId}/chat_sessions/{sessionId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId)
+        && request.resource.data['createdAt'] == resource.data['createdAt'];
+      allow delete: if isOwner(userId);
+
+      // ── MESSAGES — nested subcollection ──────────────────────────
+      // Source model: ChatMessage.cs
+      // Messages are append-only; updates are forbidden.
+      match /messages/{messageId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && hasRequiredString('role')
+          && hasRequiredString('content')
+          && request.resource.data['role'] in ['user', 'assistant'];
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // ================================================================
+    // DAILY SUMMARIES — users/{userId}/daily_summaries/{date}
+    // Source model: DailySummary.cs
+    // Document ID is the date string (YYYY-MM-DD)
+    // ================================================================
+    match /users/{userId}/daily_summaries/{date} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && hasRequiredString('date')
+        && hasRequiredString('summary')
+        && hasRequiredString('generatedBy')
+        && request.resource.data['userId'] == userId;
+      allow update: if isOwner(userId)
+        && request.resource.data['userId'] == resource.data['userId']
+        && request.resource.data['date'] == resource.data['date']
+        && request.resource.data['createdAt'] == resource.data['createdAt'];
+      allow delete: if isOwner(userId);
+    }
+
+    // ================================================================
+    // AGENT RUNS — users/{userId}/agent_runs/{runId}
+    // Source model: AgentRun.cs
+    // ================================================================
+    match /users/{userId}/agent_runs/{runId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && hasRequiredString('taskType')
+        && hasRequiredString('status')
+        && request.resource.data['userId'] == userId
+        && request.resource.data['status'] in ['success', 'failed'];
+      allow update: if isOwner(userId)
+        && request.resource.data['userId'] == resource.data['userId']
+        && request.resource.data['taskType'] == resource.data['taskType']
+        && request.resource.data['startedAt'] == resource.data['startedAt']
+        && request.resource.data['status'] in ['success', 'failed'];
+      allow delete: if isOwner(userId);
+    }
+
+    // ================================================================
+    // DOCUMENTS — users/{userId}/documents/{documentId}
+    // Source model: KnowledgeDocument.cs
+    // ================================================================
+    match /users/{userId}/documents/{documentId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && hasRequiredString('fileName')
+        && hasRequiredString('status')
+        && request.resource.data['userId'] == userId
+        && request.resource.data['status'] in ['uploading', 'processing', 'deleting', 'success', 'failed'];
+      allow update: if isOwner(userId)
+        && request.resource.data['userId'] == resource.data['userId']
+        && request.resource.data['createdAt'] == resource.data['createdAt']
+        && request.resource.data['status'] in ['uploading', 'processing', 'deleting', 'success', 'failed'];
+      allow delete: if isOwner(userId);
+    }
+
+    // ================================================================
+    // CHUNKS — users/{userId}/chunks/{chunkId}
+    // Source model: KnowledgeChunk.cs
+    // Written by backend ingestion pipeline (Admin SDK bypasses rules).
+    // Rules protect against direct client access as defense-in-depth.
+    // ================================================================
+    match /users/{userId}/chunks/{chunkId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && hasRequiredString('content')
+        && hasRequiredString('documentId')
+        && request.resource.data['userId'] == userId;
+      allow update: if isOwner(userId)
+        && request.resource.data['userId'] == resource.data['userId']
+        && request.resource.data['documentId'] == resource.data['documentId']
+        && request.resource.data['createdAt'] == resource.data['createdAt'];
+      allow delete: if isOwner(userId);
+    }
+
+    // ================================================================
+    // ROOT USER DOCUMENT — users/{userId}
+    // Deny all direct access. Subcollections are handled above.
+    // ================================================================
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+  }
+}

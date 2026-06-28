@@ -30,21 +30,40 @@ Phase 3.5 **不新增业务功能**，不大改现有架构。核心目标是：
 **目标**：确认 Firestore 数据访问是否有第二层防护（除后端中间件外）。
 
 **涉及文件/模块**：
-- `firestore.rules`（可能不存在）
-- Firestore 数据模型：`users/{userId}/life_events|reminders|knowledge_documents|chunks|chat_sessions`
+- `firestore.rules` ✅ 已创建
+- `firebase.json` / `.firebaserc` ✅ 已创建
+- Firestore 数据模型：`users/{userId}/life_events|reminders|documents|chunks|chat_sessions|daily_summaries|agent_runs`
 - 后端 `FirebaseAuthMiddleware` 的 token 校验逻辑
 
-**建议实现方式**：
-1. 检查项目根目录和各子目录是否存在 `firestore.rules` 文件
-2. 如果不存在，编写基本规则：
-   - 所有用户数据路径要求 `request.auth != null`
-   - 所有用户数据路径要求 `request.auth.uid == userId`（防止跨租户访问）
-   - `/internal` 相关集合由服务账号写入，客户端不可直接写
-3. 使用 `firebase deploy --only firestore:rules` 部署
-4. 在 Firebase Console 的 Rules Playground 中手动验证
+**实现状态**：
+
+| 项目 | 状态 | 说明 |
+|---|---|---|
+| `firestore.rules` 文件 | ✅ 已创建 | 覆盖全部 8 个子集合，默认 deny，isOwner 校验 |
+| `firebase.json` | ✅ 已创建 | 最小 CLI 配置 |
+| `.firebaserc` | ✅ 已创建 | 指向 `copper-affinity-467409-k7` |
+| 部署到线上 | ⏸️ 阻塞 | 跨项目 Auth 问题（见下文） |
+| Rules Playground 验证 | ⏸️ 待部署后执行 | 10 个测试场景已设计 |
+| Emulator 自动化测试 | ⏭️ 推迟到 Phase 4 | 无 emulator 基础设施 |
+
+**⚠️ 跨项目 Auth 阻塞问题**：
+
+当前架构使用两个独立 GCP 项目：
+- **Firestore 数据项目**：`copper-affinity-467409-k7`（数据 + Cloud Run + Cloud Tasks）
+- **Firebase Auth 项目**：`my-agent-app-a5e42`（用户认证）
+
+Firestore Security Rules 的 `request.auth` 只能验证**同一项目**签发的 Auth token。如果直接部署 rules 到 `copper-affinity-467409-k7`，来自 `my-agent-app-a5e42` 的 token 会使 `request.auth == null`，导致所有请求被拒绝（default deny）。
+
+**解决方案**（需后续执行）：
+1. 在 `copper-affinity-467409-k7` 上启用 Firebase Auth（Identity Platform）
+2. 配置 Google Sign-In provider
+3. 更新前端 `NEXT_PUBLIC_FIREBASE_*` 环境变量指向新项目
+4. 更新后端 `FirebaseApp.Create()` 的 projectId
+5. 然后执行 `firebase deploy --only firestore:rules`
 
 **验收标准**：
-- [ ] `firestore.rules` 文件存在且语法正确（可用 `firebase deploy --only firestore:rules --dry-run` 验证）
+- [x] `firestore.rules` 文件存在且语法正确
+- [ ] 部署到线上（需先解决跨项目 Auth）
 - [ ] 未登录用户无法读取任何 `users/{userId}/` 路径
 - [ ] 已登录用户 A 无法读取用户 B 的数据
 - [ ] 客户端无法直接写入 `chunks` 集合（由后端服务账号写入）

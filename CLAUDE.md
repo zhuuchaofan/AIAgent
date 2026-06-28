@@ -45,6 +45,20 @@ npm run deploy
 ./scripts/setup-phase3-infra.sh [PROJECT_ID] [env]
 ```
 
+### Firestore Security Rules
+
+Rules are defined in `firestore.rules` (project root). Deploy with Firebase CLI:
+
+```bash
+# Deploy rules only
+firebase deploy --only firestore:rules
+
+# Dry-run validation (no deployment)
+firebase deploy --only firestore:rules --dry-run
+```
+
+**⚠️ Cross-project Auth constraint**: The Firestore database is in `copper-affinity-467409-k7` but Firebase Auth is in `my-agent-app-a5e42`. Firestore rules' `request.auth` only validates tokens from the same project. Before deploying rules, Firebase Auth must be enabled on the Firestore project (`copper-affinity-467409-k7`), or the two projects must be unified. See `docs/phase3_5_stabilization_plan.md` for details.
+
 ## Environment Variables & Mock Modes
 
 ### Backend (set before `dotnet run`)
@@ -120,9 +134,11 @@ Services follow an interface-implementation pattern. Key dependencies:
 All user data is under `users/{userId}/`:
 - `users/{userId}/life_events/{eventId}` — LifeEvent documents
 - `users/{userId}/reminders/{reminderId}` — Reminder documents
-- `users/{userId}/knowledge_documents/{documentId}` — KnowledgeDocument metadata
+- `users/{userId}/documents/{documentId}` — KnowledgeDocument metadata
 - `users/{userId}/chunks/{chunkId}` — KnowledgeChunk with 768-dim `embedding` vector field (COSINE index)
 - `users/{userId}/chat_sessions/{sessionId}/messages/{messageId}` — ChatSession + ChatMessage (RAG conversations)
+- `users/{userId}/daily_summaries/{date}` — DailySummary (cached LLM-generated summaries)
+- `users/{userId}/agent_runs/{runId}` — AgentRun logs (task execution records)
 
 ### Frontend: Next.js App Router + Server Actions
 
