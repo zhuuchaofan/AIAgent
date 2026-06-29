@@ -78,10 +78,22 @@ public class LifeEvent
 
     /// <summary>
     /// 记录来源，由后端决定，大模型不可修改。
-    /// manual = 用户手动录入，agent = Agent 触发
+    /// manual = 用户手动录入，agent_confirmed = 用户确认后的 Agent 写入，import = 外部导入
     /// </summary>
     [FirestoreProperty("source")]
     public string Source { get; set; } = "manual";
+
+    /// <summary>
+    /// 创建者类型，由后端决定。manual/user 路径为 user，Agent 确认写入为 agent。
+    /// </summary>
+    [FirestoreProperty("createdBy")]
+    public string CreatedBy { get; set; } = "user";
+
+    /// <summary>
+    /// 若由 Agent 确认写入创建，则记录来源 pending action id。
+    /// </summary>
+    [FirestoreProperty("agentActionId")]
+    public string? AgentActionId { get; set; }
 
     /// <summary>
     /// 与 type 强绑定的动态结构化数据（Map）。
