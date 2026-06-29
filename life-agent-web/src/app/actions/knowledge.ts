@@ -190,3 +190,33 @@ export async function runAgentPreview(message: string, clientTimeZone?: string) 
     return { success: false, message: errMsg || "连接 Agent Preview 服务异常" };
   }
 }
+
+export async function confirmAgentAction(actionId: string, decision: "confirm" | "cancel") {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}/api/agent/confirm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        actionId,
+        decision,
+      }),
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || `Agent 确认失败 (${res.status})` };
+    }
+
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "连接 Agent 确认服务异常" };
+  }
+}

@@ -9,12 +9,17 @@ public class AgentRunner
 {
     private readonly ToolExecutor _toolExecutor;
     private readonly AgentOptions _options;
+    private readonly IPendingAgentActionStore _pendingActions;
     private static readonly Regex DocumentIdRegex = new(@"doc_[A-Za-z0-9]+", RegexOptions.Compiled);
 
-    public AgentRunner(ToolExecutor toolExecutor, IOptions<AgentOptions> options)
+    public AgentRunner(
+        ToolExecutor toolExecutor,
+        IOptions<AgentOptions> options,
+        IPendingAgentActionStore pendingActions)
     {
         _toolExecutor = toolExecutor;
         _options = options.Value;
+        _pendingActions = pendingActions;
     }
 
     public async Task<AgentRunResponse> RunAsync(
@@ -39,6 +44,21 @@ public class AgentRunner
         var plan = BuildPlan(request);
         if (plan.Count == 0)
         {
+            var proposedAction = TryCreateProposedAction(userId, request.Message ?? string.Empty);
+            if (proposedAction != null)
+            {
+                return new AgentRunResponse
+                {
+                    RunId = runId,
+                    Mode = "preview_confirmation",
+                    Answer = "我可以为这个写入类请求生成一个确认预览。当前为 preview，不会真正写入数据。",
+                    RequiresConfirmation = true,
+                    ProposedAction = proposedAction,
+                    MaxSteps = maxIterations,
+                    StepsUsed = 0
+                };
+            }
+
             return new AgentRunResponse
             {
                 RunId = runId,
@@ -148,6 +168,74 @@ public class AgentRunner
                normalized.Contains("文档列表") ||
                normalized.Contains("list documents") ||
                normalized.Contains("show documents");
+    }
+
+    private AgentProposedAction? TryCreateProposedAction(string userId, string message)
+    {
+        var normalized = message.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized) || !LooksLikeWritePreviewIntent(normalized))
+        {
+            return null;
+        }
+
+        var actionType = LooksLikeReminderPreviewIntent(normalized)
+            ? "create_reminder_preview"
+            : LooksLikeLifeEventPreviewIntent(normalized)
+                ? "create_life_event_preview"
+                : "save_memory_preview";
+        var title = actionType switch
+        {
+            "create_reminder_preview" => BuildReminderPreviewTitle(message),
+            "create_life_event_preview" => "记录一条生活事件",
+            _ => "保存一条记忆"
+        };
+
+        var pending = _pendingActions.Create(
+            userId,
+            actionType,
+            title,
+            "Agent 建议创建一条写入动作，但当前阶段仅支持确认流程预览，不会真正写入数据。",
+            new
+            {
+                originalMessage = message,
+                previewOnly = true
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+
+        return pending.ProposedAction;
+    }
+
+    private static bool LooksLikeWritePreviewIntent(string normalized)
+    {
+        return normalized.Contains("帮我记一下") ||
+               normalized.Contains("记一下") ||
+               normalized.Contains("提醒我") ||
+               normalized.Contains("记到生活记录") ||
+               normalized.Contains("生活记录里") ||
+               normalized.Contains("保存记忆") ||
+               normalized.Contains("save memory") ||
+               normalized.Contains("create reminder");
+    }
+
+    private static bool LooksLikeReminderPreviewIntent(string normalized)
+    {
+        return normalized.Contains("提醒我") ||
+               normalized.Contains("提醒") ||
+               normalized.Contains("reminder");
+    }
+
+    private static bool LooksLikeLifeEventPreviewIntent(string normalized)
+    {
+        return normalized.Contains("生活记录") ||
+               normalized.Contains("记到生活记录");
+    }
+
+    private static string BuildReminderPreviewTitle(string message)
+    {
+        return message.Contains("黑猫", StringComparison.OrdinalIgnoreCase)
+            ? "明天观察黑猫状态"
+            : "创建一条提醒预览";
     }
 
     private static bool LooksLikeDocumentStatusIntent(string normalized)

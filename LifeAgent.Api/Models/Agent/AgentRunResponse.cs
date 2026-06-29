@@ -5,6 +5,8 @@ public class AgentRunResponse
     public string RunId { get; set; } = string.Empty;
     public string Mode { get; set; } = "preview_readonly";
     public string Answer { get; set; } = string.Empty;
+    public bool RequiresConfirmation { get; set; }
+    public AgentProposedAction? ProposedAction { get; set; }
     public List<LifeAgent.Api.Models.CitationNode> Citations { get; set; } = new();
     public string? CitationIntegrity { get; set; }
     public int MaxSteps { get; set; }

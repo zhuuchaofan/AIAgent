@@ -11,6 +11,10 @@ public static class AgentEndpoints
         app.MapPost("/api/agent/run", RunAgentPreviewAsync)
             .WithTags("agent")
             .RequireRateLimiting("high-cost");
+
+        app.MapPost("/api/agent/confirm", ConfirmAgentActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("high-cost");
     }
 
     public static async Task<IResult> RunAgentPreviewAsync(
@@ -32,5 +36,21 @@ public static class AgentEndpoints
             Success = true,
             Data = response
         });
+    }
+
+    public static Task<IResult> ConfirmAgentActionAsync(
+        HttpContext httpContext,
+        [FromBody] AgentConfirmationRequest request,
+        [FromServices] IPendingAgentActionStore pendingActions)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Task.FromResult<IResult>(Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401));
+        }
+
+        request ??= new AgentConfirmationRequest();
+        var response = pendingActions.Confirm(userId, request.ActionId, request.Decision);
+        return Task.FromResult<IResult>(Results.Ok(response));
     }
 }

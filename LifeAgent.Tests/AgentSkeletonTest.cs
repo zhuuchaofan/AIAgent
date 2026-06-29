@@ -56,7 +56,8 @@ public class AgentSkeletonTest
         var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
         var runner = new AgentRunner(
             executor,
-            Options.Create(new AgentOptions { MaxIterations = 99 }));
+            Options.Create(new AgentOptions { MaxIterations = 99 }),
+            new InMemoryPendingAgentActionStore());
 
         var response = await runner.RunAsync("user_a", new AgentRunRequest(), CancellationToken.None);
 
@@ -143,7 +144,7 @@ public class AgentSkeletonTest
         var writeTool = new StubAgentTool("create_life_event", AgentToolRisk.Write, requiresConfirmation: true);
         var registry = new ToolRegistry(new IAgentTool[] { writeTool });
         var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
-        var runner = new AgentRunner(executor, Options.Create(new AgentOptions { MaxIterations = 3 }));
+        var runner = new AgentRunner(executor, Options.Create(new AgentOptions { MaxIterations = 3 }), new InMemoryPendingAgentActionStore());
 
         var response = await runner.RunAsync(
             "user_a",
@@ -154,6 +155,45 @@ public class AgentSkeletonTest
         Assert.Empty(response.ToolCalls);
         Assert.Contains("支持文档列表、文档状态查询和只读 RAG 问答", response.Answer);
         Assert.False(writeTool.WasCalled);
+    }
+
+    [Fact]
+    public async Task AgentRunner_WritePreviewIntent_ReturnsProposedAction()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var runner = CreateRunner(new FakeDocumentRepository(), pendingActions: store);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我记一下：今天黑猫吐了一次" },
+            CancellationToken.None);
+
+        Assert.True(response.RequiresConfirmation);
+        Assert.NotNull(response.ProposedAction);
+        Assert.Equal("save_memory_preview", response.ProposedAction!.ActionType);
+        Assert.False(string.IsNullOrWhiteSpace(response.ProposedAction.ActionId));
+        Assert.False(string.IsNullOrWhiteSpace(response.ProposedAction.Title));
+        Assert.False(string.IsNullOrWhiteSpace(response.ProposedAction.Summary));
+        Assert.Equal("medium", response.ProposedAction.RiskLevel);
+        Assert.True(response.ProposedAction.RequiresConfirmation);
+        Assert.Empty(response.ToolCalls);
+        Assert.Equal(0, response.StepsUsed);
+    }
+
+    [Fact]
+    public async Task AgentRunner_ReminderPreviewIntent_ReturnsReminderProposedAction()
+    {
+        var runner = CreateRunner(new FakeDocumentRepository());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "明天提醒我观察黑猫" },
+            CancellationToken.None);
+
+        Assert.True(response.RequiresConfirmation);
+        Assert.NotNull(response.ProposedAction);
+        Assert.Equal("create_reminder_preview", response.ProposedAction!.ActionType);
+        Assert.Equal("明天观察黑猫状态", response.ProposedAction.Title);
     }
 
     [Fact]
@@ -401,7 +441,7 @@ public class AgentSkeletonTest
     {
         var registry = new ToolRegistry(Array.Empty<IAgentTool>());
         var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
-        var runner = new AgentRunner(executor, Options.Create(new AgentOptions { MaxIterations = 3 }));
+        var runner = new AgentRunner(executor, Options.Create(new AgentOptions { MaxIterations = 3 }), new InMemoryPendingAgentActionStore());
         var context = new DefaultHttpContext();
         context.Items["userId"] = "user_a";
 
@@ -416,6 +456,132 @@ public class AgentSkeletonTest
         Assert.Equal("preview_readonly_rag", ok.Value.Data.Mode);
         Assert.Contains("支持文档列表、文档状态查询和只读 RAG 问答", ok.Value.Data.Answer);
         Assert.Empty(ok.Value.Data.ToolCalls);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_UnknownActionId_FailsSafely()
+    {
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+        var store = new InMemoryPendingAgentActionStore();
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = "missing", Decision = "confirm" },
+            store);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("not_found", ok.Value.Status);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_IgnoresRequestUserIdAndPreventsCrossUserConfirm()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = store.Create(
+            "user_a",
+            "create_reminder_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_b";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest
+            {
+                ActionId = pending.ProposedAction.ActionId,
+                Decision = "confirm",
+                UserId = "user_a"
+            },
+            store);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("not_found", ok.Value.Status);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_CancelReturnsCancelledAndWritesNoData()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = store.Create(
+            "user_a",
+            "create_life_event_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "cancel" },
+            store);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.True(ok.Value!.Success);
+        Assert.Equal("cancelled", ok.Value.Status);
+        Assert.Contains("No data was written", ok.Value.Message);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_ConfirmReturnsPreviewSuccessAndWritesNoData()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = store.Create(
+            "user_a",
+            "create_reminder_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.True(ok.Value!.Success);
+        Assert.Equal("preview_success", ok.Value.Status);
+        Assert.Contains("No data was written", ok.Value.Message);
+        var json = JsonSerializer.Serialize(ok.Value.Result);
+        Assert.Contains("false", json);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_ExpiredActionCannotBeConfirmed()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = store.Create(
+            "user_a",
+            "create_reminder_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromSeconds(-1));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("expired", ok.Value.Status);
     }
 
     private sealed class StubAgentTool : IAgentTool
@@ -444,6 +610,7 @@ public class AgentSkeletonTest
         IDocumentRepository repository,
         IRagSearchService? ragSearchService = null,
         IRagChatService? ragChatService = null,
+        IPendingAgentActionStore? pendingActions = null,
         int maxIterations = 3)
     {
         var tools = new IAgentTool[]
@@ -455,7 +622,10 @@ public class AgentSkeletonTest
         };
         var registry = new ToolRegistry(tools);
         var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
-        return new AgentRunner(executor, Options.Create(new AgentOptions { MaxIterations = maxIterations }));
+        return new AgentRunner(
+            executor,
+            Options.Create(new AgentOptions { MaxIterations = maxIterations }),
+            pendingActions ?? new InMemoryPendingAgentActionStore());
     }
 
     private sealed class FakeDocumentRepository : IDocumentRepository

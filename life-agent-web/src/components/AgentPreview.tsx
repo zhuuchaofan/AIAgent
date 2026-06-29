@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, Bot, ChevronDown, ChevronRight, Loader2, Send, Wrench } from "lucide-react";
-import { runAgentPreview } from "@/app/actions/knowledge";
+import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, Loader2, Send, ShieldAlert, Wrench, X } from "lucide-react";
+import { confirmAgentAction, runAgentPreview } from "@/app/actions/knowledge";
 import { Markdown } from "./Markdown";
 
 interface CitationNode {
@@ -28,6 +28,8 @@ interface AgentRunData {
   runId: string;
   mode: string;
   answer: string;
+  requiresConfirmation?: boolean;
+  proposedAction?: AgentProposedAction | null;
   maxSteps: number;
   stepsUsed: number;
   toolCalls?: AgentToolCall[];
@@ -41,12 +43,35 @@ interface AgentRunResponse {
   data?: AgentRunData;
 }
 
+interface AgentProposedAction {
+  actionId: string;
+  actionType: string;
+  title: string;
+  summary: string;
+  payload?: unknown;
+  riskLevel: string;
+  requiresConfirmation: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+interface AgentConfirmationResponse {
+  success: boolean;
+  status: string;
+  message: string;
+  actionId?: string;
+  actionType?: string;
+  result?: unknown;
+}
+
 export function AgentPreview() {
   const [expanded, setExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState<"confirm" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentRunData | null>(null);
+  const [confirmationResult, setConfirmationResult] = useState<AgentConfirmationResponse | null>(null);
 
   const toolCalls = useMemo(() => result?.toolCalls ?? [], [result]);
   const citations = useMemo(() => result?.citations ?? [], [result]);
@@ -58,6 +83,7 @@ export function AgentPreview() {
 
     setLoading(true);
     setError(null);
+    setConfirmationResult(null);
 
     try {
       const res = await runAgentPreview(message, "Asia/Shanghai") as AgentRunResponse;
@@ -74,6 +100,27 @@ export function AgentPreview() {
       setError(errMsg || "Agent Preview 请求失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmAction = async (decision: "confirm" | "cancel") => {
+    if (!result?.proposedAction || confirming) return;
+
+    setConfirming(decision);
+    setError(null);
+    setConfirmationResult(null);
+
+    try {
+      const res = await confirmAgentAction(result.proposedAction.actionId, decision) as AgentConfirmationResponse;
+      setConfirmationResult(res);
+      if (!res.success) {
+        setError(res.message || "Agent 确认失败");
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setError(errMsg || "Agent 确认请求失败");
+    } finally {
+      setConfirming(null);
     }
   };
 
@@ -145,6 +192,63 @@ export function AgentPreview() {
                 <div className="text-xs font-semibold text-zinc-300 mb-3">回答</div>
                 <Markdown content={result.answer || "Agent 未返回回答。"} citations={citations} />
               </div>
+
+              {result.requiresConfirmation && result.proposedAction && (
+                <div className="bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4 text-xs space-y-3">
+                  <div className="flex items-center gap-2 text-amber-200 font-semibold">
+                    <ShieldAlert className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span>待确认动作</span>
+                    <span className="text-[10px] text-amber-300/80 border border-amber-500/30 rounded px-2 py-0.5">Preview</span>
+                  </div>
+                  <div className="space-y-2 text-zinc-300">
+                    <div>
+                      <span className="text-zinc-500">动作：</span>
+                      <span className="font-mono">{result.proposedAction.actionType}</span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500">标题：</span>
+                      <span>{result.proposedAction.title}</span>
+                    </div>
+                    <div className="text-zinc-400 leading-relaxed">{result.proposedAction.summary}</div>
+                    <div className="text-zinc-500">
+                      风险等级：<span className="font-mono text-amber-200">{result.proposedAction.riskLevel}</span>
+                    </div>
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
+                      当前为 preview，不会真正写入生活记录、提醒或记忆。
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmAction("confirm")}
+                      disabled={!!confirming || confirmationResult?.success}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                    >
+                      {confirming === "confirm" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      确认
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmAction("cancel")}
+                      disabled={!!confirming || confirmationResult?.success}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                    >
+                      {confirming === "cancel" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                      取消
+                    </button>
+                  </div>
+                  {confirmationResult && (
+                    <div className={`rounded-xl border p-3 ${
+                      confirmationResult.success
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                        : "border-red-500/30 bg-red-500/10 text-red-200"
+                    }`}>
+                      <div className="font-mono mb-1">{confirmationResult.status}</div>
+                      <div>{confirmationResult.message}</div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4">
                 <div className="text-xs font-semibold text-zinc-300 mb-3 flex items-center gap-2">
