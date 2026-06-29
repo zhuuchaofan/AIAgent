@@ -24,7 +24,7 @@ internal static class AgentLifeEventFactory
         var now = DateTime.UtcNow;
         return new LifeEvent
         {
-            Id = $"evt_{Guid.NewGuid():N}",
+            Id = CreateStableEventId(agentActionId),
             UserId = authenticatedUserId,
             Type = request.Type.Trim(),
             Title = request.Title.Trim(),
@@ -42,5 +42,15 @@ internal static class AgentLifeEventFactory
             ReminderParseStatus = "none",
             NeedsReview = false
         };
+    }
+
+    private static string CreateStableEventId(string agentActionId)
+    {
+        var safeActionId = new string(agentActionId
+            .Trim()
+            .Select(c => char.IsLetterOrDigit(c) || c is '_' or '-' ? c : '_')
+            .ToArray());
+
+        return $"evt_{safeActionId}";
     }
 }

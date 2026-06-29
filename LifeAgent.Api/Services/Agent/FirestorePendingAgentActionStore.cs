@@ -172,6 +172,79 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
         }, cancellationToken: cancellationToken);
     }
 
+    public async Task<AgentConfirmationResponse> ConfirmWriteCompletedAsync(
+        string userId,
+        string actionId,
+        string createdResourceType,
+        string createdResourceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId))
+        {
+            return Failed(actionId, "not_found", "Pending action was not found.");
+        }
+
+        var docRef = GetDocument(userId, actionId);
+        return await _db.RunTransactionAsync(async transaction =>
+        {
+            var snapshot = await transaction.GetSnapshotAsync(docRef, cancellationToken);
+            if (!snapshot.Exists)
+            {
+                return Failed(actionId, "not_found", "Pending action was not found.");
+            }
+
+            var pending = snapshot.ConvertTo<PendingAgentActionDocument>();
+            if (!string.Equals(pending.UserId, userId, StringComparison.Ordinal))
+            {
+                return Failed(actionId, "not_found", "Pending action was not found.");
+            }
+
+            if (!AllowedActionTypes.Contains(pending.ActionType))
+            {
+                return Failed(actionId, "invalid_action_type", "Unknown proposed action type.");
+            }
+
+            if (pending.Status == Confirmed && pending.WriteCompleted && pending.WroteData)
+            {
+                return WriteSuccess(pending, idempotent: true);
+            }
+
+            if (pending.Status is Cancelled or Expired)
+            {
+                return Failed(actionId, pending.Status, $"Pending action is already {pending.Status}.");
+            }
+
+            if (pending.Status == Confirmed)
+            {
+                return Failed(actionId, Confirmed, "Pending action is already confirmed without a write result.");
+            }
+
+            var now = DateTime.UtcNow;
+            if (pending.ExpiresAt <= now)
+            {
+                pending.Status = Expired;
+                pending.LifecycleStatus = Expired;
+                pending.UpdatedAt = now;
+                pending.ExpiredAt = now;
+                transaction.Set(docRef, pending);
+                return Failed(actionId, Expired, "Pending action expired.");
+            }
+
+            pending.Status = Confirmed;
+            pending.LifecycleStatus = Confirmed;
+            pending.UpdatedAt = now;
+            pending.ConfirmedAt = now;
+            pending.CreatedResourceType = createdResourceType;
+            pending.CreatedResourceId = createdResourceId;
+            pending.WroteData = true;
+            pending.WriteCompleted = true;
+            pending.WriteCompletedAt = now;
+
+            transaction.Set(docRef, pending);
+            return WriteSuccess(pending, idempotent: false);
+        }, cancellationToken: cancellationToken);
+    }
+
     private DocumentReference GetDocument(string userId, string actionId)
     {
         return _db.Collection("users")
@@ -203,6 +276,29 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
             }
         };
     }
+
+    private static AgentConfirmationResponse WriteSuccess(PendingAgentActionDocument pending, bool idempotent)
+    {
+        return new AgentConfirmationResponse
+        {
+            Success = true,
+            Status = pending.Status,
+            Message = "Agent action confirmed and life_event was written.",
+            ActionId = pending.ActionId,
+            ActionType = pending.ActionType,
+            LifecycleStatus = pending.LifecycleStatus,
+            Result = new
+            {
+                previewOnly = false,
+                wroteData = true,
+                actionType = pending.ActionType,
+                createdResourceType = pending.CreatedResourceType,
+                createdResourceId = pending.CreatedResourceId,
+                idempotent
+            }
+        };
+    }
+
 
     private static AgentConfirmationResponse Failed(string? actionId, string status, string message)
     {
@@ -275,6 +371,21 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
         [FirestoreProperty("expiresAt")]
         public DateTime ExpiresAt { get; set; }
 
+        [FirestoreProperty("createdResourceType")]
+        public string? CreatedResourceType { get; set; }
+
+        [FirestoreProperty("createdResourceId")]
+        public string? CreatedResourceId { get; set; }
+
+        [FirestoreProperty("wroteData")]
+        public bool WroteData { get; set; }
+
+        [FirestoreProperty("writeCompleted")]
+        public bool WriteCompleted { get; set; }
+
+        [FirestoreProperty("writeCompletedAt")]
+        public DateTime? WriteCompletedAt { get; set; }
+
         public PendingAgentAction ToModel()
         {
             return new PendingAgentAction
@@ -287,6 +398,11 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
                 ConfirmedAt = ToDateTimeOffset(ConfirmedAt),
                 CancelledAt = ToDateTimeOffset(CancelledAt),
                 ExpiredAt = ToDateTimeOffset(ExpiredAt),
+                CreatedResourceType = CreatedResourceType,
+                CreatedResourceId = CreatedResourceId,
+                WroteData = WroteData,
+                WriteCompleted = WriteCompleted,
+                WriteCompletedAt = ToDateTimeOffset(WriteCompletedAt),
                 ProposedAction = new AgentProposedAction
                 {
                     ActionId = ActionId,

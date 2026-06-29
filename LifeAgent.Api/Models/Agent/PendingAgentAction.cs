@@ -11,4 +11,9 @@ public class PendingAgentAction
     public DateTimeOffset? ConfirmedAt { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
     public DateTimeOffset? ExpiredAt { get; set; }
+    public string? CreatedResourceType { get; set; }
+    public string? CreatedResourceId { get; set; }
+    public bool WroteData { get; set; }
+    public bool WriteCompleted { get; set; }
+    public DateTimeOffset? WriteCompletedAt { get; set; }
 }

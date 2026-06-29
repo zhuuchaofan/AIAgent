@@ -123,6 +123,58 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
         return Task.FromResult(PreviewSuccess(pending, idempotent: false));
     }
 
+    public Task<AgentConfirmationResponse> ConfirmWriteCompletedAsync(
+        string userId,
+        string actionId,
+        string createdResourceType,
+        string createdResourceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId) || !_actions.TryGetValue(actionId, out var pending))
+        {
+            return Task.FromResult(Failed(actionId, "not_found", "Pending action was not found."));
+        }
+
+        if (!string.Equals(pending.UserId, userId, StringComparison.Ordinal))
+        {
+            return Task.FromResult(Failed(actionId, "not_found", "Pending action was not found."));
+        }
+
+        if (!AllowedActionTypes.Contains(pending.ProposedAction.ActionType))
+        {
+            return Task.FromResult(Failed(actionId, "invalid_action_type", "Unknown proposed action type."));
+        }
+
+        if (pending.Status == Confirmed && pending.WriteCompleted && pending.WroteData)
+        {
+            return Task.FromResult(WriteSuccess(pending, idempotent: true));
+        }
+
+        if (pending.Status is Cancelled or Expired)
+        {
+            return Task.FromResult(Failed(actionId, pending.Status, $"Pending action is already {pending.Status}."));
+        }
+
+        if (pending.Status == Confirmed)
+        {
+            return Task.FromResult(Failed(actionId, Confirmed, "Pending action is already confirmed without a write result."));
+        }
+
+        if (pending.ProposedAction.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            Transition(pending, Expired);
+            return Task.FromResult(Failed(actionId, Expired, "Pending action expired."));
+        }
+
+        pending.CreatedResourceType = createdResourceType;
+        pending.CreatedResourceId = createdResourceId;
+        pending.WroteData = true;
+        pending.WriteCompleted = true;
+        pending.WriteCompletedAt = DateTimeOffset.UtcNow;
+        Transition(pending, Confirmed);
+        return Task.FromResult(WriteSuccess(pending, idempotent: false));
+    }
+
     private static AgentConfirmationResponse PreviewSuccess(PendingAgentAction pending, bool idempotent)
     {
         var message = pending.Status == Cancelled
@@ -142,6 +194,28 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
                 previewOnly = true,
                 wroteData = false,
                 actionType = pending.ProposedAction.ActionType,
+                idempotent
+            }
+        };
+    }
+
+    private static AgentConfirmationResponse WriteSuccess(PendingAgentAction pending, bool idempotent)
+    {
+        return new AgentConfirmationResponse
+        {
+            Success = true,
+            Status = pending.Status,
+            Message = "Agent action confirmed and life_event was written.",
+            ActionId = pending.ProposedAction.ActionId,
+            ActionType = pending.ProposedAction.ActionType,
+            LifecycleStatus = pending.Status,
+            Result = new
+            {
+                previewOnly = false,
+                wroteData = true,
+                actionType = pending.ProposedAction.ActionType,
+                createdResourceType = pending.CreatedResourceType,
+                createdResourceId = pending.CreatedResourceId,
                 idempotent
             }
         };
