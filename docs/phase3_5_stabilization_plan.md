@@ -521,3 +521,14 @@ Phase 3.5 可以收尾，进入 Phase 4 前的剩余事项：
 1. Firestore Rules 部署需先解决跨项目 Auth 问题（非阻塞，Admin SDK 绕过 rules）
 2. 前端 429 错误处理（P1 级别，可在 Phase 4 补充）
 3. 完整端到端冒烟验证（需手动登录 Web 执行）
+
+### 后续技术债记录
+
+以下事项不在本轮 Phase 3.5 小修中实现，避免引入检索策略或架构级改动：
+
+| 项目 | 当前状态 | 风险 | 后续建议 |
+|---|---|---|---|
+| 指定文档 RAG 过滤 | 当前在向量 TopK 召回后按 `documentIds` 后置过滤 | 限定文档问答时可能因 TopK 先召回其他文档而降低有效上下文数量 | 单独评估 Firestore StructuredQuery / vector query 前置过滤和索引方案 |
+| 文档列表 cursor | `FirestoreDocumentRepository.ListAsync(userId, limit, cursor)` 接收 `cursor` 但当前未使用 | 文档数量增大后无法分页；当前前端未暴露分页入口，暂不影响 MVP | 设计文档列表分页协议后再补齐，不在本轮硬改 API 行为 |
+| RAG 单会话 | 前端使用固定 `rag_default_session` | 当前单会话 MVP 可接受；后续多主题问答需要会话切换 | Phase 4 或多会话专项中设计会话列表/创建/切换 |
+| React hooks deps 禁用 | `DocumentProvider` 登录态初始化 effect 仍保留一次 `exhaustive-deps` 禁用 | 直接改依赖可能影响登录切换、轮询和初次加载行为 | 后续配合前端测试一起收敛 effect 结构 |

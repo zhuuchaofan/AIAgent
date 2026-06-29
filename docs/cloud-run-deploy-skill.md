@@ -24,15 +24,19 @@
 # 1. 检查本地变更
 git status
 git diff --stat
+git diff --check
 
 # 2. 前端类型检查 + 构建
-cd life-agent-web && npm run lint && npm run build
+npm run lint --prefix life-agent-web
+npm run build --prefix life-agent-web
 
 # 3. 后端单元测试（从项目根目录运行）
 dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj
 ```
 
 **任一步失败则停止部署，修复后重新检查。**
+
+> `npm run build --prefix life-agent-web` 使用 Next.js `next/font`。如果构建只因 `Failed to fetch Geist/Geist Mono` 失败，通常是构建环境无法访问 Google Fonts；联网重跑，或在单独变更中改为本地字体方案。
 
 ---
 

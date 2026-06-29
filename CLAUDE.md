@@ -14,10 +14,10 @@ dotnet build LifeAgent.Api/
 dotnet run --project LifeAgent.Api/
 
 # Run tests (xUnit)
-dotnet test LifeAgent.Tests/
+dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj
 
 # Run a single test
-dotnet test LifeAgent.Tests/ --filter "FullyQualifiedName~TestClassName.TestMethodName"
+dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj --filter "FullyQualifiedName~TestClassName.TestMethodName"
 ```
 
 ### Frontend (Next.js 16, life-agent-web/)
@@ -28,15 +28,17 @@ cd life-agent-web
 # Dev server (port 3000)
 npm run dev
 
-# Build
-npm run build
-
 # Lint
-npm run lint
+npm run lint --prefix life-agent-web
+
+# Build
+npm run build --prefix life-agent-web
 
 # Deploy to Cloud Run
 npm run deploy
 ```
+
+`npm run build --prefix life-agent-web` uses Next.js `next/font` and may need network access to fetch Google Fonts during production builds. If the build fails only on `Failed to fetch Geist/Geist Mono`, rerun with network access or switch to a local font strategy in a separate change.
 
 ### Infrastructure (GCP setup)
 

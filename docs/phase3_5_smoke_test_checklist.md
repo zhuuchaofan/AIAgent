@@ -117,7 +117,10 @@
 | F1 | Cloud Run 健康 | 确认实例正常 | `gcloud run services describe` | Ready | 否 | 无 | ✅ | 线上 | 低 |
 | F2 | Traffic 100% | 确认流量指向最新 | 检查 traffic 配置 | 100% latest revision | 否 | 无 | ✅ | 线上 | 低 |
 | F3 | Git 状态干净 | 确认无未提交改动 | `git status --short` | 空 | 否 | 无 | ✅ | 本地 | 低 |
-| F4 | 单元测试通过 | 确认代码质量 | `dotnet test` | 全部通过 | 否 | 无 | ✅ | 本地 | 低 |
+| F4 | 单元测试通过 | 确认代码质量 | `dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj` | 全部通过 | 否 | 无 | ✅ | 本地 | 低 |
+| F5 | 前端 lint 通过 | 确认前端静态检查 | `npm run lint --prefix life-agent-web` | 无 ESLint error | 否 | 无 | ✅ | 本地 | 低 |
+| F6 | 前端 build 通过 | 确认生产构建 | `npm run build --prefix life-agent-web` | 构建成功；如仅 Google Fonts 拉取失败，需联网重跑或改本地字体 | 否 | 无 | ✅ | 本地 | 低 |
+| F7 | Diff 格式检查 | 确认无空白错误 | `git diff --check` | 无输出 | 否 | 无 | ✅ | 本地 | 低 |
 
 ---
 
