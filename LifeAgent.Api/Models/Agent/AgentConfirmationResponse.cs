@@ -7,5 +7,6 @@ public class AgentConfirmationResponse
     public string Message { get; set; } = string.Empty;
     public string? ActionId { get; set; }
     public string? ActionType { get; set; }
+    public string? LifecycleStatus { get; set; }
     public object? Result { get; set; }
 }

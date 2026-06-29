@@ -9,6 +9,7 @@ public class AgentProposedAction
     public object Payload { get; set; } = new { };
     public string RiskLevel { get; set; } = "medium";
     public bool RequiresConfirmation { get; set; } = true;
+    public string LifecycleStatus { get; set; } = "pending";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
 }

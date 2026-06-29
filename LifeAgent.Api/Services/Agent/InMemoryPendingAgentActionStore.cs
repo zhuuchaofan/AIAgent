@@ -3,11 +3,18 @@ using LifeAgent.Api.Models.Agent;
 
 namespace LifeAgent.Api.Services.Agent;
 
-// Phase 4.6 preview-only store. Pending actions are lost on Cloud Run instance restart
-// and are not shared across multiple instances; replace with Firestore-backed storage
-// before enabling real write tools or durable confirmation flows.
+// Phase 4 preview-only lifecycle store. Pending actions are lost on Cloud Run
+// instance restart and are not shared across multiple instances. Phase 5 must
+// replace this with a Firestore-backed store before real write tools or durable
+// confirmation flows are enabled.
 public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
 {
+    public const string Created = "created";
+    public const string Pending = "pending";
+    public const string Confirmed = "confirmed";
+    public const string Cancelled = "cancelled";
+    public const string Expired = "expired";
+
     private static readonly HashSet<string> AllowedActionTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "save_memory_preview",
@@ -28,6 +35,8 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
         var action = new PendingAgentAction
         {
             UserId = userId,
+            Status = Created,
+            UpdatedAt = now,
             ProposedAction = new AgentProposedAction
             {
                 ActionId = $"agent_action_{Guid.NewGuid():N}",
@@ -37,10 +46,13 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
                 Payload = payload,
                 RiskLevel = riskLevel,
                 RequiresConfirmation = true,
+                LifecycleStatus = Created,
                 CreatedAt = now,
                 ExpiresAt = now.Add(ttl)
             }
         };
+
+        Transition(action, Pending);
 
         _actions[action.ProposedAction.ActionId] = action;
         return action;
@@ -63,28 +75,29 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
             return Failed(actionId, "invalid_action_type", "Unknown proposed action type.");
         }
 
-        if (pending.Consumed)
+        if (pending.Status is Confirmed or Cancelled or Expired)
         {
-            return Failed(actionId, "already_resolved", "Pending action was already resolved.");
+            return Failed(actionId, pending.Status, $"Pending action is already {pending.Status}.");
         }
 
         if (pending.ProposedAction.ExpiresAt <= DateTimeOffset.UtcNow)
         {
-            pending.Consumed = true;
-            return Failed(actionId, "expired", "Pending action expired.");
+            Transition(pending, Expired);
+            return Failed(actionId, Expired, "Pending action expired.");
         }
 
-        var normalizedDecision = decision.Trim().ToLowerInvariant();
+        var normalizedDecision = (decision ?? string.Empty).Trim().ToLowerInvariant();
         if (normalizedDecision == "cancel")
         {
-            pending.Consumed = true;
+            Transition(pending, Cancelled);
             return new AgentConfirmationResponse
             {
                 Success = true,
-                Status = "cancelled",
+                Status = Cancelled,
                 Message = "Agent action preview cancelled. No data was written.",
                 ActionId = actionId,
-                ActionType = pending.ProposedAction.ActionType
+                ActionType = pending.ProposedAction.ActionType,
+                LifecycleStatus = pending.Status
             };
         }
 
@@ -93,14 +106,15 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
             return Failed(actionId, "invalid_decision", "Decision must be confirm or cancel.");
         }
 
-        pending.Consumed = true;
+        Transition(pending, Confirmed);
         return new AgentConfirmationResponse
         {
             Success = true,
-            Status = "preview_success",
+            Status = Confirmed,
             Message = "Agent action preview confirmed. No data was written in Phase 4.6.",
             ActionId = actionId,
             ActionType = pending.ProposedAction.ActionType,
+            LifecycleStatus = pending.Status,
             Result = new
             {
                 previewOnly = true,
@@ -108,6 +122,13 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
                 actionType = pending.ProposedAction.ActionType
             }
         };
+    }
+
+    private static void Transition(PendingAgentAction action, string status)
+    {
+        action.Status = status;
+        action.UpdatedAt = DateTimeOffset.UtcNow;
+        action.ProposedAction.LifecycleStatus = status;
     }
 
     private static AgentConfirmationResponse Failed(string? actionId, string status, string message)

@@ -4,5 +4,6 @@ public class PendingAgentAction
 {
     public string UserId { get; set; } = string.Empty;
     public AgentProposedAction ProposedAction { get; set; } = new();
-    public bool Consumed { get; set; }
+    public string Status { get; set; } = "created";
+    public DateTimeOffset UpdatedAt { get; set; }
 }

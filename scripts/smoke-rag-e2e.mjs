@@ -36,9 +36,12 @@ async function main() {
   await step("Web endpoint is reachable", checkWebRoot);
 
   if (!config.token) {
-    skip("Authenticated RAG flow", "FIREBASE_ID_TOKEN is not set.");
+    skip("Authenticated RAG and Agent Preview flows", "FIREBASE_ID_TOKEN is not set.");
     return;
   }
+
+  await step("Agent Preview lists documents", runAgentListDocuments);
+  await step("Agent Preview proposes reminder confirmation", runAgentReminderPreview);
 
   if (!config.runMutatingSmoke) {
     skip("Authenticated upload/RAG/delete flow", "RUN_MUTATING_SMOKE=true is required to create and delete a temporary test document.");
@@ -146,6 +149,72 @@ async function runRagQuestion() {
   } else {
     console.log("RAG response did not include citations; this is allowed for smoke, but should be reviewed if unexpected.");
   }
+}
+
+async function runAgentListDocuments() {
+  const res = await request(`${config.apiBaseUrl}/api/agent/run`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      message: "列出我的文档",
+      clientTimeZone: "Asia/Shanghai"
+    })
+  });
+  const body = await parseJson(res);
+  assert(res.ok, `Expected Agent list documents 2xx, got ${res.status}: ${JSON.stringify(body)}`);
+  assert(body.success === true, `Agent list documents response was not successful: ${JSON.stringify(body)}`);
+
+  const data = body.data || {};
+  assert(Array.isArray(data.toolCalls), `Agent list documents response missing toolCalls: ${JSON.stringify(body)}`);
+  assert(
+    data.toolCalls.some((toolCall) => toolCall.toolName === "list_documents"),
+    `Expected toolCalls to include list_documents: ${JSON.stringify(data.toolCalls)}`
+  );
+}
+
+async function runAgentReminderPreview() {
+  const runRes = await request(`${config.apiBaseUrl}/api/agent/run`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      message: "明天提醒我观察黑猫",
+      clientTimeZone: "Asia/Shanghai"
+    })
+  });
+  const runBody = await parseJson(runRes);
+  assert(runRes.ok, `Expected Agent reminder preview 2xx, got ${runRes.status}: ${JSON.stringify(runBody)}`);
+  assert(runBody.success === true, `Agent reminder preview response was not successful: ${JSON.stringify(runBody)}`);
+
+  const data = runBody.data || {};
+  assert(data.requiresConfirmation === true, `Expected requiresConfirmation=true: ${JSON.stringify(data)}`);
+  assert(data.proposedAction, `Expected proposedAction in reminder preview: ${JSON.stringify(data)}`);
+  assert(data.proposedAction.actionId, `Expected proposedAction.actionId: ${JSON.stringify(data.proposedAction)}`);
+  assert(data.proposedAction.actionType === "create_reminder_preview", `Expected create_reminder_preview action: ${JSON.stringify(data.proposedAction)}`);
+
+  const confirmRes = await request(`${config.apiBaseUrl}/api/agent/confirm`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      actionId: data.proposedAction.actionId,
+      decision: "confirm"
+    })
+  });
+  const confirmBody = await parseJson(confirmRes);
+  assert(confirmRes.ok, `Expected Agent confirm 2xx, got ${confirmRes.status}: ${JSON.stringify(confirmBody)}`);
+  assert(confirmBody.success === true, `Expected Agent confirm success: ${JSON.stringify(confirmBody)}`);
+  assert(confirmBody.status === "confirmed", `Expected Agent confirm status=confirmed: ${JSON.stringify(confirmBody)}`);
+  assert(confirmBody.lifecycleStatus === "confirmed", `Expected Agent confirm lifecycleStatus=confirmed: ${JSON.stringify(confirmBody)}`);
+  assert(confirmBody.result?.previewOnly === true, `Expected previewOnly=true: ${JSON.stringify(confirmBody)}`);
+  assert(confirmBody.result?.wroteData === false, `Expected wroteData=false: ${JSON.stringify(confirmBody)}`);
 }
 
 async function cleanupConversation() {

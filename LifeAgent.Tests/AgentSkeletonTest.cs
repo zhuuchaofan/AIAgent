@@ -176,6 +176,7 @@ public class AgentSkeletonTest
         Assert.False(string.IsNullOrWhiteSpace(response.ProposedAction.Summary));
         Assert.Equal("medium", response.ProposedAction.RiskLevel);
         Assert.True(response.ProposedAction.RequiresConfirmation);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, response.ProposedAction.LifecycleStatus);
         Assert.Empty(response.ToolCalls);
         Assert.Equal(0, response.StepsUsed);
     }
@@ -527,12 +528,22 @@ public class AgentSkeletonTest
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.True(ok.Value!.Success);
-        Assert.Equal("cancelled", ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, ok.Value.LifecycleStatus);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, pending.Status);
         Assert.Contains("No data was written", ok.Value.Message);
+
+        var secondResult = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store);
+        var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
+        Assert.False(secondOk.Value!.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, secondOk.Value.Status);
     }
 
     [Fact]
-    public async Task AgentConfirmEndpoint_ConfirmReturnsPreviewSuccessAndWritesNoData()
+    public async Task AgentConfirmEndpoint_ConfirmReturnsConfirmedAndWritesNoData()
     {
         var store = new InMemoryPendingAgentActionStore();
         var pending = store.Create(
@@ -553,10 +564,20 @@ public class AgentSkeletonTest
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.True(ok.Value!.Success);
-        Assert.Equal("preview_success", ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.LifecycleStatus);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, pending.Status);
         Assert.Contains("No data was written", ok.Value.Message);
         var json = JsonSerializer.Serialize(ok.Value.Result);
         Assert.Contains("false", json);
+
+        var secondResult = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store);
+        var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
+        Assert.False(secondOk.Value!.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, secondOk.Value.Status);
     }
 
     [Fact]
@@ -581,7 +602,8 @@ public class AgentSkeletonTest
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.False(ok.Value!.Success);
-        Assert.Equal("expired", ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Expired, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Expired, pending.Status);
     }
 
     private sealed class StubAgentTool : IAgentTool

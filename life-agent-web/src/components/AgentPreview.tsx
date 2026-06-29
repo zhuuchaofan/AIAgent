@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, Loader2, Send, ShieldAlert, Wrench, X } from "lucide-react";
 import { confirmAgentAction, runAgentPreview } from "@/app/actions/knowledge";
 import { Markdown } from "./Markdown";
@@ -51,6 +51,7 @@ interface AgentProposedAction {
   payload?: unknown;
   riskLevel: string;
   requiresConfirmation: boolean;
+  lifecycleStatus?: string;
   createdAt: string;
   expiresAt: string;
 }
@@ -61,6 +62,7 @@ interface AgentConfirmationResponse {
   message: string;
   actionId?: string;
   actionType?: string;
+  lifecycleStatus?: string;
   result?: unknown;
 }
 
@@ -72,9 +74,20 @@ export function AgentPreview() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentRunData | null>(null);
   const [confirmationResult, setConfirmationResult] = useState<AgentConfirmationResponse | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const toolCalls = useMemo(() => result?.toolCalls ?? [], [result]);
   const citations = useMemo(() => result?.citations ?? [], [result]);
+  const actionExpired = result?.proposedAction ? new Date(result.proposedAction.expiresAt).getTime() <= nowMs : false;
+  const actionResolved = !!confirmationResult || actionExpired;
+  const showPendingAction = !!result?.requiresConfirmation && !!result.proposedAction && !actionResolved;
+
+  useEffect(() => {
+    if (!result?.proposedAction || confirmationResult) return;
+
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [result?.proposedAction, confirmationResult]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -93,6 +106,7 @@ export function AgentPreview() {
         return;
       }
 
+      setNowMs(Date.now());
       setResult(res.data);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -104,7 +118,7 @@ export function AgentPreview() {
   };
 
   const handleConfirmAction = async (decision: "confirm" | "cancel") => {
-    if (!result?.proposedAction || confirming) return;
+    if (!result?.proposedAction || confirming || actionResolved) return;
 
     setConfirming(decision);
     setError(null);
@@ -193,7 +207,7 @@ export function AgentPreview() {
                 <Markdown content={result.answer || "Agent 未返回回答。"} citations={citations} />
               </div>
 
-              {result.requiresConfirmation && result.proposedAction && (
+              {showPendingAction && result.proposedAction && (
                 <div className="bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4 text-xs space-y-3">
                   <div className="flex items-center gap-2 text-amber-200 font-semibold">
                     <ShieldAlert className="w-4 h-4 text-amber-300 shrink-0" />
@@ -213,6 +227,9 @@ export function AgentPreview() {
                     <div className="text-zinc-500">
                       风险等级：<span className="font-mono text-amber-200">{result.proposedAction.riskLevel}</span>
                     </div>
+                    <div className="text-zinc-500">
+                      生命周期：<span className="font-mono text-amber-200">{result.proposedAction.lifecycleStatus || "pending"}</span>
+                    </div>
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
                       当前为 preview，不会真正写入生活记录、提醒或记忆。
                     </div>
@@ -221,7 +238,7 @@ export function AgentPreview() {
                     <button
                       type="button"
                       onClick={() => handleConfirmAction("confirm")}
-                      disabled={!!confirming || confirmationResult?.success}
+                      disabled={!!confirming || actionResolved}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                     >
                       {confirming === "confirm" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -230,23 +247,33 @@ export function AgentPreview() {
                     <button
                       type="button"
                       onClick={() => handleConfirmAction("cancel")}
-                      disabled={!!confirming || confirmationResult?.success}
+                      disabled={!!confirming || actionResolved}
                       className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                     >
                       {confirming === "cancel" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                       取消
                     </button>
                   </div>
-                  {confirmationResult && (
-                    <div className={`rounded-xl border p-3 ${
-                      confirmationResult.success
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                        : "border-red-500/30 bg-red-500/10 text-red-200"
-                    }`}>
-                      <div className="font-mono mb-1">{confirmationResult.status}</div>
-                      <div>{confirmationResult.message}</div>
-                    </div>
-                  )}
+                </div>
+              )}
+
+              {result.requiresConfirmation && result.proposedAction && actionExpired && !confirmationResult && (
+                <div className="rounded-2xl border border-zinc-700/60 bg-zinc-950/50 p-4 text-xs text-zinc-400">
+                  <div className="font-semibold text-zinc-200 mb-1">待确认动作已过期</div>
+                  <div>生命周期：<span className="font-mono">expired</span></div>
+                  <div className="mt-2">该 preview action 已失效，不能再确认。请重新发送请求生成新的确认卡片。</div>
+                </div>
+              )}
+
+              {confirmationResult && (
+                <div className={`rounded-2xl border p-4 text-xs ${
+                  confirmationResult.success
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                    : "border-red-500/30 bg-red-500/10 text-red-200"
+                }`}>
+                  <div className="font-semibold mb-1">确认结果</div>
+                  <div className="font-mono mb-1">{confirmationResult.lifecycleStatus || confirmationResult.status}</div>
+                  <div>{confirmationResult.message}</div>
                 </div>
               )}
 
