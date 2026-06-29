@@ -2,6 +2,7 @@ using System.Text.Json;
 using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Agent;
+using LifeAgent.Api.Models.LifeEvents;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.Tools;
@@ -473,6 +474,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = "missing", Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -505,6 +507,7 @@ public class AgentSkeletonTest
             },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -532,6 +535,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "cancel" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -546,6 +550,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.False(secondOk.Value!.Success);
@@ -572,6 +577,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -588,6 +594,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.True(secondOk.Value!.Success);
@@ -614,6 +621,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -653,6 +661,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -689,6 +698,7 @@ public class AgentSkeletonTest
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
             DefaultWriteGate(),
+            CreateCoordinator(store),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -701,7 +711,7 @@ public class AgentSkeletonTest
     }
 
     [Fact]
-    public async Task AgentConfirmEndpoint_CreateLifeEventFlagsTrueStillDoesNotEnterWritePathInPhase486()
+    public async Task AgentConfirmEndpoint_CreateLifeEventFlagsTrueWritesThroughCoordinator()
     {
         var store = new InMemoryPendingAgentActionStore();
         var pending = await store.CreateAsync(
@@ -719,6 +729,8 @@ public class AgentSkeletonTest
             TimeSpan.FromMinutes(10));
         var context = new DefaultHttpContext();
         context.Items["userId"] = "user_a";
+        var lifeEvents = new RecordingAgentLifeEventService();
+        var coordinator = CreateCoordinator(store, lifeEvents);
 
         var result = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
@@ -729,14 +741,110 @@ public class AgentSkeletonTest
                 ["ENABLE_AGENT_WRITE_TOOLS"] = "true",
                 ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
             }),
+            coordinator,
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.True(ok.Value!.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.LifecycleStatus);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, pending.Status);
+        Assert.Equal(1, lifeEvents.CallCount);
+        AssertWriteResult(ok.Value.Result, pending.CreatedResourceId!, idempotent: false);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_CreateLifeEventFlagsTrueDuplicateConfirmIsIdempotent()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event",
+            "黑猫状态",
+            "记录黑猫状态",
+            new
+            {
+                type = "cat_health",
+                title = "黑猫呕吐",
+                content = "今天黑猫吐了一次，精神还可以。"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+        var lifeEvents = new RecordingAgentLifeEventService();
+        var coordinator = CreateCoordinator(store, lifeEvents);
+        var writeGate = WriteGate(new Dictionary<string, string?>
+        {
+            ["ENABLE_AGENT_WRITE_TOOLS"] = "true",
+            ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
+        });
+
+        var first = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            writeGate,
+            coordinator,
+            CancellationToken.None);
+        var second = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            writeGate,
+            coordinator,
+            CancellationToken.None);
+
+        var firstOk = Assert.IsType<Ok<AgentConfirmationResponse>>(first);
+        var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(second);
+        Assert.True(firstOk.Value!.Success);
+        Assert.True(secondOk.Value!.Success);
+        Assert.Equal(1, lifeEvents.CallCount);
+        AssertWriteResult(secondOk.Value.Result, pending.CreatedResourceId!, idempotent: true);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_CreateLifeEventFlagsTrueWriteFailureDoesNotConfirm()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event",
+            "黑猫状态",
+            "记录黑猫状态",
+            new
+            {
+                type = "cat_health",
+                title = "黑猫呕吐",
+                content = "今天黑猫吐了一次，精神还可以。"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+        var lifeEvents = new RecordingAgentLifeEventService
+        {
+            ErrorToThrow = new InvalidOperationException("firestore unavailable")
+        };
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            WriteGate(new Dictionary<string, string?>
+            {
+                ["ENABLE_AGENT_WRITE_TOOLS"] = "true",
+                ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
+            }),
+            CreateCoordinator(store, lifeEvents),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.False(ok.Value!.Success);
-        Assert.Equal("not_enabled", ok.Value.Status);
-        Assert.Equal(InMemoryPendingAgentActionStore.Pending, ok.Value.LifecycleStatus);
+        Assert.Equal("write_failed", ok.Value.Status);
         Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
         Assert.Null(pending.ConfirmedAt);
+        Assert.False(pending.WroteData);
         AssertPreviewOnly(ok.Value.Result);
     }
 
@@ -862,6 +970,58 @@ public class AgentSkeletonTest
             .Build();
 
         return new AgentWriteFeatureGate(configuration);
+    }
+
+    private static AgentLifeEventConfirmationWriteCoordinator CreateCoordinator(
+        IPendingAgentActionStore pendingActions,
+        IAgentLifeEventService? lifeEventService = null)
+    {
+        return new AgentLifeEventConfirmationWriteCoordinator(
+            pendingActions,
+            lifeEventService ?? new RecordingAgentLifeEventService());
+    }
+
+    private static void AssertWriteResult(object? result, string createdResourceId, bool idempotent)
+    {
+        var json = JsonSerializer.Serialize(result);
+        Assert.Contains("\"previewOnly\":false", json);
+        Assert.Contains("\"wroteData\":true", json);
+        Assert.Contains("\"createdResourceType\":\"life_event\"", json);
+        Assert.Contains($"\"createdResourceId\":\"{createdResourceId}\"", json);
+        Assert.Contains($"\"idempotent\":{idempotent.ToString().ToLowerInvariant()}", json);
+    }
+
+    private sealed class RecordingAgentLifeEventService : IAgentLifeEventService
+    {
+        public int CallCount { get; private set; }
+        public Exception? ErrorToThrow { get; set; }
+
+        public Task<LifeEvent> CreateFromAgentConfirmationAsync(
+            string authenticatedUserId,
+            string agentActionId,
+            CreateLifeEventRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            if (ErrorToThrow is not null)
+            {
+                throw ErrorToThrow;
+            }
+
+            return Task.FromResult(new LifeEvent
+            {
+                Id = $"evt_{agentActionId}",
+                UserId = authenticatedUserId,
+                Type = request.Type,
+                Title = request.Title,
+                Content = request.Content,
+                Source = "agent_confirmed",
+                CreatedBy = "agent",
+                AgentActionId = agentActionId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
     }
 
     private sealed class StubAgentTool : IAgentTool

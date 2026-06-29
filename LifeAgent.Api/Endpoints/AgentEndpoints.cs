@@ -44,6 +44,7 @@ public static class AgentEndpoints
         [FromBody] AgentConfirmationRequest request,
         [FromServices] IPendingAgentActionStore pendingActions,
         [FromServices] IAgentWriteFeatureGate agentWriteFeatureGate,
+        [FromServices] AgentLifeEventConfirmationWriteCoordinator lifeEventWriteCoordinator,
         CancellationToken cancellationToken)
     {
         var userId = httpContext.Items["userId"] as string;
@@ -62,7 +63,14 @@ public static class AgentEndpoints
             if (normalizedDecision == "confirm")
             {
                 var pending = await pendingActions.GetAsync(userId, actionId, cancellationToken);
-                var validation = ValidateCreateLifeEventPreviewOnlyPath(pending, agentWriteFeatureGate);
+                if (IsCreateLifeEventWriteAction(pending?.ProposedAction.ActionType) &&
+                    agentWriteFeatureGate.CanCreateLifeEvent())
+                {
+                    var writeResponse = await lifeEventWriteCoordinator.ConfirmCreateLifeEventAsync(userId, actionId, cancellationToken);
+                    return Results.Ok(writeResponse);
+                }
+
+                var validation = ValidateCreateLifeEventPreviewOnlyPath(pending);
                 if (validation is not null)
                 {
                     return Results.Ok(validation);
@@ -75,8 +83,7 @@ public static class AgentEndpoints
     }
 
     private static AgentConfirmationResponse? ValidateCreateLifeEventPreviewOnlyPath(
-        PendingAgentAction? pending,
-        IAgentWriteFeatureGate agentWriteFeatureGate)
+        PendingAgentAction? pending)
     {
         if (pending is null || !IsCreateLifeEventAction(pending.ProposedAction.ActionType))
         {
@@ -111,26 +118,12 @@ public static class AgentEndpoints
             };
         }
 
-        if (agentWriteFeatureGate.CanCreateLifeEvent())
-        {
-            return new AgentConfirmationResponse
-            {
-                Success = false,
-                Status = "not_enabled",
-                Message = "create_life_event writes are not enabled in Phase 4.8.6.",
-                ActionId = pending.ProposedAction.ActionId,
-                ActionType = pending.ProposedAction.ActionType,
-                LifecycleStatus = pending.Status,
-                Result = new
-                {
-                    previewOnly = true,
-                    wroteData = false,
-                    actionType = pending.ProposedAction.ActionType
-                }
-            };
-        }
-
         return null;
+    }
+
+    private static bool IsCreateLifeEventWriteAction(string? actionType)
+    {
+        return string.Equals(actionType, "create_life_event", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsCreateLifeEventAction(string? actionType)
