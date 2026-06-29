@@ -27,6 +27,10 @@ public static class AgentEndpoints
 
         request ??= new AgentRunRequest();
         var response = await agentRunner.RunAsync(userId, request, cancellationToken);
-        return Results.Ok(response);
+        return Results.Ok(new AgentRunApiResponse
+        {
+            Success = true,
+            Data = response
+        });
     }
 }

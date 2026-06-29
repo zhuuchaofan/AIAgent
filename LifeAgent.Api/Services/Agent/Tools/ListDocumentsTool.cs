@@ -34,6 +34,8 @@ public class ListDocumentsTool : IAgentTool
                 .ToList();
         }
 
+        var successCount = docs.Count(doc => string.Equals(doc.Status, "success", StringComparison.OrdinalIgnoreCase));
+
         return AgentToolResult.Ok(new
         {
             documents = docs.Select(doc => new
@@ -44,7 +46,7 @@ public class ListDocumentsTool : IAgentTool
                 chunkCount = doc.ChunkCount,
                 updatedAt = doc.UpdatedAt
             }).ToList()
-        });
+        }, $"{docs.Count} documents, {successCount} success");
     }
 
     private static string? ReadString(JsonElement input, string propertyName)

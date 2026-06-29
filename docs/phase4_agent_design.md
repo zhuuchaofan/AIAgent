@@ -4,6 +4,14 @@
 > 当前前置状态：Phase 3 RAG MVP 已完成，Phase 3.5 自动化验证已完成；真实线上 Firebase 登录 E2E 仍需人工执行。
 > 本文目标：冻结 Phase 4 的低风险设计边界和实施拆分。本文不包含业务实现代码。
 
+## 当前实现状态
+
+- Phase 4.0：已实现后端 preview skeleton，包括 `/api/agent/run`、`AgentRunner`、`ToolRegistry`、`ToolExecutor` 和 `IAgentTool`。
+- Phase 4.1：已接入只读工具 `list_documents` 与 `get_document_status`。
+- Phase 4.2：已实现 deterministic readonly planner；默认不调用真实 LLM，不执行写入工具。
+- `search_documents` 与 `answer_with_rag` 仍是 preview/TODO 工具，尚未接入真实向量检索或 RAG 回答链路。
+- 写入工具 `create_life_event` / `save_memory` / `create_reminder` 尚未实现，仍保留到 Phase 4.3 以后。
+
 ---
 
 ## 1. Phase 4 的目标定义

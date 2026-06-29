@@ -48,7 +48,9 @@ public class ToolExecutor
                 Step = step,
                 ToolName = tool.Name,
                 Status = result.Success ? "success" : "failed",
+                Input = JsonSerializer.Deserialize<object>(input.GetRawText()),
                 Output = result.Output,
+                OutputSummary = result.OutputSummary,
                 ErrorMessage = result.ErrorMessage,
                 DurationMs = sw.ElapsedMilliseconds
             };
@@ -68,6 +70,7 @@ public class ToolExecutor
             Step = step,
             ToolName = toolName,
             Status = "failed",
+            Input = null,
             ErrorMessage = message,
             DurationMs = durationMs
         };

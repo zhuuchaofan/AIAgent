@@ -28,7 +28,13 @@ scripts/smoke-rag-e2e.mjs
 
 ## 运行方式
 
-只读 smoke：
+只读 smoke（未设置 `API_BASE_URL` 时只检查 Web，并明确跳过 API/RAG）：
+
+```bash
+node scripts/smoke-rag-e2e.mjs
+```
+
+只读 API + Web smoke：
 
 ```bash
 API_BASE_URL="$(gcloud run services describe life-agent-api --region us-central1 --format='value(status.url)')" \
@@ -57,7 +63,7 @@ node scripts/smoke-rag-e2e.mjs
 
 | 变量 | 必填 | 默认值 | 说明 |
 |---|---:|---|---|
-| `API_BASE_URL` | 是 | 无 | API 服务地址；建议用 `gcloud run services describe life-agent-api --region us-central1 --format='value(status.url)'` 获取 |
+| `API_BASE_URL` | 否 | 空 | API 服务地址；为空时跳过 API/RAG，仅检查 Web。建议用 `gcloud run services describe life-agent-api --region us-central1 --format='value(status.url)'` 获取 |
 | `WEB_BASE_URL` | 否 | `https://life.zhuchaofan.com` | Web 服务地址 |
 | `FIREBASE_ID_TOKEN` | 否 | 空 | Firebase Auth ID token；为空时跳过认证步骤 |
 | `RUN_MUTATING_SMOKE` | 否 | `false` | 必须为 `true` 才会创建和删除临时文档 |

@@ -45,6 +45,6 @@ public class GetDocumentStatusTool : IAgentTool
             chunkCount = doc.ChunkCount,
             errorMessage = doc.ErrorMessage,
             updatedAt = doc.UpdatedAt
-        });
+        }, $"{doc.Id} status {doc.Status}");
     }
 }

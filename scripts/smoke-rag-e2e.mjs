@@ -26,7 +26,9 @@ async function main() {
   console.log(`WEB: ${config.webBaseUrl}`);
 
   if (!config.apiBaseUrl) {
-    throw new Error("API_BASE_URL is required. Get it with: gcloud run services describe life-agent-api --region us-central1 --format='value(status.url)'");
+    skip("API /health and authenticated RAG flow", "API_BASE_URL is not set. Get it with: gcloud run services describe life-agent-api --region us-central1 --format='value(status.url)'");
+    await step("Web endpoint is reachable", checkWebRoot);
+    return;
   }
 
   await step("API /health returns healthy", checkHealth);
