@@ -60,7 +60,7 @@ public class AgentSkeletonTest
 
         var response = await runner.RunAsync("user_a", new AgentRunRequest(), CancellationToken.None);
 
-        Assert.Equal("preview_readonly", response.Mode);
+        Assert.Equal("preview_readonly_rag", response.Mode);
         Assert.Equal(5, response.MaxSteps);
         Assert.Equal(0, response.StepsUsed);
         Assert.Empty(response.ToolCalls);
@@ -82,7 +82,7 @@ public class AgentSkeletonTest
             new AgentRunRequest { Message = "请列出文档" },
             CancellationToken.None);
 
-        Assert.Equal("preview_readonly", response.Mode);
+        Assert.Equal("preview_readonly_rag", response.Mode);
         Assert.Equal(1, response.StepsUsed);
         Assert.Single(response.ToolCalls);
         Assert.Equal("list_documents", response.ToolCalls[0].ToolName);
@@ -128,8 +128,158 @@ public class AgentSkeletonTest
 
         Assert.Equal(0, response.StepsUsed);
         Assert.Empty(response.ToolCalls);
-        Assert.Contains("只支持文档列表与文档状态查询", response.Answer);
+        Assert.Contains("支持文档列表、文档状态查询和只读 RAG 问答", response.Answer);
         Assert.False(writeTool.WasCalled);
+    }
+
+    [Fact]
+    public async Task AgentRunner_RagIntent_CallsAnswerWithRagAndPreservesCitations()
+    {
+        var repository = new FakeDocumentRepository();
+        repository.Documents["user_a"] = new List<KnowledgeDocument>
+        {
+            new KnowledgeDocument { Id = "doc_a", UserId = "user_a", FileName = "a.md", Status = "success", ChunkCount = 1 }
+        };
+        var ragChatService = new FakeRagChatService
+        {
+            ResponseToReturn = new RagChatResponse
+            {
+                Response = "根据文档，答案是 A [1]。",
+                CitationIntegrity = "valid",
+                Citations = new List<CitationNode>
+                {
+                    new CitationNode
+                    {
+                        Index = 1,
+                        DocumentId = "doc_a",
+                        DocumentName = "a.md",
+                        ChunkIndex = 0,
+                        PageNumber = 1,
+                        SnippetPreview = "答案是 A"
+                    }
+                }
+            }
+        };
+        var runner = CreateRunner(repository, ragChatService: ragChatService);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest
+            {
+                Message = "根据文档回答：答案是什么？",
+                DocumentIds = new List<string> { "doc_a" },
+                ClientTimeZone = "Asia/Shanghai"
+            },
+            CancellationToken.None);
+
+        Assert.Equal("preview_readonly_rag", response.Mode);
+        Assert.Equal(1, response.StepsUsed);
+        Assert.Equal("answer_with_rag", response.ToolCalls[0].ToolName);
+        Assert.Equal("根据文档，答案是 A [1]。", response.Answer);
+        Assert.Equal("valid", response.CitationIntegrity);
+        Assert.Single(response.Citations);
+        Assert.Equal("doc_a", response.Citations[0].DocumentId);
+        Assert.Equal("user_a", ragChatService.LastUserId);
+        Assert.Equal(new List<string> { "doc_a" }, ragChatService.LastRequest!.DocumentIds);
+    }
+
+    [Fact]
+    public async Task AnswerWithRagTool_RejectsDocumentIdsThatDoNotBelongToCurrentUser()
+    {
+        var repository = new FakeDocumentRepository();
+        repository.Documents["user_b"] = new List<KnowledgeDocument>
+        {
+            new KnowledgeDocument { Id = "doc_b", UserId = "user_b", FileName = "b.md", Status = "success", ChunkCount = 1 }
+        };
+        var ragChatService = new FakeRagChatService();
+        var tool = new AnswerWithRagTool(ragChatService, repository);
+
+        var result = await tool.ExecuteAsync(
+            new AgentContext { UserId = "user_a", ConversationId = "agent_test" },
+            JsonSerializer.SerializeToElement(new
+            {
+                question = "根据文档回答",
+                documentIds = new[] { "doc_b" }
+            }),
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("not found or access denied", result.ErrorMessage);
+        Assert.Null(ragChatService.LastRequest);
+        Assert.Equal("user_a", repository.LastGetUserId);
+    }
+
+    [Fact]
+    public async Task AgentRunner_UnknownIntent_DoesNotCallRagTools()
+    {
+        var repository = new FakeDocumentRepository();
+        var ragChatService = new FakeRagChatService();
+        var ragSearchService = new FakeRagSearchService();
+        var runner = CreateRunner(repository, ragSearchService, ragChatService);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我随便聊聊" },
+            CancellationToken.None);
+
+        Assert.Equal(0, response.StepsUsed);
+        Assert.Empty(response.ToolCalls);
+        Assert.False(ragChatService.WasCalled);
+        Assert.False(ragSearchService.WasCalled);
+    }
+
+    [Fact]
+    public async Task SearchDocumentsTool_RejectsDocumentIdsThatDoNotBelongToCurrentUser()
+    {
+        var ragSearchService = new FakeRagSearchService
+        {
+            ErrorToThrow = new KeyNotFoundException("Document doc_b not found or access denied.")
+        };
+        var registry = new ToolRegistry(new IAgentTool[] { new SearchDocumentsTool(ragSearchService) });
+        var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
+
+        var result = await executor.ExecuteAsync(
+            new AgentContext { UserId = "user_a" },
+            "search_documents",
+            JsonSerializer.SerializeToElement(new
+            {
+                query = "查一下文档",
+                documentIds = new[] { "doc_b" }
+            }),
+            1,
+            CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Contains("Agent tool execution failed", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task AgentRunner_RagToolFailure_ReturnsStructuredFailure()
+    {
+        var repository = new FakeDocumentRepository();
+        repository.Documents["user_a"] = new List<KnowledgeDocument>
+        {
+            new KnowledgeDocument { Id = "doc_a", UserId = "user_a", FileName = "a.md", Status = "success", ChunkCount = 1 }
+        };
+        var ragChatService = new FakeRagChatService
+        {
+            ErrorToThrow = new InvalidOperationException("rag failed")
+        };
+        var runner = CreateRunner(repository, ragChatService: ragChatService);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest
+            {
+                Message = "根据文档回答：测试",
+                DocumentIds = new List<string> { "doc_a" }
+            },
+            CancellationToken.None);
+
+        Assert.Equal(1, response.StepsUsed);
+        Assert.Equal("failed", response.ToolCalls[0].Status);
+        Assert.Contains("Agent tool execution failed", response.ToolCalls[0].ErrorMessage);
+        Assert.Contains("只读 Agent 工具调用失败", response.Answer);
     }
 
     [Fact]
@@ -239,8 +389,8 @@ public class AgentSkeletonTest
 
         var ok = Assert.IsType<Ok<AgentRunApiResponse>>(result);
         Assert.True(ok.Value!.Success);
-        Assert.Equal("preview_readonly", ok.Value.Data.Mode);
-        Assert.Contains("只支持文档列表与文档状态查询", ok.Value.Data.Answer);
+        Assert.Equal("preview_readonly_rag", ok.Value.Data.Mode);
+        Assert.Contains("支持文档列表、文档状态查询和只读 RAG 问答", ok.Value.Data.Answer);
         Assert.Empty(ok.Value.Data.ToolCalls);
     }
 
@@ -266,14 +416,18 @@ public class AgentSkeletonTest
         }
     }
 
-    private static AgentRunner CreateRunner(IDocumentRepository repository, int maxIterations = 3)
+    private static AgentRunner CreateRunner(
+        IDocumentRepository repository,
+        IRagSearchService? ragSearchService = null,
+        IRagChatService? ragChatService = null,
+        int maxIterations = 3)
     {
         var tools = new IAgentTool[]
         {
             new ListDocumentsTool(repository),
             new GetDocumentStatusTool(repository),
-            new SearchDocumentsTool(),
-            new AnswerWithRagTool()
+            new SearchDocumentsTool(ragSearchService ?? new FakeRagSearchService()),
+            new AnswerWithRagTool(ragChatService ?? new FakeRagChatService(), repository)
         };
         var registry = new ToolRegistry(tools);
         var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
@@ -313,6 +467,55 @@ public class AgentSkeletonTest
         public Task DeleteAsync(string userId, string documentId)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class FakeRagChatService : IRagChatService
+    {
+        public bool WasCalled { get; private set; }
+        public string? LastUserId { get; private set; }
+        public RagChatRequest? LastRequest { get; private set; }
+        public RagChatResponse ResponseToReturn { get; set; } = new()
+        {
+            Response = "fake answer",
+            CitationIntegrity = "valid"
+        };
+        public Exception? ErrorToThrow { get; set; }
+
+        public Task<RagChatResponse> ProcessChatAsync(string userId, RagChatRequest request)
+        {
+            WasCalled = true;
+            LastUserId = userId;
+            LastRequest = request;
+            if (ErrorToThrow != null)
+            {
+                throw ErrorToThrow;
+            }
+
+            return Task.FromResult(ResponseToReturn);
+        }
+    }
+
+    private sealed class FakeRagSearchService : IRagSearchService
+    {
+        public bool WasCalled { get; private set; }
+        public Exception? ErrorToThrow { get; set; }
+        public List<VectorSearchResult> ResultsToReturn { get; set; } = new();
+
+        public Task<List<VectorSearchResult>> SearchAsync(
+            string userId,
+            string query,
+            IReadOnlyList<string>? documentIds,
+            int? topK,
+            CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+            if (ErrorToThrow != null)
+            {
+                throw ErrorToThrow;
+            }
+
+            return Task.FromResult(ResultsToReturn);
         }
     }
 }

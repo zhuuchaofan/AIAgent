@@ -8,8 +8,8 @@
 
 - Phase 4.0：已实现后端 preview skeleton，包括 `/api/agent/run`、`AgentRunner`、`ToolRegistry`、`ToolExecutor` 和 `IAgentTool`。
 - Phase 4.1：已接入只读工具 `list_documents` 与 `get_document_status`。
-- Phase 4.2：已实现 deterministic readonly planner；默认不调用真实 LLM，不执行写入工具。
-- `search_documents` 与 `answer_with_rag` 仍是 preview/TODO 工具，尚未接入真实向量检索或 RAG 回答链路。
+- Phase 4.2：已实现 deterministic readonly planner；不执行写入工具。
+- Phase 4.3A：已接入只读 RAG Agent 工具，`search_documents` 使用当前用户向量检索，`answer_with_rag` 复用现有 `RagChatService` 并保留 citations。
 - 写入工具 `create_life_event` / `save_memory` / `create_reminder` 尚未实现，仍保留到 Phase 4.3 以后。
 
 ---

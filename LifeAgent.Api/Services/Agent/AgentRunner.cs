@@ -42,8 +42,8 @@ public class AgentRunner
             return new AgentRunResponse
             {
                 RunId = runId,
-                Mode = "preview_readonly",
-                Answer = "Phase 4.2 Agent preview 目前只支持文档列表与文档状态查询；其他问题仍请使用现有 RAG Chat。",
+                Mode = "preview_readonly_rag",
+                Answer = "Phase 4.3A Agent preview 目前支持文档列表、文档状态查询和只读 RAG 问答；其他问题仍请使用现有 RAG Chat。",
                 MaxSteps = maxIterations,
                 StepsUsed = 0
             };
@@ -69,8 +69,10 @@ public class AgentRunner
         return new AgentRunResponse
         {
             RunId = runId,
-            Mode = "preview_readonly",
+            Mode = "preview_readonly_rag",
             Answer = BuildAnswer(toolCalls),
+            Citations = ExtractCitations(toolCalls),
+            CitationIntegrity = ExtractCitationIntegrity(toolCalls),
             MaxSteps = maxIterations,
             StepsUsed = toolCalls.Count,
             ToolCalls = toolCalls
@@ -94,6 +96,20 @@ public class AgentRunner
         if (string.IsNullOrWhiteSpace(normalized))
         {
             return new List<PlannedToolCall>();
+        }
+
+        if (LooksLikeRagAnswerIntent(normalized))
+        {
+            return new List<PlannedToolCall>
+            {
+                new PlannedToolCall(
+                    "answer_with_rag",
+                    JsonSerializer.SerializeToElement(new
+                    {
+                        question = message,
+                        documentIds = request.DocumentIds ?? new List<string>()
+                    }))
+            };
         }
 
         if (LooksLikeDocumentStatusIntent(normalized))
@@ -140,6 +156,18 @@ public class AgentRunner
                normalized.Contains("get_document_status");
     }
 
+    private static bool LooksLikeRagAnswerIntent(string normalized)
+    {
+        return normalized.Contains("根据文档回答") ||
+               normalized.Contains("查一下文档") ||
+               normalized.Contains("文档里有没有") ||
+               normalized.Contains("总结我上传的文档") ||
+               normalized.Contains("基于选中文档回答") ||
+               normalized.Contains("基于文档回答") ||
+               normalized.Contains("answer with rag") ||
+               normalized.Contains("search my documents");
+    }
+
     private static string? ExtractDocumentId(AgentRunRequest request, string message)
     {
         if (request.ToolInput.HasValue &&
@@ -176,8 +204,60 @@ public class AgentRunner
         {
             "list_documents" => $"已完成文档列表查询：{last.OutputSummary ?? "documents returned"}。",
             "get_document_status" => $"已完成文档状态查询：{last.OutputSummary ?? "status returned"}。",
+            "answer_with_rag" => ExtractAnswer(last) ?? $"已完成 RAG 问答：{last.OutputSummary ?? "answer returned"}。",
+            "search_documents" => $"已完成文档检索：{last.OutputSummary ?? "chunks returned"}。",
             _ => $"已执行只读工具 {last.ToolName}。"
         };
+    }
+
+    private static string? ExtractAnswer(AgentToolCallResult toolCall)
+    {
+        if (toolCall.Output == null)
+        {
+            return null;
+        }
+
+        var json = JsonSerializer.Serialize(toolCall.Output);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.TryGetProperty("answer", out var answer) &&
+               answer.ValueKind == JsonValueKind.String
+            ? answer.GetString()
+            : null;
+    }
+
+    private static List<LifeAgent.Api.Models.CitationNode> ExtractCitations(List<AgentToolCallResult> toolCalls)
+    {
+        var last = toolCalls.LastOrDefault(call => call.ToolName == "answer_with_rag" && call.Output != null);
+        if (last?.Output == null)
+        {
+            return new List<LifeAgent.Api.Models.CitationNode>();
+        }
+
+        var json = JsonSerializer.Serialize(last.Output);
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("citations", out var citations) ||
+            citations.ValueKind != JsonValueKind.Array)
+        {
+            return new List<LifeAgent.Api.Models.CitationNode>();
+        }
+
+        return JsonSerializer.Deserialize<List<LifeAgent.Api.Models.CitationNode>>(citations.GetRawText()) ?? new List<LifeAgent.Api.Models.CitationNode>();
+    }
+
+    private static string? ExtractCitationIntegrity(List<AgentToolCallResult> toolCalls)
+    {
+        var last = toolCalls.LastOrDefault(call => call.ToolName == "answer_with_rag" && call.Output != null);
+        if (last?.Output == null)
+        {
+            return null;
+        }
+
+        var json = JsonSerializer.Serialize(last.Output);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.TryGetProperty("citationIntegrity", out var integrity) &&
+               integrity.ValueKind == JsonValueKind.String
+            ? integrity.GetString()
+            : null;
     }
 
     private sealed record PlannedToolCall(string ToolName, JsonElement Input);

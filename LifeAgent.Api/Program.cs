@@ -35,6 +35,7 @@ builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddScoped<IDailySummaryService, DailySummaryService>();
 builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>();
 builder.Services.AddScoped<IRagChatService, RagChatService>();
+builder.Services.AddScoped<IRagSearchService, RagSearchService>();
 builder.Services.AddScoped<AgentRunner>();
 builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<ToolExecutor>();
