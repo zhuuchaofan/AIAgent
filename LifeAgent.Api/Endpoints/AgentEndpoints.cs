@@ -1,5 +1,6 @@
 using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Services.Agent;
+using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LifeAgent.Api.Endpoints;
@@ -42,6 +43,7 @@ public static class AgentEndpoints
         HttpContext httpContext,
         [FromBody] AgentConfirmationRequest request,
         [FromServices] IPendingAgentActionStore pendingActions,
+        [FromServices] IAgentWriteFeatureGate agentWriteFeatureGate,
         CancellationToken cancellationToken)
     {
         var userId = httpContext.Items["userId"] as string;
@@ -55,8 +57,105 @@ public static class AgentEndpoints
 
         async Task<IResult> ConfirmAsync()
         {
-            var response = await pendingActions.ConfirmAsync(userId, request.ActionId, request.Decision, cancellationToken);
+            var actionId = request.ActionId ?? string.Empty;
+            var normalizedDecision = (request.Decision ?? string.Empty).Trim().ToLowerInvariant();
+            if (normalizedDecision == "confirm")
+            {
+                var pending = await pendingActions.GetAsync(userId, actionId, cancellationToken);
+                var validation = ValidateCreateLifeEventPreviewOnlyPath(pending, agentWriteFeatureGate);
+                if (validation is not null)
+                {
+                    return Results.Ok(validation);
+                }
+            }
+
+            var response = await pendingActions.ConfirmAsync(userId, actionId, normalizedDecision, cancellationToken);
             return Results.Ok(response);
         }
+    }
+
+    private static AgentConfirmationResponse? ValidateCreateLifeEventPreviewOnlyPath(
+        PendingAgentAction? pending,
+        IAgentWriteFeatureGate agentWriteFeatureGate)
+    {
+        if (pending is null || !IsCreateLifeEventAction(pending.ProposedAction.ActionType))
+        {
+            return null;
+        }
+
+        if (!LooksLikeCreateLifeEventPayload(pending.ProposedAction.Payload))
+        {
+            return null;
+        }
+
+        try
+        {
+            _ = LifeEventActionPayloadMapper.Map(pending.ProposedAction.Payload);
+        }
+        catch (ArgumentException ex)
+        {
+            return new AgentConfirmationResponse
+            {
+                Success = false,
+                Status = "invalid_payload",
+                Message = ex.Message,
+                ActionId = pending.ProposedAction.ActionId,
+                ActionType = pending.ProposedAction.ActionType,
+                LifecycleStatus = pending.Status,
+                Result = new
+                {
+                    previewOnly = true,
+                    wroteData = false,
+                    actionType = pending.ProposedAction.ActionType
+                }
+            };
+        }
+
+        if (agentWriteFeatureGate.CanCreateLifeEvent())
+        {
+            return new AgentConfirmationResponse
+            {
+                Success = false,
+                Status = "not_enabled",
+                Message = "create_life_event writes are not enabled in Phase 4.8.6.",
+                ActionId = pending.ProposedAction.ActionId,
+                ActionType = pending.ProposedAction.ActionType,
+                LifecycleStatus = pending.Status,
+                Result = new
+                {
+                    previewOnly = true,
+                    wroteData = false,
+                    actionType = pending.ProposedAction.ActionType
+                }
+            };
+        }
+
+        return null;
+    }
+
+    private static bool IsCreateLifeEventAction(string? actionType)
+    {
+        return string.Equals(actionType, "create_life_event", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(actionType, "create_life_event_preview", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeCreateLifeEventPayload(object? payload)
+    {
+        if (payload is null)
+        {
+            return false;
+        }
+
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        return document.RootElement.TryGetProperty("type", out _) ||
+               document.RootElement.TryGetProperty("title", out _) ||
+               document.RootElement.TryGetProperty("content", out _) ||
+               document.RootElement.TryGetProperty("structuredData", out _);
     }
 }

@@ -14,6 +14,7 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
 
     private static readonly HashSet<string> AllowedActionTypes = new(StringComparer.OrdinalIgnoreCase)
     {
+        "create_life_event",
         "save_memory_preview",
         "create_life_event_preview",
         "create_reminder_preview"
@@ -64,6 +65,31 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
 
         await GetDocument(userId, actionId).SetAsync(document, cancellationToken: cancellationToken);
         return document.ToModel();
+    }
+
+    public async Task<PendingAgentAction?> GetAsync(
+        string userId,
+        string actionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId))
+        {
+            return null;
+        }
+
+        var snapshot = await GetDocument(userId, actionId).GetSnapshotAsync(cancellationToken);
+        if (!snapshot.Exists)
+        {
+            return null;
+        }
+
+        var pending = snapshot.ConvertTo<PendingAgentActionDocument>();
+        if (!string.Equals(pending.UserId, userId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return pending.ToModel();
     }
 
     public async Task<AgentConfirmationResponse> ConfirmAsync(

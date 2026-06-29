@@ -15,6 +15,7 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
 
     private static readonly HashSet<string> AllowedActionTypes = new(StringComparer.OrdinalIgnoreCase)
     {
+        "create_life_event",
         "save_memory_preview",
         "create_life_event_preview",
         "create_reminder_preview"
@@ -56,6 +57,21 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
 
         _actions[action.ProposedAction.ActionId] = action;
         return Task.FromResult(action);
+    }
+
+    public Task<PendingAgentAction?> GetAsync(string userId, string actionId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId) || !_actions.TryGetValue(actionId, out var pending))
+        {
+            return Task.FromResult<PendingAgentAction?>(null);
+        }
+
+        if (!string.Equals(pending.UserId, userId, StringComparison.Ordinal))
+        {
+            return Task.FromResult<PendingAgentAction?>(null);
+        }
+
+        return Task.FromResult<PendingAgentAction?>(pending);
     }
 
     public Task<AgentConfirmationResponse> ConfirmAsync(string userId, string actionId, string decision, CancellationToken cancellationToken = default)

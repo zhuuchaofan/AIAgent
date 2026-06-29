@@ -7,6 +7,7 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.Tools;
+using LifeAgent.Api.Services.LifeEvents;
 using LifeAgent.Api.Endpoints;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("LifeAgent.Tests")]
@@ -39,6 +40,7 @@ builder.Services.AddScoped<IRagSearchService, RagSearchService>();
 builder.Services.AddScoped<AgentRunner>();
 builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<ToolExecutor>();
+builder.Services.AddSingleton<IAgentWriteFeatureGate, AgentWriteFeatureGate>();
 builder.Services.AddSingleton<IPendingAgentActionStore, FirestorePendingAgentActionStore>();
 builder.Services.AddScoped<IAgentTool, ListDocumentsTool>();
 builder.Services.AddScoped<IAgentTool, GetDocumentStatusTool>();

@@ -5,8 +5,10 @@ using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.Tools;
+using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -470,6 +472,7 @@ public class AgentSkeletonTest
             context,
             new AgentConfirmationRequest { ActionId = "missing", Decision = "confirm" },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -501,6 +504,7 @@ public class AgentSkeletonTest
                 UserId = "user_a"
             },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -527,6 +531,7 @@ public class AgentSkeletonTest
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "cancel" },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -540,6 +545,7 @@ public class AgentSkeletonTest
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.False(secondOk.Value!.Success);
@@ -565,6 +571,7 @@ public class AgentSkeletonTest
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -580,6 +587,7 @@ public class AgentSkeletonTest
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.True(secondOk.Value!.Success);
@@ -605,12 +613,131 @@ public class AgentSkeletonTest
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
             store,
+            DefaultWriteGate(),
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.False(ok.Value!.Success);
         Assert.Equal(InMemoryPendingAgentActionStore.Expired, ok.Value.Status);
         Assert.Equal(InMemoryPendingAgentActionStore.Expired, pending.Status);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_CreateLifeEventFlagsOffConfirmsPreviewOnly()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event",
+            "黑猫状态",
+            "记录黑猫状态",
+            new
+            {
+                type = "cat_health",
+                title = "黑猫呕吐",
+                content = "今天黑猫吐了一次，精神还可以。",
+                structuredData = new
+                {
+                    tags = new[] { "猫", "健康" },
+                    catName = "黑猫",
+                    importance = 2
+                }
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            DefaultWriteGate(),
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.True(ok.Value!.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.LifecycleStatus);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, pending.Status);
+        AssertPreviewOnly(ok.Value.Result);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_CreateLifeEventForbiddenPayloadFailsBeforeLifecycleTransition()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event",
+            "黑猫状态",
+            "记录黑猫状态",
+            new
+            {
+                type = "cat_health",
+                title = "黑猫呕吐",
+                content = "今天黑猫吐了一次，精神还可以。",
+                userId = "payload_user"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            DefaultWriteGate(),
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("invalid_payload", ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, ok.Value.LifecycleStatus);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
+        Assert.Null(pending.ConfirmedAt);
+        AssertPreviewOnly(ok.Value.Result);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_CreateLifeEventFlagsTrueStillDoesNotEnterWritePathInPhase486()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event",
+            "黑猫状态",
+            "记录黑猫状态",
+            new
+            {
+                type = "cat_health",
+                title = "黑猫呕吐",
+                content = "今天黑猫吐了一次，精神还可以。"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            WriteGate(new Dictionary<string, string?>
+            {
+                ["ENABLE_AGENT_WRITE_TOOLS"] = "true",
+                ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
+            }),
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("not_enabled", ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, ok.Value.LifecycleStatus);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
+        Assert.Null(pending.ConfirmedAt);
+        AssertPreviewOnly(ok.Value.Result);
     }
 
     [Fact]
@@ -721,6 +848,20 @@ public class AgentSkeletonTest
         var json = JsonSerializer.Serialize(result);
         Assert.Contains("\"previewOnly\":true", json);
         Assert.Contains("\"wroteData\":false", json);
+    }
+
+    private static IAgentWriteFeatureGate DefaultWriteGate()
+    {
+        return WriteGate(new Dictionary<string, string?>());
+    }
+
+    private static IAgentWriteFeatureGate WriteGate(Dictionary<string, string?> values)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
+
+        return new AgentWriteFeatureGate(configuration);
     }
 
     private sealed class StubAgentTool : IAgentTool
