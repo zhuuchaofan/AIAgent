@@ -5,6 +5,8 @@ using Google.Cloud.Firestore;
 using LifeAgent.Api.Middleware;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
+using LifeAgent.Api.Services.Agent;
+using LifeAgent.Api.Services.Agent.Tools;
 using LifeAgent.Api.Endpoints;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("LifeAgent.Tests")]
@@ -27,11 +29,19 @@ builder.Services.AddSingleton(_ => FirestoreDb.Create(firestoreProjectId));
 
 // ── 业务 Service 注册 ─────────────────────────────────────────
 builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.Rag));
+builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.SectionName));
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
 builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddScoped<IDailySummaryService, DailySummaryService>();
 builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>();
 builder.Services.AddScoped<IRagChatService, RagChatService>();
+builder.Services.AddScoped<AgentRunner>();
+builder.Services.AddScoped<ToolRegistry>();
+builder.Services.AddScoped<ToolExecutor>();
+builder.Services.AddScoped<IAgentTool, ListDocumentsTool>();
+builder.Services.AddScoped<IAgentTool, GetDocumentStatusTool>();
+builder.Services.AddScoped<IAgentTool, SearchDocumentsTool>();
+builder.Services.AddScoped<IAgentTool, AnswerWithRagTool>();
 
 builder.Services.AddSingleton<FileValidator>();
 builder.Services.AddSingleton<IDailyQuotaService, DailyQuotaService>();
@@ -189,6 +199,7 @@ app.MapMigrationEndpoints();
 app.MapDocumentEndpoints();
 app.MapInternalDocumentEndpoints();
 app.MapRagChatEndpoints();
+app.MapAgentEndpoints();
 
 // GET /health — 无需鉴权
 app.MapGet("/health", () => Results.Ok("healthy"));
