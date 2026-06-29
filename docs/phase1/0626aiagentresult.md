@@ -1,5 +1,11 @@
 # Chat Conversation
 
+> Historical log warning:
+> This file is an early development conversation record. Any `USE_MOCK_AUTH=true`
+> commands or Cloud Run examples below are historical records only and must not
+> be used as current production deployment guidance. Production must use real
+> Firebase ID Token verification.
+
 Note: _This is purely the output of the chat conversation and does not contain any raw data, codebase snippets, etc. used to generate the output._
 
 ### User Input

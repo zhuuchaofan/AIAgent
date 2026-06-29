@@ -103,6 +103,7 @@ cd life-agent-web && ./deploy.sh
 - 修改域名映射
 - 重新创建 Cloud Run 服务（`gcloud run deploy` 只应更新已有服务）
 - 修改 Firebase 项目配置
+- 在生产环境启用 mock auth（`USE_MOCK_AUTH=true`）
 - **盲目使用 `gcloud run deploy --source .`（项目根目录）**——必须确认构建上下文目录正确
 - 构建失败后 **重复重试同一个部署命令** ——必须先查日志
 - **在未确认 Dockerfile / 构建上下文 / 脚本含义前直接部署**
@@ -165,3 +166,31 @@ gcloud run services describe life-agent-web \
   --project=copper-affinity-467409-k7 \
   --format="value(status.latestReadyRevisionName, status.traffic)"
 ```
+
+### 生产安全校验
+
+API 部署完成后必须确认生产环境未启用 mock auth：
+
+```bash
+gcloud run services describe life-agent-api \
+  --region=us-central1 \
+  --project=copper-affinity-467409-k7 \
+  --format="json(spec.template.spec.containers[0].env)"
+```
+
+检查输出中的 `USE_MOCK_AUTH`：
+
+- 允许：`USE_MOCK_AUTH=false`
+- 允许：未设置 `USE_MOCK_AUTH`
+- 禁止：`USE_MOCK_AUTH=true`
+
+生产环境必须使用真实 Firebase ID Token 验签。`USE_MOCK_AUTH=true` 只允许本地开发调试使用，绝不能出现在 Cloud Run 生产服务配置中。
+
+### Firestore Rules 当前状态
+
+- 本地 `firestore.rules` 已存在，`firebase.json` 指向该 rules 文件。
+- `.firebaserc` 当前指向 Firestore 数据项目 `copper-affinity-467409-k7`。
+- 当前线上 Firestore ruleset/release 状态未确认或未部署完成，不应标记为"已完成"。
+- 当前架构中 Firestore 数据项目为 `copper-affinity-467409-k7`，Firebase Auth 项目为 `my-agent-app-a5e42`。
+- 跨项目 Auth 问题解决前，不要直接把 Firestore Rules 部署状态标记为完成；否则 `request.auth` 可能无法匹配同项目 Auth，导致 rules 验证结果与预期不一致。
+- 现阶段业务数据访问仍应通过后端 BFF/API 完成，不要新增前端直连 Firestore 的生产读写路径。
