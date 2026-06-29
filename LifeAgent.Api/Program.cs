@@ -39,7 +39,7 @@ builder.Services.AddScoped<IRagSearchService, RagSearchService>();
 builder.Services.AddScoped<AgentRunner>();
 builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<ToolExecutor>();
-builder.Services.AddSingleton<IPendingAgentActionStore, InMemoryPendingAgentActionStore>();
+builder.Services.AddSingleton<IPendingAgentActionStore, FirestorePendingAgentActionStore>();
 builder.Services.AddScoped<IAgentTool, ListDocumentsTool>();
 builder.Services.AddScoped<IAgentTool, GetDocumentStatusTool>();
 builder.Services.AddScoped<IAgentTool, SearchDocumentsTool>();

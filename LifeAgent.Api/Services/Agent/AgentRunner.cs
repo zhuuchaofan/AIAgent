@@ -44,7 +44,7 @@ public class AgentRunner
         var plan = BuildPlan(request);
         if (plan.Count == 0)
         {
-            var proposedAction = TryCreateProposedAction(userId, request.Message ?? string.Empty);
+            var proposedAction = await TryCreateProposedActionAsync(userId, request.Message ?? string.Empty, cancellationToken);
             if (proposedAction != null)
             {
                 return new AgentRunResponse
@@ -170,7 +170,7 @@ public class AgentRunner
                normalized.Contains("show documents");
     }
 
-    private AgentProposedAction? TryCreateProposedAction(string userId, string message)
+    private async Task<AgentProposedAction?> TryCreateProposedActionAsync(string userId, string message, CancellationToken cancellationToken)
     {
         var normalized = message.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(normalized) || !LooksLikeWritePreviewIntent(normalized))
@@ -190,7 +190,7 @@ public class AgentRunner
             _ => "保存一条记忆"
         };
 
-        var pending = _pendingActions.Create(
+        var pending = await _pendingActions.CreateAsync(
             userId,
             actionType,
             title,
@@ -201,7 +201,8 @@ public class AgentRunner
                 previewOnly = true
             },
             "medium",
-            TimeSpan.FromMinutes(10));
+            TimeSpan.FromMinutes(10),
+            cancellationToken);
 
         return pending.ProposedAction;
     }

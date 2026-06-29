@@ -4,6 +4,6 @@ namespace LifeAgent.Api.Services.Agent;
 
 public interface IPendingAgentActionStore
 {
-    PendingAgentAction Create(string userId, string actionType, string title, string summary, object payload, string riskLevel, TimeSpan ttl);
-    AgentConfirmationResponse Confirm(string userId, string actionId, string decision);
+    Task<PendingAgentAction> CreateAsync(string userId, string actionType, string title, string summary, object payload, string riskLevel, TimeSpan ttl, CancellationToken cancellationToken = default);
+    Task<AgentConfirmationResponse> ConfirmAsync(string userId, string actionId, string decision, CancellationToken cancellationToken = default);
 }

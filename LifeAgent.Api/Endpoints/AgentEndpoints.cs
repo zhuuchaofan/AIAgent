@@ -41,7 +41,8 @@ public static class AgentEndpoints
     public static Task<IResult> ConfirmAgentActionAsync(
         HttpContext httpContext,
         [FromBody] AgentConfirmationRequest request,
-        [FromServices] IPendingAgentActionStore pendingActions)
+        [FromServices] IPendingAgentActionStore pendingActions,
+        CancellationToken cancellationToken)
     {
         var userId = httpContext.Items["userId"] as string;
         if (string.IsNullOrEmpty(userId))
@@ -50,7 +51,12 @@ public static class AgentEndpoints
         }
 
         request ??= new AgentConfirmationRequest();
-        var response = pendingActions.Confirm(userId, request.ActionId, request.Decision);
-        return Task.FromResult<IResult>(Results.Ok(response));
+        return ConfirmAsync();
+
+        async Task<IResult> ConfirmAsync()
+        {
+            var response = await pendingActions.ConfirmAsync(userId, request.ActionId, request.Decision, cancellationToken);
+            return Results.Ok(response);
+        }
     }
 }

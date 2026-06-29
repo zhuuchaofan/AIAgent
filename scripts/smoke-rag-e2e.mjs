@@ -215,6 +215,25 @@ async function runAgentReminderPreview() {
   assert(confirmBody.lifecycleStatus === "confirmed", `Expected Agent confirm lifecycleStatus=confirmed: ${JSON.stringify(confirmBody)}`);
   assert(confirmBody.result?.previewOnly === true, `Expected previewOnly=true: ${JSON.stringify(confirmBody)}`);
   assert(confirmBody.result?.wroteData === false, `Expected wroteData=false: ${JSON.stringify(confirmBody)}`);
+
+  const secondConfirmRes = await request(`${config.apiBaseUrl}/api/agent/confirm`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      actionId: data.proposedAction.actionId,
+      decision: "confirm"
+    })
+  });
+  const secondConfirmBody = await parseJson(secondConfirmRes);
+  assert(secondConfirmRes.ok, `Expected idempotent Agent confirm 2xx, got ${secondConfirmRes.status}: ${JSON.stringify(secondConfirmBody)}`);
+  assert(secondConfirmBody.success === true, `Expected idempotent Agent confirm success: ${JSON.stringify(secondConfirmBody)}`);
+  assert(secondConfirmBody.status === "confirmed", `Expected idempotent Agent confirm status=confirmed: ${JSON.stringify(secondConfirmBody)}`);
+  assert(secondConfirmBody.result?.previewOnly === true, `Expected idempotent previewOnly=true: ${JSON.stringify(secondConfirmBody)}`);
+  assert(secondConfirmBody.result?.wroteData === false, `Expected idempotent wroteData=false: ${JSON.stringify(secondConfirmBody)}`);
+  assert(secondConfirmBody.result?.idempotent === true, `Expected idempotent=true: ${JSON.stringify(secondConfirmBody)}`);
 }
 
 async function cleanupConversation() {

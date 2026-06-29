@@ -469,7 +469,8 @@ public class AgentSkeletonTest
         var result = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
             new AgentConfirmationRequest { ActionId = "missing", Decision = "confirm" },
-            store);
+            store,
+            CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.False(ok.Value!.Success);
@@ -480,7 +481,7 @@ public class AgentSkeletonTest
     public async Task AgentConfirmEndpoint_IgnoresRequestUserIdAndPreventsCrossUserConfirm()
     {
         var store = new InMemoryPendingAgentActionStore();
-        var pending = store.Create(
+        var pending = await store.CreateAsync(
             "user_a",
             "create_reminder_preview",
             "title",
@@ -499,7 +500,8 @@ public class AgentSkeletonTest
                 Decision = "confirm",
                 UserId = "user_a"
             },
-            store);
+            store,
+            CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.False(ok.Value!.Success);
@@ -510,7 +512,7 @@ public class AgentSkeletonTest
     public async Task AgentConfirmEndpoint_CancelReturnsCancelledAndWritesNoData()
     {
         var store = new InMemoryPendingAgentActionStore();
-        var pending = store.Create(
+        var pending = await store.CreateAsync(
             "user_a",
             "create_life_event_preview",
             "title",
@@ -524,7 +526,8 @@ public class AgentSkeletonTest
         var result = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "cancel" },
-            store);
+            store,
+            CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.True(ok.Value!.Success);
@@ -536,7 +539,8 @@ public class AgentSkeletonTest
         var secondResult = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
-            store);
+            store,
+            CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.False(secondOk.Value!.Success);
         Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, secondOk.Value.Status);
@@ -546,7 +550,7 @@ public class AgentSkeletonTest
     public async Task AgentConfirmEndpoint_ConfirmReturnsConfirmedAndWritesNoData()
     {
         var store = new InMemoryPendingAgentActionStore();
-        var pending = store.Create(
+        var pending = await store.CreateAsync(
             "user_a",
             "create_reminder_preview",
             "title",
@@ -560,7 +564,8 @@ public class AgentSkeletonTest
         var result = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
-            store);
+            store,
+            CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.True(ok.Value!.Success);
@@ -574,9 +579,10 @@ public class AgentSkeletonTest
         var secondResult = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
-            store);
+            store,
+            CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
-        Assert.False(secondOk.Value!.Success);
+        Assert.True(secondOk.Value!.Success);
         Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, secondOk.Value.Status);
     }
 
@@ -584,7 +590,7 @@ public class AgentSkeletonTest
     public async Task AgentConfirmEndpoint_ExpiredActionCannotBeConfirmed()
     {
         var store = new InMemoryPendingAgentActionStore();
-        var pending = store.Create(
+        var pending = await store.CreateAsync(
             "user_a",
             "create_reminder_preview",
             "title",
@@ -598,12 +604,123 @@ public class AgentSkeletonTest
         var result = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
             new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
-            store);
+            store,
+            CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
         Assert.False(ok.Value!.Success);
         Assert.Equal(InMemoryPendingAgentActionStore.Expired, ok.Value.Status);
         Assert.Equal(InMemoryPendingAgentActionStore.Expired, pending.Status);
+    }
+
+    [Fact]
+    public async Task PendingActionStore_CreateAddsAuditFieldsAndPreviewOnly()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_reminder_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+
+        Assert.Equal("user_a", pending.UserId);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
+        Assert.True(pending.PreviewOnly);
+        Assert.True(pending.CreatedAt > DateTimeOffset.MinValue);
+        Assert.True(pending.UpdatedAt >= pending.CreatedAt);
+        Assert.Null(pending.ConfirmedAt);
+        Assert.Null(pending.CancelledAt);
+        Assert.Null(pending.ExpiredAt);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.ProposedAction.LifecycleStatus);
+        Assert.True(pending.ProposedAction.ExpiresAt > pending.CreatedAt);
+    }
+
+    [Fact]
+    public async Task PendingActionStore_ConfirmIsPreviewOnlyAndIdempotent()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_reminder_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+
+        var first = await store.ConfirmAsync("user_a", pending.ProposedAction.ActionId, "confirm");
+        var second = await store.ConfirmAsync("user_a", pending.ProposedAction.ActionId, "confirm");
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, first.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, second.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, pending.Status);
+        Assert.NotNull(pending.ConfirmedAt);
+        Assert.Null(pending.CancelledAt);
+        AssertPreviewOnly(first.Result);
+        AssertPreviewOnly(second.Result);
+        Assert.Contains("true", JsonSerializer.Serialize(second.Result));
+    }
+
+    [Fact]
+    public async Task PendingActionStore_CancelIsPreviewOnlyAndIdempotent()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+
+        var first = await store.ConfirmAsync("user_a", pending.ProposedAction.ActionId, "cancel");
+        var second = await store.ConfirmAsync("user_a", pending.ProposedAction.ActionId, "cancel");
+        var conflictingConfirm = await store.ConfirmAsync("user_a", pending.ProposedAction.ActionId, "confirm");
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.False(conflictingConfirm.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, first.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, second.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Cancelled, pending.Status);
+        Assert.NotNull(pending.CancelledAt);
+        Assert.Null(pending.ConfirmedAt);
+        AssertPreviewOnly(first.Result);
+        AssertPreviewOnly(second.Result);
+    }
+
+    [Fact]
+    public async Task PendingActionStore_PreventsCrossUserConfirmation()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "save_memory_preview",
+            "title",
+            "summary",
+            new { previewOnly = true },
+            "medium",
+            TimeSpan.FromMinutes(10));
+
+        var response = await store.ConfirmAsync("user_b", pending.ProposedAction.ActionId, "confirm");
+
+        Assert.False(response.Success);
+        Assert.Equal("not_found", response.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
+    }
+
+    private static void AssertPreviewOnly(object? result)
+    {
+        var json = JsonSerializer.Serialize(result);
+        Assert.Contains("\"previewOnly\":true", json);
+        Assert.Contains("\"wroteData\":false", json);
     }
 
     private sealed class StubAgentTool : IAgentTool
