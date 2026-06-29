@@ -159,3 +159,34 @@ export async function clearRagChatHistory(conversationId: string) {
     return { success: false, message: errMsg || "清空历史消息连接服务器失败" };
   }
 }
+
+export async function runAgentPreview(message: string, clientTimeZone?: string) {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}/api/agent/run`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversationId: "agent_preview_default_session",
+        message,
+        clientTimeZone: clientTimeZone || "Asia/Shanghai",
+      }),
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || `Agent Preview 调用失败 (${res.status})` };
+    }
+
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "连接 Agent Preview 服务异常" };
+  }
+}

@@ -9,11 +9,13 @@ import { DailySummaryCard } from "@/components/DailySummaryCard";
 import { Loader2 } from "lucide-react";
 import { KnowledgeBase } from "@/components/KnowledgeBase";
 import { RagChat } from "@/components/RagChat";
+import { AgentPreview } from "@/components/AgentPreview";
 
 export default function Home() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<"assistant" | "knowledge" | "chat">("assistant");
+  const showAgentPreview = process.env.NEXT_PUBLIC_ENABLE_AGENT_PREVIEW === "true";
 
   const handleLogin = async () => {
     try {
@@ -143,7 +145,11 @@ export default function Home() {
               )}
 
               {activeTab === "chat" && (
-                <RagChat />
+                <div className="space-y-6">
+                  <RagChat />
+                  {/* Agent Preview is an experimental, removable entry gated by NEXT_PUBLIC_ENABLE_AGENT_PREVIEW. Removing this mount and AgentPreview.tsx should not affect the existing RAG flow. */}
+                  {showAgentPreview && <AgentPreview />}
+                </div>
               )}
             </div>
 
@@ -208,8 +214,10 @@ export default function Home() {
               )}
 
               {activeTab === "chat" && (
-                <div className="animate-in fade-in duration-500">
+                <div className="animate-in fade-in duration-500 space-y-6">
                   <RagChat />
+                  {/* Agent Preview is an experimental, removable entry gated by NEXT_PUBLIC_ENABLE_AGENT_PREVIEW. Removing this mount and AgentPreview.tsx should not affect the existing RAG flow. */}
+                  {showAgentPreview && <AgentPreview />}
                 </div>
               )}
             </div>
