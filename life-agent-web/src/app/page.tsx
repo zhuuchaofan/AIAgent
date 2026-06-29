@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { IngestForm } from "@/components/IngestForm";
 import { Timeline } from "@/components/Timeline";
@@ -10,12 +10,31 @@ import { Loader2 } from "lucide-react";
 import { KnowledgeBase } from "@/components/KnowledgeBase";
 import { RagChat } from "@/components/RagChat";
 import { AgentPreview } from "@/components/AgentPreview";
+import { getFeatureFlags } from "@/app/actions/config";
 
 export default function Home() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<"assistant" | "knowledge" | "chat">("assistant");
-  const showAgentPreview = process.env.NEXT_PUBLIC_ENABLE_AGENT_PREVIEW === "true";
+  const [showAgentPreview, setShowAgentPreview] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getFeatureFlags()
+      .then(flags => {
+        if (!cancelled) {
+          setShowAgentPreview(flags.agentPreviewEnabled);
+        }
+      })
+      .catch(error => {
+        console.error("Failed to load feature flags:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogin = async () => {
     try {

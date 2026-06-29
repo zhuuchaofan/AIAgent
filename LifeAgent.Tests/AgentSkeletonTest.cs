@@ -91,6 +91,30 @@ public class AgentSkeletonTest
         Assert.Equal("user_a", repository.LastListUserId);
     }
 
+    [Theory]
+    [InlineData("列出我的文档")]
+    [InlineData("有哪些文档")]
+    [InlineData("文档列表")]
+    public async Task AgentRunner_ChineseListDocumentsIntents_CallListDocumentsTool(string message)
+    {
+        var repository = new FakeDocumentRepository();
+        repository.Documents["user_a"] = new List<KnowledgeDocument>
+        {
+            new KnowledgeDocument { Id = "doc_a", UserId = "user_a", FileName = "a.md", Status = "success", ChunkCount = 1 }
+        };
+        var runner = CreateRunner(repository);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = message },
+            CancellationToken.None);
+
+        Assert.Equal(1, response.StepsUsed);
+        Assert.Single(response.ToolCalls);
+        Assert.Equal("list_documents", response.ToolCalls[0].ToolName);
+        Assert.Equal("success", response.ToolCalls[0].Status);
+    }
+
     [Fact]
     public async Task AgentRunner_DocumentStatusIntent_CallsGetDocumentStatusTool()
     {

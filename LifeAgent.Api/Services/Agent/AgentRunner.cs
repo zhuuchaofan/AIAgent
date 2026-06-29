@@ -142,6 +142,8 @@ public class AgentRunner
     private static bool LooksLikeListDocumentsIntent(string normalized)
     {
         return normalized.Contains("列出文档") ||
+               (normalized.Contains("列出") && normalized.Contains("文档")) ||
+               normalized.Contains("我的文档") ||
                normalized.Contains("有哪些文档") ||
                normalized.Contains("文档列表") ||
                normalized.Contains("list documents") ||
