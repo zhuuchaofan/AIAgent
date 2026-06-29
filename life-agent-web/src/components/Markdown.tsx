@@ -51,6 +51,7 @@ function parseTextForCitations(
     // Citation button
     const matchedNode = citations.find((c) => c.index === citationNumber);
     if (matchedNode) {
+      const sourceName = matchedNode.documentName || matchedNode.documentId || "未知来源";
       parts.push(
         <span
           key={`${keyPrefix}-cite-${matchIndex}`}
@@ -67,13 +68,13 @@ function parseTextForCitations(
           <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 shadow-2xl z-50 text-xs text-left font-normal normal-case">
             <span className="flex items-center gap-1.5 font-semibold text-white border-b border-zinc-800 pb-1.5 mb-1.5">
               <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-              <span className="truncate">{matchedNode.documentName}</span>
+              <span className="truncate">{sourceName}</span>
               <span className="text-[10px] text-zinc-500 font-mono ml-auto">
-                Page {matchedNode.pageNumber} | Chunk {matchedNode.chunkIndex}
+                Page {matchedNode.pageNumber || "-"} | Chunk {matchedNode.chunkIndex ?? "-"}
               </span>
             </span>
             <span className="block text-zinc-400 leading-normal line-clamp-4 italic">
-              &ldquo;{matchedNode.snippetPreview}&rdquo;
+              &ldquo;{matchedNode.snippetPreview || "暂无片段预览"}&rdquo;
             </span>
             {/* Arrow */}
             <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-zinc-900" />

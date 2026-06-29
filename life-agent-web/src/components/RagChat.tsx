@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Send,
   BookOpen,
@@ -36,7 +36,8 @@ interface Message {
 export function RagChat() {
   const { user } = useAuth();
   const { documents } = useDocuments();
-  const docs = documents.filter(d => d.status === "success");
+  const docs = useMemo(() => documents.filter(d => d.status === "success"), [documents]);
+  const availableDocIds = useMemo(() => docs.map(d => d.id), [docs]);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -104,6 +105,18 @@ export function RagChat() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // 文档删除或状态变化后，清理已不可检索的选中文档，避免请求携带无效 documentId。
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSelectedDocIds(prev => {
+        const next = prev.filter(id => availableDocIds.includes(id));
+        return next.length === prev.length ? prev : next;
+      });
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [availableDocIds]);
+
   // 文档勾选逻辑
   const handleToggleDoc = (docId: string) => {
     setSelectedDocIds(prev =>
@@ -117,7 +130,7 @@ export function RagChat() {
     if (selectedDocIds.length === docs.length) {
       setSelectedDocIds([]);
     } else {
-      setSelectedDocIds(docs.map(d => d.id));
+      setSelectedDocIds(availableDocIds);
     }
   };
 
@@ -336,14 +349,14 @@ export function RagChat() {
                             {c.index}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-zinc-300 break-all block text-xs" title={c.documentName}>
-                              {c.documentName || c.documentId}
+                            <span className="font-medium text-zinc-300 break-all block text-xs" title={c.documentName || c.documentId || "未知来源"}>
+                              {c.documentName || c.documentId || "未知来源"}
                             </span>
                             <span className="text-[10px] text-zinc-500 block font-mono">
-                              Page {c.pageNumber} | Chunk {c.chunkIndex}
+                              Page {c.pageNumber || "-"} | Chunk {c.chunkIndex ?? "-"}
                             </span>
                             <span className="text-zinc-400 text-[11px] leading-normal italic block mt-0.5 line-clamp-2 break-all">
-                              &ldquo;{c.snippetPreview}&rdquo;
+                              &ldquo;{c.snippetPreview || "暂无片段预览"}&rdquo;
                             </span>
                           </div>
                         </li>

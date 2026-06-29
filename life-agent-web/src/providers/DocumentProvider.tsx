@@ -42,6 +42,7 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const uploadRefreshTimersRef = useRef<NodeJS.Timeout[]>([]);
   const shownToastsRef = useRef<Set<string>>(new Set());
 
   // 弹窗队列控制
@@ -131,7 +132,13 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await uploadDocument(formData);
       if (res.success) {
-        fetchDocs(true);
+        await fetchDocs(true);
+
+        const timer = setTimeout(() => {
+          void fetchDocs(true);
+          uploadRefreshTimersRef.current = uploadRefreshTimersRef.current.filter(t => t !== timer);
+        }, 1200);
+        uploadRefreshTimersRef.current.push(timer);
       }
       return res;
     } catch (err) {
@@ -240,6 +247,8 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return () => {
       stopPolling();
+      uploadRefreshTimersRef.current.forEach(timer => clearTimeout(timer));
+      uploadRefreshTimersRef.current = [];
     };
   }, [stopPolling]);
 
