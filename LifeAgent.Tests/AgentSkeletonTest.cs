@@ -10,6 +10,7 @@ using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -475,6 +476,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -508,6 +510,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -536,6 +539,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -551,6 +555,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.False(secondOk.Value!.Success);
@@ -578,6 +583,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -595,6 +601,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
         var secondOk = Assert.IsType<Ok<AgentConfirmationResponse>>(secondResult);
         Assert.True(secondOk.Value!.Success);
@@ -622,6 +629,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -662,6 +670,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -699,6 +708,7 @@ public class AgentSkeletonTest
             store,
             DefaultWriteGate(),
             CreateCoordinator(store),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -742,6 +752,7 @@ public class AgentSkeletonTest
                 ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
             }),
             coordinator,
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -786,6 +797,7 @@ public class AgentSkeletonTest
             store,
             writeGate,
             coordinator,
+            NullLoggerFactory.Instance,
             CancellationToken.None);
         var second = await AgentEndpoints.ConfirmAgentActionAsync(
             context,
@@ -793,6 +805,7 @@ public class AgentSkeletonTest
             store,
             writeGate,
             coordinator,
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var firstOk = Assert.IsType<Ok<AgentConfirmationResponse>>(first);
@@ -837,6 +850,7 @@ public class AgentSkeletonTest
                 ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
             }),
             CreateCoordinator(store, lifeEvents),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -846,6 +860,48 @@ public class AgentSkeletonTest
         Assert.Null(pending.ConfirmedAt);
         Assert.False(pending.WroteData);
         AssertPreviewOnly(ok.Value.Result);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_LogsStructuredConfirmFieldsWithoutPayload()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "create_life_event",
+            "黑猫状态",
+            "记录黑猫状态",
+            new
+            {
+                type = "cat_health",
+                title = "黑猫呕吐",
+                content = "今天黑猫吐了一次，精神还可以。",
+                secret = "do-not-log"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+        var loggerFactory = new RecordingLoggerFactory();
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            DefaultWriteGate(),
+            CreateCoordinator(store),
+            loggerFactory,
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("invalid_payload", ok.Value.Status);
+        Assert.Contains(loggerFactory.Messages, item => item.Contains("Agent confirm request received", StringComparison.Ordinal));
+        Assert.Contains(loggerFactory.Messages, item => item.Contains("FeatureGateCanCreateLifeEvent=False", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(loggerFactory.Messages, item => item.Contains("ErrorCode=invalid_payload", StringComparison.Ordinal));
+        Assert.Contains(loggerFactory.Messages, item => item.Contains($"ActionId={pending.ProposedAction.ActionId}", StringComparison.Ordinal));
+        Assert.DoesNotContain(loggerFactory.Messages, item => item.Contains("今天黑猫吐了一次", StringComparison.Ordinal));
+        Assert.DoesNotContain(loggerFactory.Messages, item => item.Contains("do-not-log", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -978,7 +1034,8 @@ public class AgentSkeletonTest
     {
         return new AgentLifeEventConfirmationWriteCoordinator(
             pendingActions,
-            lifeEventService ?? new RecordingAgentLifeEventService());
+            lifeEventService ?? new RecordingAgentLifeEventService(),
+            NullLogger<AgentLifeEventConfirmationWriteCoordinator>.Instance);
     }
 
     private static void AssertWriteResult(object? result, string createdResourceId, bool idempotent)
@@ -1021,6 +1078,63 @@ public class AgentSkeletonTest
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             });
+        }
+    }
+
+    private sealed class RecordingLoggerFactory : ILoggerFactory
+    {
+        public List<string> Messages { get; } = new();
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new RecordingLogger(Messages);
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class RecordingLogger : ILogger
+    {
+        private readonly List<string> _messages;
+
+        public RecordingLogger(List<string> messages)
+        {
+            _messages = messages;
+        }
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
+        {
+            return NullScope.Instance;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            _messages.Add(formatter(state, exception));
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+
+            public void Dispose()
+            {
+            }
         }
     }
 

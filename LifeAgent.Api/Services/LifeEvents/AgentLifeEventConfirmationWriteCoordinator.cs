@@ -10,13 +10,16 @@ public class AgentLifeEventConfirmationWriteCoordinator
 
     private readonly IPendingAgentActionStore _pendingActions;
     private readonly IAgentLifeEventService _lifeEventService;
+    private readonly ILogger<AgentLifeEventConfirmationWriteCoordinator> _logger;
 
     public AgentLifeEventConfirmationWriteCoordinator(
         IPendingAgentActionStore pendingActions,
-        IAgentLifeEventService lifeEventService)
+        IAgentLifeEventService lifeEventService,
+        ILogger<AgentLifeEventConfirmationWriteCoordinator> logger)
     {
         _pendingActions = pendingActions;
         _lifeEventService = lifeEventService;
+        _logger = logger;
     }
 
     public async Task<AgentConfirmationResponse> ConfirmCreateLifeEventAsync(
@@ -28,6 +31,10 @@ public class AgentLifeEventConfirmationWriteCoordinator
         var validation = ValidatePendingAction(pending, actionId);
         if (validation is not null)
         {
+            LogResponse(
+                "Agent life_event write coordinator rejected pending action.",
+                authenticatedUserId,
+                validation);
             return validation;
         }
 
@@ -36,6 +43,12 @@ public class AgentLifeEventConfirmationWriteCoordinator
 
         try
         {
+            _logger.LogInformation(
+                "Agent life_event write started. UserId={UserId}, ActionId={ActionId}, ActionType={ActionType}, LifecycleStatus={LifecycleStatus}",
+                authenticatedUserId,
+                confirmedPending.ProposedAction.ActionId,
+                confirmedPending.ProposedAction.ActionType,
+                confirmedPending.Status);
             var payload = LifeEventActionPayloadMapper.Map(confirmedPending.ProposedAction.Payload);
             var lifeEvent = await _lifeEventService.CreateFromAgentConfirmationAsync(
                 authenticatedUserId,
@@ -43,21 +56,81 @@ public class AgentLifeEventConfirmationWriteCoordinator
                 payload,
                 cancellationToken);
 
-            return await _pendingActions.ConfirmWriteCompletedAsync(
+            var response = await _pendingActions.ConfirmWriteCompletedAsync(
                 authenticatedUserId,
                 confirmedPending.ProposedAction.ActionId,
                 CreatedResourceType,
                 lifeEvent.Id,
                 cancellationToken);
+            LogResponse(
+                "Agent life_event write completed.",
+                authenticatedUserId,
+                response);
+            return response;
         }
         catch (ArgumentException ex)
         {
-            return Failed(confirmedPending.ProposedAction.ActionId, "invalid_payload", ex.Message, confirmedPending);
+            var response = Failed(confirmedPending.ProposedAction.ActionId, "invalid_payload", ex.Message, confirmedPending);
+            LogResponse(
+                "Agent life_event write invalid_payload.",
+                authenticatedUserId,
+                response);
+            return response;
         }
         catch (InvalidOperationException ex)
         {
-            return Failed(confirmedPending.ProposedAction.ActionId, "write_failed", ex.Message, confirmedPending);
+            var response = Failed(confirmedPending.ProposedAction.ActionId, "write_failed", ex.Message, confirmedPending);
+            LogResponse(
+                "Agent life_event write write_failed.",
+                authenticatedUserId,
+                response);
+            return response;
         }
+    }
+
+    private void LogResponse(
+        string message,
+        string userId,
+        AgentConfirmationResponse response)
+    {
+        var result = System.Text.Json.JsonSerializer.SerializeToElement(response.Result ?? new { });
+        var previewOnly = ReadBool(result, "previewOnly");
+        var wroteData = ReadBool(result, "wroteData");
+        var createdResourceType = ReadString(result, "createdResourceType");
+        var createdResourceId = ReadString(result, "createdResourceId");
+        var idempotent = ReadBool(result, "idempotent");
+
+        _logger.LogInformation(
+            "{Message} UserId={UserId}, ActionId={ActionId}, ActionType={ActionType}, ErrorCode={ErrorCode}, LifecycleStatus={LifecycleStatus}, PreviewOnly={PreviewOnly}, WroteData={WroteData}, CreatedResourceType={CreatedResourceType}, CreatedResourceId={CreatedResourceId}, Idempotent={Idempotent}",
+            message,
+            userId,
+            response.ActionId,
+            response.ActionType,
+            response.Status,
+            response.LifecycleStatus,
+            previewOnly,
+            wroteData,
+            createdResourceType,
+            createdResourceId,
+            idempotent);
+    }
+
+    private static bool? ReadBool(System.Text.Json.JsonElement element, string propertyName)
+    {
+        return element.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+            ? property.GetBoolean()
+            : null;
+    }
+
+    private static string? ReadString(System.Text.Json.JsonElement element, string propertyName)
+    {
+        return element.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind == System.Text.Json.JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private static AgentConfirmationResponse? ValidatePendingAction(

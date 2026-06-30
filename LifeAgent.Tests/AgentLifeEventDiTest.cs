@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LifeAgent.Tests;
 
@@ -69,6 +71,7 @@ public class AgentLifeEventDiTest
             pendingActions,
             services.GetRequiredService<IAgentWriteFeatureGate>(),
             services.GetRequiredService<AgentLifeEventConfirmationWriteCoordinator>(),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -113,6 +116,7 @@ public class AgentLifeEventDiTest
             pendingActions,
             services.GetRequiredService<IAgentWriteFeatureGate>(),
             services.GetRequiredService<AgentLifeEventConfirmationWriteCoordinator>(),
+            NullLoggerFactory.Instance,
             CancellationToken.None);
 
         var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
@@ -132,6 +136,7 @@ public class AgentLifeEventDiTest
         var services = new ServiceCollection();
 
         services.AddSingleton<IConfiguration>(configuration);
+        services.AddLogging();
         services.AddSingleton<IAgentWriteFeatureGate, AgentWriteFeatureGate>();
         services.AddSingleton<IPendingAgentActionStore, InMemoryPendingAgentActionStore>();
         services.AddScoped<AgentLifeEventConfirmationWriteCoordinator>();

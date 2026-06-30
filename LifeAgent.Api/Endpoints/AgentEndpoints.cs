@@ -45,6 +45,7 @@ public static class AgentEndpoints
         [FromServices] IPendingAgentActionStore pendingActions,
         [FromServices] IAgentWriteFeatureGate agentWriteFeatureGate,
         [FromServices] AgentLifeEventConfirmationWriteCoordinator lifeEventWriteCoordinator,
+        [FromServices] ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var userId = httpContext.Items["userId"] as string;
@@ -58,28 +59,96 @@ public static class AgentEndpoints
 
         async Task<IResult> ConfirmAsync()
         {
+            var logger = loggerFactory.CreateLogger("AgentEndpoints");
             var actionId = request.ActionId ?? string.Empty;
             var normalizedDecision = (request.Decision ?? string.Empty).Trim().ToLowerInvariant();
+            logger.LogInformation(
+                "Agent confirm request received. UserId={UserId}, ActionId={ActionId}, Decision={Decision}",
+                userId, actionId, normalizedDecision);
+
             if (normalizedDecision == "confirm")
             {
                 var pending = await pendingActions.GetAsync(userId, actionId, cancellationToken);
+                var canCreateLifeEvent = agentWriteFeatureGate.CanCreateLifeEvent();
+                logger.LogInformation(
+                    "Agent confirm action lookup completed. UserId={UserId}, ActionId={ActionId}, ActionFound={ActionFound}, ActionType={ActionType}, LifecycleStatus={LifecycleStatus}, FeatureGateCanCreateLifeEvent={FeatureGateCanCreateLifeEvent}",
+                    userId,
+                    actionId,
+                    pending is not null,
+                    pending?.ProposedAction.ActionType,
+                    pending?.Status,
+                    canCreateLifeEvent);
+
                 if (IsCreateLifeEventWriteAction(pending?.ProposedAction.ActionType) &&
-                    agentWriteFeatureGate.CanCreateLifeEvent())
+                    canCreateLifeEvent)
                 {
+                    logger.LogInformation(
+                        "Agent confirm entering real write branch. UserId={UserId}, ActionId={ActionId}, ActionType={ActionType}, FeatureGateCanCreateLifeEvent={FeatureGateCanCreateLifeEvent}",
+                        userId, actionId, pending!.ProposedAction.ActionType, canCreateLifeEvent);
                     var writeResponse = await lifeEventWriteCoordinator.ConfirmCreateLifeEventAsync(userId, actionId, cancellationToken);
+                    LogConfirmResponse(logger, "Agent confirm real write branch completed.", userId, writeResponse);
                     return Results.Ok(writeResponse);
                 }
 
                 var validation = ValidateCreateLifeEventPreviewOnlyPath(pending);
                 if (validation is not null)
                 {
+                    LogConfirmResponse(logger, "Agent confirm preview validation failed.", userId, validation);
                     return Results.Ok(validation);
                 }
             }
 
             var response = await pendingActions.ConfirmAsync(userId, actionId, normalizedDecision, cancellationToken);
+            LogConfirmResponse(logger, "Agent confirm preview-only branch completed.", userId, response);
             return Results.Ok(response);
         }
+    }
+
+    private static void LogConfirmResponse(
+        ILogger logger,
+        string message,
+        string userId,
+        AgentConfirmationResponse response)
+    {
+        var result = System.Text.Json.JsonSerializer.SerializeToElement(response.Result ?? new { });
+        var previewOnly = ReadBool(result, "previewOnly");
+        var wroteData = ReadBool(result, "wroteData");
+        var createdResourceType = ReadString(result, "createdResourceType");
+        var createdResourceId = ReadString(result, "createdResourceId");
+        var idempotent = ReadBool(result, "idempotent");
+
+        logger.LogInformation(
+            "{Message} UserId={UserId}, ActionId={ActionId}, ActionType={ActionType}, Success={Success}, ErrorCode={ErrorCode}, LifecycleStatus={LifecycleStatus}, PreviewOnly={PreviewOnly}, WroteData={WroteData}, CreatedResourceType={CreatedResourceType}, CreatedResourceId={CreatedResourceId}, Idempotent={Idempotent}",
+            message,
+            userId,
+            response.ActionId,
+            response.ActionType,
+            response.Success,
+            response.Status,
+            response.LifecycleStatus,
+            previewOnly,
+            wroteData,
+            createdResourceType,
+            createdResourceId,
+            idempotent);
+    }
+
+    private static bool? ReadBool(System.Text.Json.JsonElement element, string propertyName)
+    {
+        return element.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+            ? property.GetBoolean()
+            : null;
+    }
+
+    private static string? ReadString(System.Text.Json.JsonElement element, string propertyName)
+    {
+        return element.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind == System.Text.Json.JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private static AgentConfirmationResponse? ValidateCreateLifeEventPreviewOnlyPath(
