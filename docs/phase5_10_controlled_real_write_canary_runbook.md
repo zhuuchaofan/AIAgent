@@ -27,27 +27,29 @@ All items must be checked before execution.
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| User explicitly approves real-write canary | TODO | Approval must happen after this runbook is reviewed. |
-| Firestore Rules acceptance conclusion recorded | TODO | See section 2. |
-| Dedicated smoke test userId recorded | TODO | See section 3. |
-| Previous healthy API revision recorded | TODO | See section 4. |
-| Cloud Run logs query ready | TODO | See section 5. |
-| Cleanup owner and scope confirmed | TODO | See section 6. |
-| Current Cloud Run env confirmed preview-only | TODO | Both write flags must be unset or false before canary. |
-| Rollback commands ready | TODO | See section 13. |
-| No unrelated deployment in progress | TODO | Canary must be isolated. |
+| User explicitly approves real-write canary | NO | Waiting for another explicit user approval. |
+| Firestore Rules acceptance conclusion recorded | TODO_USER_CONFIRM | See section 2. |
+| Dedicated smoke test userId recorded | TODO_USER_CONFIRM | See section 3. |
+| Previous healthy API revision recorded | READY | Current verified preview-only revision: `life-agent-api-00035-tnf`. |
+| Cloud Run logs query ready | READY | Copyable commands are listed in section 5. |
+| Cleanup owner and scope confirmed | PARTIAL | Owner is `小朱`; test userId remains TODO. |
+| Current Cloud Run env confirmed preview-only | READY | Verified read-only: write flags unset, mock auth/LLM false. |
+| Rollback commands ready | READY | See section 13. |
+| No unrelated deployment in progress | TODO_USER_CONFIRM | Canary must be isolated. |
 
 If any item is TODO, Phase 5.10 remains No-Go.
+
+Current decision: No-Go. Do not execute canary until Firestore Rules acceptance, dedicated smoke test userId, and explicit user approval are recorded.
 
 ## 2. Firestore Rules Acceptance Conclusion
 
 Record the final decision before canary:
 
 ```text
-Decision: TODO
-Accepted by: TODO
-Date/time: TODO
-Rationale: TODO
+Decision: TODO_USER_CONFIRM
+Accepted by: TODO_USER_CONFIRM
+Date/time: TODO_USER_CONFIRM
+Rationale: TODO_USER_CONFIRM
 ```
 
 Known considerations:
@@ -64,10 +66,11 @@ No-Go if the rules posture is unknown or disputed.
 Fill before canary:
 
 ```text
-Test userId: TODO
-Test account owner: TODO
-Account contains real personal data: TODO yes/no
-Cleanup contact: TODO
+Test userId: TODO_USER_CONFIRM
+Test account owner: 小朱
+Account contains real personal data: TODO_USER_CONFIRM yes/no
+Cleanup contact: 小朱
+Smoke data marker: [SMOKE TEST]
 ```
 
 Requirements:
@@ -82,9 +85,10 @@ Requirements:
 Fill before canary:
 
 ```text
-Current preview-only API revision: TODO
-Previous healthy rollback revision: TODO
-Web revision: TODO
+Current preview-only API revision: life-agent-api-00035-tnf
+Previous healthy rollback revision: life-agent-api-00035-tnf
+Web revision: life-agent-web-00018-bpq
+Read-only check result: life-agent-api-00035-tnf receives 100% traffic.
 ```
 
 Expected current baseline from Phase 5.7:
@@ -109,6 +113,42 @@ gcloud logging read \
    jsonPayload.actionId="<ACTION_ID>"' \
   --project copper-affinity-467409-k7 \
   --limit 50 \
+  --format json
+```
+
+Copyable query for the planned canary action:
+
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision"
+   resource.labels.service_name="life-agent-api"
+   (jsonPayload.actionId="<ACTION_ID>" OR textPayload:"<ACTION_ID>")' \
+  --project copper-affinity-467409-k7 \
+  --limit 100 \
+  --format json
+```
+
+Copyable query for write results:
+
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision"
+   resource.labels.service_name="life-agent-api"
+   (jsonPayload.wroteData=true OR textPayload:"wroteData")' \
+  --project copper-affinity-467409-k7 \
+  --limit 100 \
+  --format json
+```
+
+Copyable query for failure signals:
+
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision"
+   resource.labels.service_name="life-agent-api"
+   (textPayload:"write_failed" OR textPayload:"invalid_payload" OR textPayload:"cross-user")' \
+  --project copper-affinity-467409-k7 \
+  --limit 100 \
   --format json
 ```
 
@@ -145,11 +185,13 @@ Do not log or copy Firebase tokens, auth headers, full payload JSON, secrets, or
 Fill before canary:
 
 ```text
-Cleanup owner: TODO
-Cleanup approver: TODO
-Cleanup window: TODO
+Cleanup owner: 小朱
+Cleanup approver: 小朱
+Cleanup window: TODO_USER_CONFIRM
 Allowed cleanup path: users/{testUserId}/life_events
 Allowed pending action path: users/{testUserId}/agent_pending_actions
+Smoke data marker: [SMOKE TEST]
+Current test userId: TODO_USER_CONFIRM
 ```
 
 Cleanup is limited to:
@@ -181,6 +223,17 @@ USE_MOCK_AUTH=false
 USE_MOCK_LLM=false
 ENABLE_AGENT_WRITE_TOOLS: not set or false
 ENABLE_CREATE_LIFE_EVENT_TOOL: not set or false
+```
+
+Current read-only check:
+
+```text
+status.url = https://life-agent-api-hyo2yvwwia-uc.a.run.app
+traffic = 100% to life-agent-api-00035-tnf
+USE_MOCK_AUTH=false
+USE_MOCK_LLM=false
+ENABLE_AGENT_WRITE_TOOLS: not set
+ENABLE_CREATE_LIFE_EVENT_TOOL: not set
 ```
 
 Stop if either write flag is already true.
@@ -372,3 +425,21 @@ Only a later explicit user approval may authorize Phase 5.10 canary execution. T
 - Running one controlled real `create_life_event` write using the dedicated smoke user.
 
 Until that approval is given, Phase 5.10 remains No-Go.
+
+## 16. Current No-Go Summary
+
+Current state remains No-Go.
+
+Blocking manual confirmations:
+
+- `dedicated smoke test userId = TODO_USER_CONFIRM`
+- `Firestore Rules acceptance conclusion = TODO_USER_CONFIRM`
+- `User explicit approval for real-write canary = NO`
+
+Therefore:
+
+- Do not deploy.
+- Do not modify Cloud Run env.
+- Do not enable write flags.
+- Do not set real-write smoke env vars.
+- Do not execute real writes.
