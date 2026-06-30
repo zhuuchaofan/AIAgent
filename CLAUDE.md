@@ -176,3 +176,10 @@ Project phase definitions are maintained in `docs/lifeos_project_roadmap.md` (si
 - `InternalsVisibleTo("LifeAgent.Tests")` is set in `Program.cs`, allowing tests to access internal members.
 - Mock services (`MockLlmService`, `MockEmbeddingService`, `MockRagAnswerGenerator`) use keyword/rule-based logic — useful for understanding expected behavior without hitting real APIs.
 - The `BasicChunker` splits documents by page/section with configurable max chunk size.
+
+## AI Skills & Guidelines
+
+When performing specific operations, Claude Code will automatically match skills defined under `.claude/skills/`. The canonical source of truth for these instructions is maintained in `docs/skills/`:
+
+- **Project Phase Assessment**: Refer to [docs/skills/lifeos-phase-assessment.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/skills/lifeos-phase-assessment.md) (Adapter: `.claude/skills/lifeos-phase-assessment/SKILL.md`)
+- **Cloud Run Deployment**: Refer to [docs/skills/cloud-run-deploy.md](file:///Volumes/fanxiang/01_Development/google_Agent/AIAgent/docs/skills/cloud-run-deploy.md) (Adapter: `.claude/skills/cloud-run-deploy/SKILL.md`)
