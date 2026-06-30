@@ -202,6 +202,67 @@ public class AgentSkeletonTest
     }
 
     [Fact]
+    public async Task AgentRunner_LifeEventPreviewIntent_ReturnsValidCreateLifeEventProposedAction()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var runner = CreateRunner(new FakeDocumentRepository(), pendingActions: store);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest
+            {
+                Message = "[SMOKE TEST] 请新增一条 life_event 生活事件记录：今天黑猫吐了一次。type=pet_health，title=黑猫呕吐观察，content=今天黑猫吐了一次，暂时观察精神和食欲。"
+            },
+            CancellationToken.None);
+
+        Assert.Equal("preview_confirmation", response.Mode);
+        Assert.True(response.RequiresConfirmation);
+        Assert.NotNull(response.ProposedAction);
+        Assert.Equal("create_life_event", response.ProposedAction!.ActionType);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, response.ProposedAction.LifecycleStatus);
+        Assert.True(response.ProposedAction.RequiresConfirmation);
+
+        var request = LifeEventActionPayloadMapper.Map(response.ProposedAction.Payload);
+        Assert.Equal("pet_health", request.Type);
+        Assert.Equal("黑猫呕吐观察", request.Title);
+        Assert.Contains("黑猫吐了一次", request.Content);
+        Assert.Equal("黑猫", request.StructuredData["catName"]);
+        Assert.False(JsonSerializer.Serialize(response.ProposedAction.Payload).Contains("userId", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task AgentRunner_LifeEventPreviewIntent_FlagsOffConfirmsPreviewOnly()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var runner = CreateRunner(new FakeDocumentRepository(), pendingActions: store);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest
+            {
+                Message = "[SMOKE TEST] 请新增一条 life_event 生活事件记录：今天黑猫吐了一次。type=pet_health，title=黑猫呕吐观察，content=今天黑猫吐了一次，暂时观察精神和食欲。"
+            },
+            CancellationToken.None);
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = response.ProposedAction!.ActionId, Decision = "confirm" },
+            store,
+            DefaultWriteGate(),
+            CreateCoordinator(store),
+            NullLoggerFactory.Instance,
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.True(ok.Value!.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.LifecycleStatus);
+        AssertPreviewOnly(ok.Value.Result);
+    }
+
+    [Fact]
     public async Task AgentRunner_RagIntent_CallsAnswerWithRagAndPreservesCitations()
     {
         var repository = new FakeDocumentRepository();

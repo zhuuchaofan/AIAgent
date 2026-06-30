@@ -46,7 +46,7 @@ async function checkHealth() {
 }
 
 async function runAgentLifeEventProposal() {
-  const message = `${config.prefix} 帮我记一下：今天黑猫吐了一次`;
+  const message = `${config.prefix} 请新增一条 life_event 生活事件记录：今天黑猫吐了一次。type=pet_health，title=黑猫呕吐观察，content=今天黑猫吐了一次，暂时观察精神和食欲。`;
   const res = await request(`${config.apiBaseUrl}/api/agent/run`, {
     method: "POST",
     headers: {

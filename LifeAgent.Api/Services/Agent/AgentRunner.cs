@@ -181,25 +181,28 @@ public class AgentRunner
         var actionType = LooksLikeReminderPreviewIntent(normalized)
             ? "create_reminder_preview"
             : LooksLikeLifeEventPreviewIntent(normalized)
-                ? "create_life_event_preview"
+                ? "create_life_event"
                 : "save_memory_preview";
         var title = actionType switch
         {
             "create_reminder_preview" => BuildReminderPreviewTitle(message),
-            "create_life_event_preview" => "记录一条生活事件",
+            "create_life_event" => BuildLifeEventPreviewTitle(message),
             _ => "保存一条记忆"
         };
+        var payload = actionType == "create_life_event"
+            ? BuildLifeEventPreviewPayload(message)
+            : new
+            {
+                originalMessage = message,
+                previewOnly = true
+            };
 
         var pending = await _pendingActions.CreateAsync(
             userId,
             actionType,
             title,
             "Agent 建议创建一条写入动作，但当前阶段仅支持确认流程预览，不会真正写入数据。",
-            new
-            {
-                originalMessage = message,
-                previewOnly = true
-            },
+            payload,
             "medium",
             TimeSpan.FromMinutes(10),
             cancellationToken);
@@ -214,6 +217,9 @@ public class AgentRunner
                normalized.Contains("提醒我") ||
                normalized.Contains("记到生活记录") ||
                normalized.Contains("生活记录里") ||
+               normalized.Contains("生活事件") ||
+               normalized.Contains("life_event") ||
+               normalized.Contains("create_life_event") ||
                normalized.Contains("保存记忆") ||
                normalized.Contains("save memory") ||
                normalized.Contains("create reminder");
@@ -229,7 +235,11 @@ public class AgentRunner
     private static bool LooksLikeLifeEventPreviewIntent(string normalized)
     {
         return normalized.Contains("生活记录") ||
-               normalized.Contains("记到生活记录");
+               normalized.Contains("记到生活记录") ||
+               normalized.Contains("生活事件") ||
+               normalized.Contains("life_event") ||
+               normalized.Contains("create_life_event") ||
+               normalized.Contains("create life event");
     }
 
     private static string BuildReminderPreviewTitle(string message)
@@ -237,6 +247,43 @@ public class AgentRunner
         return message.Contains("黑猫", StringComparison.OrdinalIgnoreCase)
             ? "明天观察黑猫状态"
             : "创建一条提醒预览";
+    }
+
+    private static string BuildLifeEventPreviewTitle(string message)
+    {
+        return message.Contains("黑猫", StringComparison.OrdinalIgnoreCase)
+            ? "黑猫呕吐观察"
+            : "记录一条生活事件";
+    }
+
+    private static object BuildLifeEventPreviewPayload(string message)
+    {
+        var containsCat = message.Contains("黑猫", StringComparison.OrdinalIgnoreCase) ||
+                          message.Contains("猫", StringComparison.OrdinalIgnoreCase);
+        var containsVomit = message.Contains("吐", StringComparison.OrdinalIgnoreCase) ||
+                            message.Contains("呕吐", StringComparison.OrdinalIgnoreCase);
+        var type = containsCat || containsVomit ? "pet_health" : "life_event";
+        var title = BuildLifeEventPreviewTitle(message);
+        var content = containsCat && containsVomit
+            ? "今天黑猫吐了一次，暂时观察精神和食欲。"
+            : "Agent 根据用户确认请求生成一条生活事件预览。";
+        var tags = containsCat
+            ? new[] { "猫", "健康" }
+            : new[] { "生活事件" };
+
+        return new
+        {
+            type,
+            title,
+            content,
+            structuredData = new
+            {
+                tags,
+                catName = containsCat ? "黑猫" : null,
+                importance = containsVomit ? 2 : 1,
+                rawExtractedHints = "agent_preview_life_event"
+            }
+        };
     }
 
     private static bool LooksLikeDocumentStatusIntent(string normalized)
