@@ -28,28 +28,28 @@ All items must be checked before execution.
 | Item | Status | Notes |
 | --- | --- | --- |
 | User explicitly approves real-write canary | NO | Waiting for another explicit user approval. |
-| Firestore Rules acceptance conclusion recorded | TODO_USER_CONFIRM | See section 2. |
-| Dedicated smoke test userId recorded | TODO_USER_CONFIRM | See section 3. |
+| Firestore Rules acceptance conclusion recorded | READY | Accepted for one backend Admin SDK canary; see section 2. |
+| Dedicated smoke test userId recorded | READY | `2k5UiLxtfCaOZiUUc2yPbwpxQpw1`; see section 3. |
 | Previous healthy API revision recorded | READY | Current verified preview-only revision: `life-agent-api-00035-tnf`. |
 | Cloud Run logs query ready | READY | Copyable commands are listed in section 5. |
-| Cleanup owner and scope confirmed | PARTIAL | Owner is `小朱`; test userId remains TODO. |
+| Cleanup owner and scope confirmed | PARTIAL | Owner and test userId recorded; cleanup window and account data status remain TODO. |
 | Current Cloud Run env confirmed preview-only | READY | Verified read-only: write flags unset, mock auth/LLM false. |
 | Rollback commands ready | READY | See section 13. |
 | No unrelated deployment in progress | TODO_USER_CONFIRM | Canary must be isolated. |
 
 If any item is TODO, Phase 5.10 remains No-Go.
 
-Current decision: No-Go. Do not execute canary until Firestore Rules acceptance, dedicated smoke test userId, and explicit user approval are recorded.
+Current decision: No-Go. Do not execute canary until explicit user approval is recorded.
 
 ## 2. Firestore Rules Acceptance Conclusion
 
 Record the final decision before canary:
 
 ```text
-Decision: TODO_USER_CONFIRM
-Accepted by: TODO_USER_CONFIRM
+Decision: Accepted for one backend Admin SDK canary.
+Accepted by: 小朱
 Date/time: TODO_USER_CONFIRM
-Rationale: TODO_USER_CONFIRM
+Rationale: Current create_life_event canary writes through the backend Admin SDK and does not depend on client direct Firestore access. Client read verification involving Firestore Rules will be validated separately.
 ```
 
 Known considerations:
@@ -66,12 +66,14 @@ No-Go if the rules posture is unknown or disputed.
 Fill before canary:
 
 ```text
-Test userId: TODO_USER_CONFIRM
+Test userId: 2k5UiLxtfCaOZiUUc2yPbwpxQpw1
 Test account owner: 小朱
 Account contains real personal data: TODO_USER_CONFIRM yes/no
 Cleanup contact: 小朱
 Smoke data marker: [SMOKE TEST]
 ```
+
+Do not record the Firebase ID token, print the full token, or write the token to any repository file.
 
 Requirements:
 
@@ -191,7 +193,7 @@ Cleanup window: TODO_USER_CONFIRM
 Allowed cleanup path: users/{testUserId}/life_events
 Allowed pending action path: users/{testUserId}/agent_pending_actions
 Smoke data marker: [SMOKE TEST]
-Current test userId: TODO_USER_CONFIRM
+Current test userId: 2k5UiLxtfCaOZiUUc2yPbwpxQpw1
 ```
 
 Cleanup is limited to:
@@ -432,9 +434,9 @@ Current state remains No-Go.
 
 Blocking manual confirmations:
 
-- `dedicated smoke test userId = TODO_USER_CONFIRM`
-- `Firestore Rules acceptance conclusion = TODO_USER_CONFIRM`
 - `User explicit approval for real-write canary = NO`
+- `Account contains real personal data = TODO_USER_CONFIRM`
+- `Cleanup window = TODO_USER_CONFIRM`
 
 Therefore:
 
