@@ -24,6 +24,7 @@ async function main() {
   console.log("LifeAgent RAG smoke test");
   console.log(`API: ${config.apiBaseUrl || "(not configured)"}`);
   console.log(`WEB: ${config.webBaseUrl}`);
+  console.log(`Token check in RAG script: length = ${config.token.length}, prefix = ${config.token.slice(0, 40)}`);
 
   if (!config.apiBaseUrl) {
     skip("API /health and authenticated RAG flow", "API_BASE_URL is not set. Get it with: gcloud run services describe life-agent-api --region us-central1 --format='value(status.url)'");
@@ -291,7 +292,7 @@ function skip(name, reason) {
 
 function authHeaders() {
   return {
-    authorization: `Bearer ${config.token}`
+    Authorization: `Bearer ${config.token}`
   };
 }
 
