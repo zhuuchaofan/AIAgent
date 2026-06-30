@@ -2,11 +2,11 @@
 
 ## Scope
 
-Phase 5.9 is the final decision checklist before enabling real Agent `create_life_event` writes.
+Phase 5.9 is a Release Gate decision checklist before enabling real Agent `create_life_event` writes.
 
 This phase does not deploy, does not modify Cloud Run env, does not enable write flags, does not execute real writes, and does not modify Firestore Rules or Firebase Auth.
 
-Real write enablement is only allowed in a later explicitly approved phase, recommended as Phase 5.10 Controlled Real-Write Canary Execution.
+Phase 5 Development is closed. Real write enablement is only allowed in a later explicitly approved Release Gate canary execution step.
 
 ## Current Baseline
 
@@ -278,13 +278,13 @@ Phase 5.9 does not allow enabling real writes.
 
 Real write enablement must not happen in this phase.
 
-The earliest allowed real-write step is a separately approved:
+The earliest allowed real-write step is a separately approved Release Gate action:
 
 ```text
-Phase 5.10 Controlled Real-Write Canary Execution
+Controlled Real-Write Canary Execution
 ```
 
-Phase 5.10 must be explicitly approved again before any of the following occur:
+It must be explicitly approved again before any of the following occur:
 
 - Set `ENABLE_AGENT_WRITE_TOOLS=true`.
 - Set `ENABLE_CREATE_LIFE_EVENT_TOOL=true`.

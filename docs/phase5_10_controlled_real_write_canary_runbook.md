@@ -2,9 +2,11 @@
 
 ## Scope
 
-Phase 5.10 is currently runbook-only and defaults to No-Go.
+Phase 5.10 is a Release Gate runbook and currently defaults to No-Go.
 
 This document defines the exact checklist and commands for a future controlled `create_life_event` real-write canary. It does not authorize execution by itself.
+
+Phase 5 Development is closed. This runbook is a release/operations artifact, not a development Phase.
 
 Current phase restrictions:
 
@@ -426,7 +428,7 @@ Only a later explicit user approval may authorize Phase 5.10 canary execution. T
 - Setting `EXPECT_AGENT_WRITE_ENABLED=true`.
 - Running one controlled real `create_life_event` write using the dedicated smoke user.
 
-Until that approval is given, Phase 5.10 remains No-Go.
+Until that approval is given, this Release Gate runbook remains No-Go.
 
 ## 16. Current No-Go Summary
 

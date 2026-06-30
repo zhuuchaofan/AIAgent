@@ -1,6 +1,6 @@
 # LifeAgent 项目阶段评估
 
-> 评估日期：2026-06-27
+> 评估日期：2026-06-30
 > 评估依据：实际代码、API 端点、前端组件、测试文件、部署配置、docs/ 文档
 
 ---
@@ -11,19 +11,23 @@
 
 | 阶段 | 文档定义 | 完成状态 | 说明 |
 |------|---------|----------|------|
-| Phase 1 | 生活记录 MVP | ✅ 100% 完成 | 自由文本摄入 → LLM 解析 → Firestore 存储 → 时间线查询 |
-| Phase 2 | 智能助理 | ✅ 100% 完成 | 事件编辑/删除、提醒闭环、每日总结、数据迁移 |
+| Phase 1 | 基础应用层 | ✅ 100% 完成 | Web + API + Auth + Firestore + Cloud Run |
+| Phase 2 | 生活数据层 | ✅ 100% 完成 | 事件编辑/删除、提醒闭环、每日总结、数据迁移 |
 | Phase 3 | 知识接入层（RAG） | ✅ 100% 完成 | 文档上传/处理管线、向量化、RAG 问答、引用验证、对话管理 |
+| Phase 4 | Agent 化 MVP | ✅ 100% 完成 | Agent Preview + proposedAction + 确认状态机 + pending action |
+| Phase 5 | Agent Write MVP | ✅ Development Complete | `create_life_event` feature-gated 写入路径，默认关闭 |
+| Release Gate | 真实写入发布闸门 | 🟡 No-Go | canary / production enablement / gradual rollout，需单独批准 |
+| Phase 6 | Memory Engine（长期记忆） | 🟡 当前开发阶段 | 长期记忆模型与能力待启动 |
 
 ### 按产品能力定义
 
-当前属于 **RAG MVP 完成**，系统仍为被动响应式应用。
+当前属于 **Agent Write MVP Development Complete**，系统已具备 feature-gated `create_life_event` 写入路径，但生产真实写入仍关闭。
 
 > **重要说明**：项目文档中的 "Phase 3" 定义为**知识接入层（RAG）**，而非 Agent 能力。
 > `docs/phase3/phase3_non_goals.md` 明确将 "no agentic tool-use" 列为非目标。
 > 因此，真正的 Agent 化应作为 **Phase 4** 规划。
 
-**当前系统的本质**：一个功能完整的被动式知识管理 + RAG 问答应用，所有交互均由用户主动发起。
+**当前系统的本质**：一个已完成基础生活数据、RAG、Agent Preview 和第一个 Agent Write MVP 的 LifeAgent；真实写入上线属于 Release Gate，下一开发阶段是 Phase 6 Memory Engine。
 
 ---
 
@@ -83,7 +87,7 @@
 | 嵌入维度异常检测 | ✅ RagChatService | — | ✅ 512 vs 768 维测试 |
 | GCP 基础设施脚本 | ✅ setup-phase3-infra.sh | — | — |
 
-### Phase 3.5 — 稳定化（非正式阶段，已部分完成）
+### Phase 3.5 — 稳定化（非正式阶段，已吸收到后续阶段）
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
@@ -91,9 +95,9 @@
 | 横向溢出修复 | ✅ | Markdown.tsx + RagChat.tsx 多处 overflow 修复 |
 | 部署流程标准化文档 | ✅ | docs/cloud-run-deploy-skill.md |
 | 后端单元测试 | ✅ | 41 个测试，覆盖 RAG、文档管道、提醒状态机、向量存储 |
-| 前端测试 | ❌ | 0 个测试（Jest/Vitest/Playwright 均无） |
-| E2E / 集成测试 | ❌ | 无 |
-| Firestore Security Rules | ❓ | 未找到 firestore.rules 文件 |
+| 前端测试 | ❌ | 仍需后续补齐 |
+| E2E / 集成测试 | 🟡 | smoke 脚本已覆盖关键线上链路，完整 Playwright 仍未补齐 |
+| Firestore Security Rules | 🟡 | 已有 rules 文件与 Phase 5.1 hardening 文档；真实写入上线前仍需 Release Gate 决策 |
 | API Rate Limiting | ❌ | 无限流保护 |
 | 错误监控/告警 | ❌ | 无 Sentry / Cloud Error Reporting |
 | README.md | ❌ | 项目根目录缺少 README |
@@ -129,100 +133,99 @@
 
 ## 4. 下一阶段建议
 
-### Phase 3.5 — 稳定化、安全、测试（建议先做，1-2 周）
+### Phase 6 — Memory Engine（建议下一开发阶段）
 
 优先级排序：
 
 | 优先级 | 任务 | 说明 |
 |--------|------|------|
-| P0 | API Rate Limiting | ASP.NET Core middleware，每用户每分钟限制 LLM/Embedding 调用次数 |
-| P0 | Gemini 成本预算警戒 | 设定月度预算上限，监控异常调用 |
-| P1 | 前端 Smoke Tests | Vitest + React Testing Library，覆盖 7 个组件基本渲染和交互 |
-| P1 | 确认 Firestore Security Rules | 检查是否有 rules 文件；如无则创建基本规则 |
-| P2 | E2E 基础测试 | Playwright 覆盖：登录 → 摄入 → RAG 问答 → 清除对话 |
-| P2 | 错误监控 | 接入 Cloud Error Reporting 或 Sentry |
-| P3 | README.md | 基于 CLAUDE.md 内容写对外 README |
-| P3 | 多会话支持 | 将硬编码的 `rag_default_session` 改为可创建/切换多个对话 |
+| P0 | Memory 数据模型 | 定义长期事实、偏好、目标、习惯、来源、审计字段 |
+| P0 | Memory 权限边界 | `userId` 只能来自认证上下文，写入必须可审计 |
+| P1 | Memory 提取与确认 | 从 life events / RAG / chat 中提取候选记忆，但先确认后保存 |
+| P1 | Memory 检索 | Agent 在回答或建议前可读取相关长期记忆 |
+| P2 | Memory 更新/删除 | 支持用户撤销、修改、清理长期记忆 |
+| P2 | Release Gate 分离 | 真实写入 canary / 生产启用继续留在 Release Gate |
 
-### Phase 4 — 真正 Agent 化（Phase 3.5 完成后）
+### Release Gate — 真实写入上线（非开发 Phase）
 
-详见下一节。
+以下事项不属于 Phase 6 开发：
+
+- 打开 `ENABLE_AGENT_WRITE_TOOLS`
+- 打开 `ENABLE_CREATE_LIFE_EVENT_TOOL`
+- 执行 real-write canary
+- Production Enablement
+- Gradual Rollout
+
+Release Gate 的执行细节以 `docs/phase5_10_controlled_real_write_canary_runbook.md` 为准。
 
 ---
 
-## 5. Phase 4 MVP 初步定义
+## 5. Phase 6 Memory Engine 初步定义
 
 ### 产品定位
 
-**每日复盘 Agent** — 从被动 RAG 问答升级为**主动驱动的生活复盘和建议生成**。
+**Memory Engine** — 从单次会话和单条生活记录，升级为可审计、可撤销、可检索的长期记忆系统。
 
 ### 核心流程
 
 ```
-用户点击"生成今日复盘"
+用户产生生活记录 / RAG 对话 / Agent 交互
   │
   ▼
-Agent 读取数据（工具调用）
-  ├─ search_life_events — 搜索今日记录
-  ├─ get_pending_reminders — 获取未完成提醒
-  ├─ get_daily_summary — 获取已有总结（如有）
-  └─ query_knowledge_base — RAG 搜索相关文档
+Memory Engine 提取候选记忆
+  ├─ 长期事实
+  ├─ 偏好
+  ├─ 目标
+  ├─ 习惯
+  └─ 历史状态变化
   │
   ▼
-Agent 生成复盘
-  ├─ 今日回顾（做了什么、心情、重要事件）
-  ├─ 提醒追踪（完成了哪些、哪些逾期、为什么）
-  ├─ 明日建议（可执行的具体行动）
-  └─ 记忆沉淀（今天值得记住的要点）
+用户审阅 / 确认 / 修改 / 拒绝
   │
   ▼
-用户审阅 / 确认 / 修改
+保存长期记忆
+  ├─ source / createdBy / agentActionId
+  ├─ confidence / evidence
+  ├─ createdAt / updatedAt
+  └─ revoked / deleted lifecycle
   │
   ▼
-保存复盘结果
-  ├─ 生成 DailySummary（已有的 summary 字段）
-  ├─ 创建明日提醒（如有建议）
-  └─ 记录 AgentRun（执行日志）
+Agent 在后续回答和建议中检索相关记忆
 ```
 
-### 第一批工具（Agent 可调用的能力）
+### 第一批能力
 
-| 工具 | 功能 | 数据源 |
+| 能力 | 功能 | 数据源 |
 |------|------|--------|
-| `search_life_events` | 按日期/类型/tag 搜索历史事件 | Firestore life_events |
-| `get_pending_reminders` | 获取未完成提醒列表 | Firestore reminders |
-| `get_daily_summary` | 获取指定日期的总结 | Firestore daily_summaries |
-| `query_knowledge_base` | RAG 搜索已上传文档 | Firestore chunks + vector search |
-| `create_reminder` | 创建新提醒 | Firestore reminders |
-| `save_daily_summary` | 保存/更新每日总结 | Firestore daily_summaries |
+| `propose_memory` | 从用户数据中生成候选长期记忆 | life_events / chat / RAG |
+| `confirm_memory` | 用户确认后保存记忆 | Firestore memories |
+| `search_memories` | 检索相关长期记忆 | Firestore memories |
+| `update_memory` | 修正或合并已有记忆 | Firestore memories |
+| `revoke_memory` | 撤销不准确或过期记忆 | Firestore memories |
 
-### 明确不做（Phase 4 Non-Goals）
+### 明确不做（Phase 6 初期 Non-Goals）
 
-- ❌ 自动外部通知（邮件/微信/短信）
-- ❌ 复杂 Scheduler（定时自动触发）
-- ❌ 多工具无限循环（Agent 自行决定调用多少工具）
-- ❌ 多轮 Agent 交互（Phase 4 只做单轮：点击 → 生成 → 确认）
-- ❌ 跨用户/跨租户 Agent
-- ❌ 外部 API 工具（天气、日历、地图等）
+- ❌ 不做未经用户确认的长期记忆写入
+- ❌ 不把真实写入 canary 混入 Phase 6
+- ❌ 不接日历、邮件、外部 MCP
+- ❌ 不做主动后台自动化
+- ❌ 不做跨用户/跨租户记忆
 
 ### 技术实现要点
 
-1. **Agent 执行框架**：基于现有 `AgentRun` 模型扩展，实现一个最小 ReAct 循环
-   - 用户输入触发 → Agent 规划步骤 → 工具调用 → 综合结果 → 输出
-   - 每步记录到 `agent_runs` 集合
-   
-2. **LLM Prompt 设计**：System prompt 中声明工具定义和调用格式（JSON function calling）
-
-3. **工具注册**：每个工具是一个 C# 方法，接收 JSON 参数、返回结构化结果
-
-4. **用户审阅层**：Agent 输出先展示给用户，用户确认后才写入 Firestore
+1. **Memory 数据模型**：显式字段承载 `userId/source/createdBy/evidence/confidence/lifecycle`。
+2. **权限边界**：`userId` 只能来自后端认证上下文。
+3. **确认机制复用**：沿用 Phase 5 的 proposedAction / pending action / confirm 状态机。
+4. **检索边界**：只读取当前用户的 memories，并保留引用来源。
+5. **撤销能力**：用户必须能撤销或删除错误记忆。
 
 ### 预期产出
 
-- Agent 调用 2-4 个工具，生成结构化复盘
-- 包含具体可执行的明日提醒建议
-- 执行日志可追溯（AgentRun）
-- 用户始终有最终决定权
+- Memory 数据模型和 service skeleton
+- `propose_memory` preview-only flow
+- 用户确认式 `save_memory`
+- Memory 检索接入 Agent/RAG 上下文
+- 记忆撤销/删除策略
 
 ---
 
@@ -235,12 +238,13 @@ Agent 生成复盘
 | Phase 1 是否已完成？ | ✅ **是**，全部功能已实现、测试、部署 |
 | Phase 2 是否已完成？ | ✅ **是**，全部功能已实现、测试、部署 |
 | Phase 3 是否已完成？ | ✅ **是**（文档定义的 RAG 阶段），全部功能已实现、测试、部署 |
-| 当前处于什么阶段？ | **Phase 3 完成 → Phase 3.5 稳定化**（前后有待补充） |
-| 是否可以开始规划 Agent 化？ | ✅ **可以**，基础架构（AgentRun 模型、RAG 管线、多工具 DI 框架）已就绪 |
-| 正式开发 Agent 前需要什么？ | ⚠️ 建议先完成 Phase 3.5 的 P0/P1 项（Rate Limiting + 成本控制 + 前端测试） |
-| Phase 4 第一步应该做什么？ | **每日复盘 Agent** — 最小 Agent Loop + 4-6 个工具 + 用户审阅层 |
+| Phase 4 是否已完成？ | ✅ **是**，Agent Preview / 确认状态机 / pending action 已完成 |
+| Phase 5 是否已完成？ | ✅ **Development Complete**，`create_life_event` Agent Write MVP 已完成 |
+| 当前处于什么阶段？ | **Phase 6 Memory Engine**（开发阶段）+ **Release Gate No-Go**（发布闸门） |
+| 是否可以开启真实写入？ | ❌ **不可以**，必须走 Release Gate 且再次显式批准 |
+| Phase 6 第一步应该做什么？ | **Memory Engine 设计冻结** — 数据模型、权限边界、确认机制、撤销策略 |
 
 ### 一句话总结
 
-> LifeAgent 已完成文档定义的全部三个阶段（生活记录 → 智能助理 → RAG 知识库），是一个功能完整的被动式知识管理应用。
-> 下一步应从"被动响应"转向"主动服务"，Phase 3.5 补齐安全和测试短板后，Phase 4 以"每日复盘 Agent"作为第一个 Agent 化 MVP。
+> LifeAgent 已完成基础生活数据、RAG、Agent Preview 和第一个 Agent Write MVP 的开发闭环。
+> 真实写入上线属于 Release Gate；下一开发阶段应进入 Phase 6 Memory Engine。

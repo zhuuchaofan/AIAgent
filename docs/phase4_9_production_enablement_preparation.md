@@ -688,9 +688,18 @@ The following are explicitly **not** part of Phase 4.9:
 
 ## Recommended Next Phase
 
-**Phase 5.1 - Production Enablement Execution**
+**Superseded by Phase 5 Development + Release Gate**
 
-Phase 5 would be the first phase that actually makes production changes:
+This section was the original Phase 4.9 recommendation. It has been superseded by the completed Phase 5 development work and the separate Release Gate.
+
+Current state:
+
+- Phase 5 Development is complete.
+- `create_life_event` write path is implemented, tested, and feature-gated.
+- Production remains preview-only.
+- Real-write canary, Production Enablement, and Gradual Rollout are Release Gate activities, not development phases.
+
+Historical recommendation:
 
 1. Apply Firestore Rules (if cross-project Auth is resolved).
 2. Set Cloud Run env vars to enable writes for a test user (canary).
@@ -699,7 +708,9 @@ Phase 5 would be the first phase that actually makes production changes:
 5. If smoke test passes: enable for all users.
 6. If smoke test fails: execute rollback per Phase 4.9.6.
 
-Phase 5.2+ may cover:
+Future development after Release Gate should not continue adding Phase 5.x documents. The next development phase is Phase 6 Memory Engine.
+
+Future development candidates:
 
 - Frontend UI for agent-created life events (display, edit, delete).
 - `update_life_event` and `delete_life_event` action types.

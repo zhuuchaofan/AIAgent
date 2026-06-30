@@ -2,9 +2,11 @@
 
 ## Scope
 
-Phase 5.8 is a planning-only phase for controlled `create_life_event` real-write enablement.
+Phase 5.8 is a Release Gate planning document for controlled `create_life_event` real-write enablement.
 
 This phase does not deploy, does not modify Cloud Run env, does not enable write flags, does not modify Firestore Rules, and does not execute real writes.
+
+Phase 5 Development is closed. Real-write canary, production enablement, and gradual rollout are release activities and do not belong to any development Phase.
 
 ## 1. Current Safety Baseline
 
@@ -230,4 +232,4 @@ This document is only the real-write enablement plan. Any actual enablement requ
 Current recommendation:
 
 - Keep production preview-only.
-- Next phase may be a formal go/no-go checklist or an explicitly approved canary execution phase.
+- Treat the next step as Release Gate review, not further Phase 5 development.

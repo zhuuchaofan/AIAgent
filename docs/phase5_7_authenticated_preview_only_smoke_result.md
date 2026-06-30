@@ -152,5 +152,6 @@ Phase 5.7 authenticated preview-only production smoke passed.
 
 Current recommendation:
 
-- Do not enable real writes yet.
-- The next phase may prepare the controlled real-write enablement decision, but production should remain preview-only until explicitly approved.
+- Phase 5 Development can be closed.
+- Do not enable real writes as part of development.
+- Real-write canary, production enablement, and gradual rollout belong to the Release Gate and require separate explicit approval.
