@@ -204,6 +204,11 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
                 return Failed(actionId, "invalid_action_type", "Unknown proposed action type.");
             }
 
+            if (string.Equals(pending.ActionType, AgentActionTypes.SaveMemoryPreview, StringComparison.OrdinalIgnoreCase))
+            {
+                return Failed(actionId, "preview_only", "save_memory_preview cannot complete a durable write in Phase 6.2.");
+            }
+
             if (pending.Status == Confirmed && pending.WriteCompleted && pending.WroteData)
             {
                 return WriteSuccess(pending, idempotent: true);
@@ -272,6 +277,7 @@ public class FirestorePendingAgentActionStore : IPendingAgentActionStore
                 previewOnly = true,
                 wroteData = false,
                 actionType = pending.ActionType,
+                createdResourceId = (string?)null,
                 idempotent
             }
         };

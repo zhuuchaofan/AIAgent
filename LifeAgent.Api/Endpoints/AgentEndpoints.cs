@@ -196,7 +196,8 @@ public static class AgentEndpoints
                 {
                     previewOnly = true,
                     wroteData = false,
-                    actionType = pending.ProposedAction.ActionType
+                    actionType = pending.ProposedAction.ActionType,
+                    createdResourceId = (string?)null
                 }
             };
         }
@@ -220,7 +221,8 @@ public static class AgentEndpoints
             {
                 previewOnly = true,
                 wroteData = false,
-                actionType = pending?.ProposedAction.ActionType
+                actionType = pending?.ProposedAction.ActionType,
+                createdResourceId = (string?)null
             }
         };
     }

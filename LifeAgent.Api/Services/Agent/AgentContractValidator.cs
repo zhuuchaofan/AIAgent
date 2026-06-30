@@ -82,6 +82,18 @@ public sealed class AgentContractValidator
             }
         }
 
+        if (proposedAction.ActionType.Equals(AgentActionTypes.SaveMemoryPreview, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(proposedAction.Payload);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+            {
+                return AgentContractValidationResult.Invalid(ex.Message);
+            }
+        }
+
         return AgentContractValidationResult.Valid();
     }
 

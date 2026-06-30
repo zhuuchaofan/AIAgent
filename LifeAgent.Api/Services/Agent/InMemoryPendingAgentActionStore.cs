@@ -145,6 +145,11 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
             return Task.FromResult(Failed(actionId, "invalid_action_type", "Unknown proposed action type."));
         }
 
+        if (string.Equals(pending.ProposedAction.ActionType, AgentActionTypes.SaveMemoryPreview, StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult(Failed(actionId, "preview_only", "save_memory_preview cannot complete a durable write in Phase 6.2."));
+        }
+
         if (pending.Status == Confirmed && pending.WriteCompleted && pending.WroteData)
         {
             return Task.FromResult(WriteSuccess(pending, idempotent: true));
@@ -194,6 +199,7 @@ public class InMemoryPendingAgentActionStore : IPendingAgentActionStore
                 previewOnly = true,
                 wroteData = false,
                 actionType = pending.ProposedAction.ActionType,
+                createdResourceId = (string?)null,
                 idempotent
             }
         };

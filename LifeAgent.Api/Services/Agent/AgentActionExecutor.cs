@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LifeAgent.Api.Models.Agent;
+using LifeAgent.Api.Models.Memories;
 
 namespace LifeAgent.Api.Services.Agent;
 
@@ -86,13 +87,16 @@ public sealed class AgentActionExecutor
             AgentActionTypes.CreateLifeEvent => BuildLifeEventPreviewTitle(message),
             _ => "保存一条记忆"
         };
-        var payload = proposedActionType == AgentActionTypes.CreateLifeEvent
-            ? BuildLifeEventPreviewPayload(message)
-            : new
+        var payload = proposedActionType switch
+        {
+            AgentActionTypes.CreateLifeEvent => BuildLifeEventPreviewPayload(message),
+            AgentActionTypes.SaveMemoryPreview => BuildMemoryPreviewPayload(message),
+            _ => new
             {
                 originalMessage = message,
                 previewOnly = true
-            };
+            }
+        };
 
         var pending = await _pendingActions.CreateAsync(
             userId,
@@ -149,6 +153,82 @@ public sealed class AgentActionExecutor
                 rawExtractedHints = "agent_preview_life_event"
             }
         };
+    }
+
+    private static MemoryPreviewActionPayload BuildMemoryPreviewPayload(string message)
+    {
+        var content = ExtractMemoryContent(message);
+        var memoryType = InferMemoryType(message, content);
+        var importance = memoryType == MemoryType.Constraint.ToSnakeCaseString() ? 5 : 3;
+
+        return new MemoryPreviewActionPayload
+        {
+            MemoryType = memoryType,
+            Content = content,
+            Confidence = 0.8,
+            Importance = importance,
+            Source = "agent_preview",
+            PreviewOnly = true,
+            OriginalMessage = message,
+            SourceText = message,
+            Metadata = new Dictionary<string, object>
+            {
+                ["proposalStage"] = "phase6_2_preview_contract"
+            }
+        };
+    }
+
+    private static string ExtractMemoryContent(string message)
+    {
+        var normalized = (message ?? string.Empty).Trim();
+        var prefixes = new[]
+        {
+            "帮我保存记忆：",
+            "帮我保存记忆:",
+            "帮我记一下：",
+            "帮我记一下:",
+            "记一下：",
+            "记一下:"
+        };
+
+        foreach (var prefix in prefixes)
+        {
+            if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = normalized[prefix.Length..].Trim();
+                break;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(normalized)
+            ? "用户提出了一条待确认的长期记忆。"
+            : normalized;
+    }
+
+    private static string InferMemoryType(string message, string content)
+    {
+        var text = $"{message} {content}";
+        if (text.Contains("不要", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("禁止", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("过敏", StringComparison.OrdinalIgnoreCase))
+        {
+            return MemoryType.Constraint.ToSnakeCaseString();
+        }
+
+        if (text.Contains("目标", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("计划", StringComparison.OrdinalIgnoreCase))
+        {
+            return MemoryType.Goal.ToSnakeCaseString();
+        }
+
+        if (text.Contains("习惯", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("每天", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("总是", StringComparison.OrdinalIgnoreCase))
+        {
+            return MemoryType.Habit.ToSnakeCaseString();
+        }
+
+        return MemoryType.Preference.ToSnakeCaseString();
     }
 }
 

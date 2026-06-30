@@ -240,6 +240,225 @@ public class AgentSkeletonTest
     }
 
     [Fact]
+    public async Task AgentRunner_MemoryIntent_ReturnsPhase62PreviewPayloadSchema()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var runner = CreateRunner(new FakeDocumentRepository(), pendingActions: store);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：我喜欢早上写代码" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("save_memory_preview", response.ActionType);
+        Assert.True(response.RequiresConfirmation);
+        Assert.Null(response.CreatedResourceId);
+        Assert.NotNull(response.ProposedAction);
+        Assert.True(response.ProposedAction!.RequiresConfirmation);
+
+        var payload = MemoryPreviewActionPayloadMapper.Map(response.ProposedAction.Payload);
+        Assert.Equal("preference", payload.MemoryType);
+        Assert.Equal("我喜欢早上写代码", payload.Content);
+        Assert.Equal(0.8, payload.Confidence);
+        Assert.Equal(3, payload.Importance);
+        Assert.Equal("agent_preview", payload.Source);
+        Assert.True(payload.PreviewOnly);
+        Assert.Equal("帮我保存记忆：我喜欢早上写代码", payload.OriginalMessage);
+        Assert.Equal("帮我保存记忆：我喜欢早上写代码", payload.SourceText);
+        Assert.NotNull(payload.Metadata);
+        Assert.Null(payload.ExpiresAt);
+        MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(response.ProposedAction.Payload);
+
+        var stored = await store.GetAsync("user_a", response.ProposedAction.ActionId);
+        Assert.NotNull(stored);
+        Assert.True(stored!.PreviewOnly);
+        Assert.False(stored.WroteData);
+        Assert.Null(stored.CreatedResourceId);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryConstraintPreview_ForcesImportanceFive()
+    {
+        var runner = CreateRunner(new FakeDocumentRepository());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：我对花生过敏，禁止推荐花生食品" },
+            CancellationToken.None);
+
+        var payload = MemoryPreviewActionPayloadMapper.Map(response.ProposedAction!.Payload);
+        Assert.Equal("constraint", payload.MemoryType);
+        Assert.Equal(5, payload.Importance);
+        MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(response.ProposedAction.Payload);
+    }
+
+    [Fact]
+    public void MemoryPreviewContractValidator_RejectsInvalidPayload()
+    {
+        var validator = new AgentContractValidator();
+        var contract = new AgentExecutionContract(
+            AgentIntentNames.Memory,
+            1.0,
+            AgentActionTypes.SaveMemoryPreview,
+            RequiresConfirmation: true,
+            IsFallback: false,
+            FallbackReason: null);
+        var proposedAction = new AgentProposedAction
+        {
+            ActionId = "agent_action_invalid",
+            ActionType = AgentActionTypes.SaveMemoryPreview,
+            Title = "保存一条记忆",
+            Summary = "invalid",
+            RequiresConfirmation = true,
+            Payload = new MemoryPreviewActionPayload
+            {
+                MemoryType = "constraint",
+                Content = "禁止推荐花生食品",
+                Confidence = 0.9,
+                Importance = 3,
+                Source = "agent_preview",
+                PreviewOnly = true,
+                OriginalMessage = "禁止推荐花生食品"
+            }
+        };
+
+        var result = validator.Validate(contract, AgentExecutionResult.Confirmation(proposedAction));
+
+        Assert.False(result.Success);
+        Assert.Contains("constraint", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_SaveMemoryPreviewConfirmsWithoutDurableMemoryWrite()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "save_memory_preview",
+            "保存一条记忆",
+            "preview only",
+            new MemoryPreviewActionPayload
+            {
+                MemoryType = "preference",
+                Content = "我喜欢早上写代码",
+                Confidence = 0.8,
+                Importance = 3,
+                Source = "agent_preview",
+                PreviewOnly = true,
+                OriginalMessage = "帮我保存记忆：我喜欢早上写代码"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            WriteGate(new Dictionary<string, string?>
+            {
+                ["ENABLE_AGENT_WRITE_TOOLS"] = "true",
+                ["ENABLE_CREATE_LIFE_EVENT_TOOL"] = "true"
+            }),
+            CreateCoordinator(store),
+            NullLoggerFactory.Instance,
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.True(ok.Value!.Success);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Confirmed, pending.Status);
+        Assert.False(pending.WroteData);
+        Assert.False(pending.WriteCompleted);
+        Assert.Null(pending.CreatedResourceId);
+        AssertPreviewOnly(ok.Value.Result);
+        AssertCreatedResourceIdNull(ok.Value.Result);
+    }
+
+    [Fact]
+    public async Task AgentConfirmEndpoint_InvalidSaveMemoryPreviewPayloadFailsBeforeLifecycleTransition()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "save_memory_preview",
+            "保存一条记忆",
+            "invalid",
+            new MemoryPreviewActionPayload
+            {
+                MemoryType = "preference",
+                Content = "我喜欢早上写代码",
+                Confidence = 0.8,
+                Importance = 3,
+                Source = "agent_preview",
+                PreviewOnly = true,
+                OriginalMessage = "帮我保存记忆：我喜欢早上写代码",
+                Metadata = new Dictionary<string, object>
+                {
+                    ["api_key"] = "secret"
+                }
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+        var context = new DefaultHttpContext();
+        context.Items["userId"] = "user_a";
+
+        var result = await AgentEndpoints.ConfirmAgentActionAsync(
+            context,
+            new AgentConfirmationRequest { ActionId = pending.ProposedAction.ActionId, Decision = "confirm" },
+            store,
+            DefaultWriteGate(),
+            CreateCoordinator(store),
+            NullLoggerFactory.Instance,
+            CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<AgentConfirmationResponse>>(result);
+        Assert.False(ok.Value!.Success);
+        Assert.Equal("invalid_payload", ok.Value.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
+        Assert.Null(pending.ConfirmedAt);
+        Assert.False(pending.WroteData);
+        AssertPreviewOnly(ok.Value.Result);
+    }
+
+    [Fact]
+    public async Task PendingActionStore_SaveMemoryPreviewRejectsWriteCompleted()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var pending = await store.CreateAsync(
+            "user_a",
+            "save_memory_preview",
+            "保存一条记忆",
+            "preview only",
+            new MemoryPreviewActionPayload
+            {
+                MemoryType = "preference",
+                Content = "我喜欢早上写代码",
+                Confidence = 0.8,
+                Importance = 3,
+                Source = "agent_preview",
+                PreviewOnly = true,
+                OriginalMessage = "帮我保存记忆：我喜欢早上写代码"
+            },
+            "medium",
+            TimeSpan.FromMinutes(10));
+
+        var response = await store.ConfirmWriteCompletedAsync(
+            "user_a",
+            pending.ProposedAction.ActionId,
+            "memory",
+            "mem_blocked");
+
+        Assert.False(response.Success);
+        Assert.Equal("preview_only", response.Status);
+        Assert.Equal(InMemoryPendingAgentActionStore.Pending, pending.Status);
+        Assert.False(pending.WroteData);
+        Assert.Null(pending.CreatedResourceId);
+    }
+
+    [Fact]
     public async Task AgentRunner_InvalidProposedActionType_ReturnsContractErrorWithoutFallback()
     {
         var runner = new AgentRunner(
@@ -1191,6 +1410,14 @@ public class AgentSkeletonTest
         var json = JsonSerializer.Serialize(result);
         Assert.Contains("\"previewOnly\":true", json);
         Assert.Contains("\"wroteData\":false", json);
+    }
+
+    private static void AssertCreatedResourceIdNull(object? result)
+    {
+        var json = JsonSerializer.Serialize(result);
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.TryGetProperty("createdResourceId", out var createdResourceId));
+        Assert.Equal(JsonValueKind.Null, createdResourceId.ValueKind);
     }
 
     private static void AssertContractShape(AgentRunResponse response)
