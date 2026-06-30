@@ -82,6 +82,14 @@ public static class AgentEndpoints
                 if (IsCreateLifeEventWriteAction(pending?.ProposedAction.ActionType) &&
                     canCreateLifeEvent)
                 {
+                    var contractValidation = new AgentContractValidator().ValidatePendingConfirmation(pending);
+                    if (!contractValidation.Success)
+                    {
+                        var validationError = BuildContractValidationResponse(pending, contractValidation.ErrorMessage);
+                        LogConfirmResponse(logger, "Agent confirm contract validation failed.", userId, validationError);
+                        return Results.Ok(validationError);
+                    }
+
                     logger.LogInformation(
                         "Agent confirm entering real write branch. UserId={UserId}, ActionId={ActionId}, ActionType={ActionType}, FeatureGateCanCreateLifeEvent={FeatureGateCanCreateLifeEvent}",
                         userId, actionId, pending!.ProposedAction.ActionType, canCreateLifeEvent);
@@ -90,7 +98,7 @@ public static class AgentEndpoints
                     return Results.Ok(writeResponse);
                 }
 
-                var validation = ValidateCreateLifeEventPreviewOnlyPath(pending);
+                var validation = ValidatePendingPreviewOnlyPath(pending);
                 if (validation is not null)
                 {
                     LogConfirmResponse(logger, "Agent confirm preview validation failed.", userId, validation);
@@ -151,9 +159,15 @@ public static class AgentEndpoints
             : null;
     }
 
-    private static AgentConfirmationResponse? ValidateCreateLifeEventPreviewOnlyPath(
+    private static AgentConfirmationResponse? ValidatePendingPreviewOnlyPath(
         PendingAgentAction? pending)
     {
+        var contractValidation = new AgentContractValidator().ValidatePendingConfirmation(pending);
+        if (!contractValidation.Success)
+        {
+            return BuildContractValidationResponse(pending, contractValidation.ErrorMessage);
+        }
+
         if (pending is null || !IsCreateLifeEventAction(pending.ProposedAction.ActionType))
         {
             return null;
@@ -188,6 +202,27 @@ public static class AgentEndpoints
         }
 
         return null;
+    }
+
+    private static AgentConfirmationResponse BuildContractValidationResponse(
+        PendingAgentAction? pending,
+        string? errorMessage)
+    {
+        return new AgentConfirmationResponse
+        {
+            Success = false,
+            Status = "invalid_payload",
+            Message = errorMessage ?? "Agent confirmation contract validation failed.",
+            ActionId = pending?.ProposedAction.ActionId,
+            ActionType = pending?.ProposedAction.ActionType,
+            LifecycleStatus = pending?.Status,
+            Result = new
+            {
+                previewOnly = true,
+                wroteData = false,
+                actionType = pending?.ProposedAction.ActionType
+            }
+        };
     }
 
     private static bool IsCreateLifeEventWriteAction(string? actionType)

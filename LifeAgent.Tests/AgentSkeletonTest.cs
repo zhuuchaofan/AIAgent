@@ -152,13 +152,131 @@ public class AgentSkeletonTest
 
         var response = await runner.RunAsync(
             "user_a",
-            new AgentRunRequest { Message = "帮我保存一条记忆" },
+            new AgentRunRequest { Message = "随便聊聊今天的天气" },
             CancellationToken.None);
 
         Assert.Equal(0, response.StepsUsed);
         Assert.Empty(response.ToolCalls);
         Assert.Contains("支持文档列表、文档状态查询和只读 RAG 问答", response.Answer);
         Assert.False(writeTool.WasCalled);
+    }
+
+    [Theory]
+    [InlineData("请新增一条 life_event 生活事件记录：今天黑猫吐了一次", "create_life_event", true, "preview_confirmation")]
+    [InlineData("帮我保存记忆：我喜欢早上写代码", "save_memory_preview", true, "preview_confirmation")]
+    [InlineData("明天提醒我观察黑猫", "reminder_action", true, "preview_confirmation")]
+    [InlineData("根据文档回答：项目目标是什么", "preview_readonly_rag", false, "preview_readonly_rag")]
+    [InlineData("列出我的文档", "document_action", false, "preview_readonly_rag")]
+    [InlineData("随便聊聊一个未知话题", "preview_readonly_rag", false, "preview_readonly_rag")]
+    public async Task AgentRunner_IntentCoverageMatrix_ReturnsStableContract(
+        string message,
+        string expectedActionType,
+        bool expectedRequiresConfirmation,
+        string expectedMode)
+    {
+        var repository = new FakeDocumentRepository();
+        repository.Documents["user_a"] = new List<KnowledgeDocument>
+        {
+            new KnowledgeDocument { Id = "doc_a", UserId = "user_a", FileName = "a.md", Status = "success", ChunkCount = 1 }
+        };
+        var runner = CreateRunner(repository);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = message, DocumentIds = new List<string> { "doc_a" } },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal(expectedMode, response.Mode);
+        Assert.Equal(expectedActionType, response.ActionType);
+        Assert.Equal(expectedRequiresConfirmation, response.RequiresConfirmation);
+        Assert.True(response.PreviewOnly);
+        Assert.False(response.WroteData);
+        Assert.Null(response.CreatedResourceId);
+    }
+
+    [Fact]
+    public async Task AgentRunner_LifeEventContract_IsPreviewOnlyAndDoesNotWrite()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var runner = CreateRunner(new FakeDocumentRepository(), pendingActions: store);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "请新增一条 life_event 生活事件记录：今天黑猫吐了一次" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("create_life_event", response.ActionType);
+        Assert.True(response.RequiresConfirmation);
+        Assert.True(response.PreviewOnly);
+        Assert.False(response.WroteData);
+        Assert.Null(response.CreatedResourceId);
+        Assert.NotNull(response.ProposedAction);
+        Assert.Equal("create_life_event", response.ProposedAction!.ActionType);
+
+        var stored = await store.GetAsync("user_a", response.ProposedAction.ActionId);
+        Assert.NotNull(stored);
+        Assert.False(stored!.WroteData);
+        Assert.True(stored.PreviewOnly);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryIntent_DoesNotTriggerLifeEvent()
+    {
+        var runner = CreateRunner(new FakeDocumentRepository());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：我喜欢早上写代码" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("save_memory_preview", response.ActionType);
+        Assert.True(response.RequiresConfirmation);
+        Assert.NotNull(response.ProposedAction);
+        Assert.Equal("save_memory_preview", response.ProposedAction!.ActionType);
+        Assert.NotEqual("create_life_event", response.ProposedAction.ActionType);
+    }
+
+    [Fact]
+    public async Task AgentRunner_InvalidProposedActionType_ReturnsContractErrorWithoutFallback()
+    {
+        var runner = new AgentRunner(
+            new ToolExecutor(new ToolRegistry(Array.Empty<IAgentTool>()), NullLogger<ToolExecutor>.Instance),
+            Options.Create(new AgentOptions { MaxIterations = 3 }),
+            new InvalidPendingActionStore("invalid_action_type", requiresConfirmation: true));
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：测试" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("preview_contract_error", response.Mode);
+        Assert.Equal("invalid_action", response.ActionType);
+        Assert.False(response.RequiresConfirmation);
+        Assert.Null(response.ProposedAction);
+        Assert.Empty(response.ToolCalls);
+    }
+
+    [Fact]
+    public async Task AgentRunner_ProposedActionWithoutConfirmation_ReturnsContractError()
+    {
+        var runner = new AgentRunner(
+            new ToolExecutor(new ToolRegistry(Array.Empty<IAgentTool>()), NullLogger<ToolExecutor>.Instance),
+            Options.Create(new AgentOptions { MaxIterations = 3 }),
+            new InvalidPendingActionStore("save_memory_preview", requiresConfirmation: false));
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：测试" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("preview_contract_error", response.Mode);
+        Assert.Equal("invalid_action", response.ActionType);
+        Assert.False(response.WroteData);
     }
 
     [Fact]
@@ -1075,6 +1193,18 @@ public class AgentSkeletonTest
         Assert.Contains("\"wroteData\":false", json);
     }
 
+    private static void AssertContractShape(AgentRunResponse response)
+    {
+        Assert.False(string.IsNullOrWhiteSpace(response.RunId));
+        Assert.False(string.IsNullOrWhiteSpace(response.Mode));
+        Assert.NotNull(response.Answer);
+        Assert.False(string.IsNullOrWhiteSpace(response.ActionType));
+        Assert.NotNull(response.Payload);
+        Assert.NotNull(response.ToolCalls);
+        Assert.True(response.PreviewOnly);
+        Assert.False(response.WroteData);
+    }
+
     private static IAgentWriteFeatureGate DefaultWriteGate()
     {
         return WriteGate(new Dictionary<string, string?>());
@@ -1218,6 +1348,70 @@ public class AgentSkeletonTest
         {
             WasCalled = true;
             return Task.FromResult(AgentToolResult.Ok(new { ok = true }));
+        }
+    }
+
+    private sealed class InvalidPendingActionStore : IPendingAgentActionStore
+    {
+        private readonly string _actionType;
+        private readonly bool _requiresConfirmation;
+
+        public InvalidPendingActionStore(string actionType, bool requiresConfirmation)
+        {
+            _actionType = actionType;
+            _requiresConfirmation = requiresConfirmation;
+        }
+
+        public Task<PendingAgentAction> CreateAsync(
+            string userId,
+            string actionType,
+            string title,
+            string summary,
+            object payload,
+            string riskLevel,
+            TimeSpan ttl,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new PendingAgentAction
+            {
+                UserId = userId,
+                Status = InMemoryPendingAgentActionStore.Pending,
+                PreviewOnly = true,
+                WroteData = false,
+                ProposedAction = new AgentProposedAction
+                {
+                    ActionId = "act_invalid",
+                    ActionType = _actionType,
+                    Title = title,
+                    Summary = summary,
+                    Payload = payload,
+                    RiskLevel = riskLevel,
+                    RequiresConfirmation = _requiresConfirmation,
+                    LifecycleStatus = InMemoryPendingAgentActionStore.Pending,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    ExpiresAt = DateTimeOffset.UtcNow.Add(ttl)
+                }
+            });
+        }
+
+        public Task<PendingAgentAction?> GetAsync(string userId, string actionId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<PendingAgentAction?>(null);
+        }
+
+        public Task<AgentConfirmationResponse> ConfirmAsync(string userId, string actionId, string decision, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<AgentConfirmationResponse> ConfirmWriteCompletedAsync(
+            string userId,
+            string actionId,
+            string createdResourceType,
+            string createdResourceId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 
