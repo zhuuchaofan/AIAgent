@@ -1,5 +1,7 @@
 # Safety Boundaries Skill
 
+`docs/skills/_shared/safety-red-lines.md` is the source of truth for LifeOS safety red lines. This Skill applies those red lines to concrete task execution and must not weaken or redefine them.
+
 ## When to use
 
 Use this before any work touching Agent actions, write paths, Firestore, Cloud Storage, Firebase Auth, Cloud Run, feature flags, deployment, smoke tests, or production claims.

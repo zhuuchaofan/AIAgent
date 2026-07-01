@@ -30,7 +30,7 @@ Keep AI agents aligned with LifeOS phase-based development and prevent conflatin
 | Phase 4 Agent MVP | Complete | Agent Preview, read tools, controlled Agent runner, pending action confirmation lifecycle. |
 | Phase 5 Agent Write MVP | Development Complete | `create_life_event` write path exists behind preview / confirm / feature gate controls. |
 | Release Gate | No-Go unless explicitly approved | Real-write canary, production enablement, rollout, rollback, cleanup. Not a development Phase. |
-| Phase 6 Memory Engine | Current development context | Long-term Memory taxonomy, preview proposals, retrieval skeletons, merge/conflict/pollution guard. Durable Memory writes still require gates. |
+| Phase 6 Memory Engine | Current development context | Long-term Memory taxonomy, preview proposals, retrieval skeletons, merge/conflict/pollution guard. Durable Memory write and production integration are not ordinary Phase 6 implementation; they require Release Gate or explicit approval. |
 
 ## Release Gate boundary
 

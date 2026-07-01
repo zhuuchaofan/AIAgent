@@ -26,7 +26,7 @@ Provide the default ordered workflow for safe feature development without repeat
 6. Implement only within approved scope.
 7. Use `core/docs-sync.md` to keep docs and code aligned.
 8. Use `development/testing.md` for validation.
-9. Use `development/commit-readiness.md` when committing.
+9. Use `development/commit-readiness.md` after the task is complete, the changed scope matches the current Phase, validation is complete or explained, the worktree has no unrelated changes, and the user did not request analysis-only or no commit.
 
 ## Red lines
 
@@ -41,7 +41,7 @@ Provide the default ordered workflow for safe feature development without repeat
 - Architecture and safety checks are complete.
 - Docs and code are consistent.
 - Validation is recorded.
-- Commit is local only when requested or appropriate.
+- Local commit is created only after commit-readiness conditions are met.
 
 ## Checklist
 
@@ -52,7 +52,7 @@ Provide the default ordered workflow for safe feature development without repeat
 - [ ] Preview/confirm/write checked if relevant.
 - [ ] Docs sync checked.
 - [ ] Validation completed or explained.
-- [ ] Commit readiness checked if committing.
+- [ ] Commit readiness checked after completion when no unrelated changes are present.
 
 ## Related skills
 

@@ -46,7 +46,7 @@ Provide an ordered flow for closeout work without redefining the detailed rules 
 - [ ] Docs updated or no-update reason recorded.
 - [ ] Tests / smoke results recorded.
 - [ ] Release Gate boundary preserved.
-- [ ] Commit created if requested or appropriate.
+- [ ] Commit created only after commit-readiness conditions are met.
 
 ## Related skills
 

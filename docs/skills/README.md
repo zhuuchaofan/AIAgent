@@ -21,14 +21,18 @@ Existing source-of-truth documents remain valid:
 
 ## New agent first-read order
 
+New agents should read the shared and core baseline rules first, then route to development or playbook Skills based on the task.
+
 1. `_shared/phase-map.md`
 2. `_shared/safety-red-lines.md`
 3. `core/project-overview.md`
 4. `core/phase-management.md`
-5. `core/architecture-first.md`
-6. `core/preview-confirm-write.md`
-7. `development/testing.md`
-8. `development/commit-readiness.md`
+5. `core/safety-boundaries.md`
+6. `core/architecture-first.md`
+7. `core/docs-sync.md`
+8. `core/preview-confirm-write.md`
+9. `development/testing.md`
+10. `development/commit-readiness.md`
 
 ## Common task routing
 

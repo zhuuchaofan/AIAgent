@@ -24,11 +24,19 @@ Force design clarity before code so LifeOS changes preserve Phase scope, safety 
 4. Keep implementation incremental and aligned with existing service/repository patterns.
 5. Do not proceed from design to code if the user only asked for analysis or design.
 
+Architecture First is required before:
+
+- Any Firestore physical path, collection, index, or multi-tenant path change.
+- Any production write behavior change.
+- Any Agent Action state machine change.
+- Any RAG, Memory, or `life_event` data model change.
+- Any Cloud Run env, feature flag, or Auth boundary change.
+
 ## Red lines
 
 - Do not implement architecture-impacting behavior without first understanding current architecture.
 - Do not add a new write path without preview/confirm/write and feature gate analysis.
-- Do not change Firestore physical paths casually.
+- Do not change Firestore physical paths, collections, indexes, or multi-tenant paths without an Architecture First review.
 - Do not introduce production behavior that docs have not described.
 - Do not label architecture design as completed implementation.
 
