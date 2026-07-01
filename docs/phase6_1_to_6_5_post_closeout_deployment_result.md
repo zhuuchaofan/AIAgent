@@ -113,3 +113,101 @@ Service: `life-agent-api`
 ## Final Conclusion
 
 API deployment completed, but authenticated post-closeout smoke was skipped because `FIREBASE_ID_TOKEN` was missing. Follow-up authenticated smoke is still required.
+
+## Follow-Up Authenticated Smoke
+
+Execution time: 2026-07-01 19:19:00 CST
+
+Scope:
+
+- This was a post-closeout authenticated smoke follow-up only.
+- No new phase was entered.
+- No implementation work was performed.
+- No deployment was performed.
+- No Cloud Run, Firestore Rules, or MCP configuration was changed.
+
+Token handling:
+
+- `FIREBASE_ID_TOKEN` present: yes
+- Full token recorded: no
+- Fake token used: no
+- Mock auth enabled by this smoke: no
+
+Commands:
+
+```bash
+API_BASE_URL="https://life-agent-api-151587524132.us-central1.run.app" \
+FIREBASE_ID_TOKEN="$FIREBASE_ID_TOKEN" \
+node scripts/smoke-agent-life-event-write.mjs
+```
+
+```bash
+API_BASE_URL="https://life-agent-api-151587524132.us-central1.run.app" \
+FIREBASE_ID_TOKEN="$FIREBASE_ID_TOKEN" \
+node scripts/smoke-rag-e2e.mjs
+```
+
+### Follow-Up `scripts/smoke-agent-life-event-write.mjs`
+
+Result: passed
+
+Observed output summary:
+
+- `RUN_AGENT_WRITE_SMOKE=false`
+- `EXPECT_AGENT_WRITE_ENABLED=false`
+- `PASS API /health returns healthy`
+- `PASS Agent proposes life_event action`
+- `PASS Confirm action and verify expected write mode`
+- `PASS Repeat confirm and verify idempotency`
+- `SKIP Real write assertions: Set RUN_AGENT_WRITE_SMOKE=true and EXPECT_AGENT_WRITE_ENABLED=true to require wroteData=true.`
+
+Validated behavior:
+
+- Authenticated Agent flow passed.
+- Agent life event proposal passed.
+- Confirmation passed in preview-only mode.
+- Repeated confirmation passed idempotently.
+- Real write assertions were not enabled.
+- `wroteData=true` observed: no
+- `previewOnly=false` observed: no
+- `createdResourceId` observed: no
+- `life_event` created: no
+
+### Follow-Up `scripts/smoke-rag-e2e.mjs`
+
+Result: passed
+
+Observed output summary:
+
+- `PASS API /health returns healthy`
+- `PASS API endpoint responds`
+- `PASS Web endpoint is reachable`
+- `PASS Agent Preview lists documents`
+- `PASS Agent Preview proposes reminder confirmation`
+- `SKIP Authenticated upload/RAG/delete flow: RUN_MUTATING_SMOKE=true is required to create and delete a temporary test document.`
+
+Validated behavior:
+
+- Authenticated Agent Preview document-list flow passed.
+- Authenticated Agent Preview reminder confirmation flow passed.
+- Mutating upload/RAG/delete smoke was not enabled.
+- `RUN_MUTATING_SMOKE`: not set
+
+### Follow-Up Safety Result
+
+- Real write enabled: no
+- Real write occurred: no
+- `RUN_AGENT_WRITE_SMOKE`: not set
+- `EXPECT_AGENT_WRITE_ENABLED`: not set
+- `RUN_MUTATING_SMOKE`: not set
+- Cloud Run env changed: no
+- Firestore Rules changed: no
+- MCP changed: no
+- Business code changed: no
+- Docs-only update after smoke: yes
+- Memory skeleton remains local-only / fake-only / preview-only: yes
+- Production Memory runtime wiring enabled: no
+
+### Follow-Up Conclusion
+
+Authenticated post-closeout smoke is complete. Both `smoke-agent-life-event-write` and `smoke-rag-e2e` passed under authenticated preview-only conditions, with no real write observed.
