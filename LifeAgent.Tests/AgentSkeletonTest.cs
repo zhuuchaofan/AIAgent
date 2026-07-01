@@ -3,6 +3,7 @@ using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Models.LifeEvents;
+using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.Tools;
@@ -380,13 +381,208 @@ public class AgentSkeletonTest
         Assert.Equal("帮我保存记忆：我喜欢早上写代码", payload.SourceText);
         Assert.NotNull(payload.Metadata);
         Assert.Null(payload.ExpiresAt);
+        Assert.Null(payload.GuardDecision);
+        Assert.Null(payload.Blocked);
+        Assert.Null(payload.ReviewRequired);
         MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(response.ProposedAction.Payload);
+
+        var payloadJson = JsonSerializer.Serialize(response.ProposedAction.Payload);
+        using var payloadDoc = JsonDocument.Parse(payloadJson);
+        var payloadRoot = payloadDoc.RootElement;
+        Assert.Equal("preference", payloadRoot.GetProperty("MemoryType").GetString());
+        Assert.Equal("我喜欢早上写代码", payloadRoot.GetProperty("Content").GetString());
+        Assert.Equal(0.8, payloadRoot.GetProperty("Confidence").GetDouble());
+        Assert.Equal(3, payloadRoot.GetProperty("Importance").GetInt32());
+        Assert.Equal("agent_preview", payloadRoot.GetProperty("Source").GetString());
+        Assert.True(payloadRoot.GetProperty("PreviewOnly").GetBoolean());
+        Assert.False(payloadRoot.TryGetProperty("GuardDecision", out _));
+        Assert.False(payloadRoot.TryGetProperty("Blocked", out _));
+        Assert.False(payloadRoot.TryGetProperty("ReviewRequired", out _));
+        Assert.False(payloadRoot.TryGetProperty("GuardReason", out _));
+        Assert.False(payloadRoot.TryGetProperty("ConflictResult", out _));
+        Assert.False(payloadRoot.TryGetProperty("MergeCandidate", out _));
 
         var stored = await store.GetAsync("user_a", response.ProposedAction.ActionId);
         Assert.NotNull(stored);
         Assert.True(stored!.PreviewOnly);
         Assert.False(stored.WroteData);
         Assert.Null(stored.CreatedResourceId);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryProposalGuardAllowed_CreatesPendingAction()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var guard = new FixedMemoryProposalGuard(new MemoryPollutionDecision
+        {
+            Action = "allow",
+            Reason = "test_allow"
+        });
+        var runner = CreateRunner(
+            new FakeDocumentRepository(),
+            pendingActions: store,
+            memoryProposalGuard: guard,
+            memoryProposalOptions: EnabledMemoryProposalOptions());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：我喜欢早上写代码" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("save_memory_preview", response.ActionType);
+        Assert.True(response.RequiresConfirmation);
+        Assert.False(response.WroteData);
+        Assert.NotNull(response.ProposedAction);
+        Assert.Equal(1, guard.CallCount);
+
+        var payload = MemoryPreviewActionPayloadMapper.Map(response.ProposedAction!.Payload);
+        Assert.Equal("allow", payload.GuardDecision);
+        Assert.Equal("test_allow", payload.GuardReason);
+        Assert.Null(payload.Blocked);
+        Assert.Null(payload.ReviewRequired);
+        MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(response.ProposedAction.Payload);
+
+        var payloadJson = JsonSerializer.Serialize(response.ProposedAction.Payload);
+        Assert.Contains("\"GuardDecision\":\"allow\"", payloadJson);
+        Assert.Contains("\"GuardReason\":\"test_allow\"", payloadJson);
+        Assert.Contains("\"PreviewOnly\":true", payloadJson);
+        Assert.DoesNotContain("Blocked", payloadJson);
+        Assert.DoesNotContain("ReviewRequired", payloadJson);
+
+        var stored = await store.GetAsync("user_a", response.ProposedAction.ActionId);
+        Assert.NotNull(stored);
+        Assert.False(stored!.WroteData);
+        Assert.True(stored.PreviewOnly);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryProposalGuardBlocked_DoesNotCreatePendingAction()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var runner = CreateRunner(
+            new FakeDocumentRepository(),
+            pendingActions: store,
+            memoryProposalGuard: new MemoryProposalGuard(),
+            memoryProposalOptions: EnabledMemoryProposalOptions());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：Bearer abc.def.ghi" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.Equal("save_memory_preview", response.ActionType);
+        Assert.Null(response.ProposedAction);
+        Assert.False(response.WroteData);
+        Assert.Null(response.CreatedResourceId);
+
+        var json = JsonSerializer.Serialize(response.Payload);
+        Assert.Contains("\"blocked\":true", json);
+        Assert.Contains("\"guardDecision\":\"block\"", json);
+        Assert.Contains("\"wroteData\":false", json);
+        Assert.DoesNotContain("Bearer abc.def.ghi", json);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryProposalGuardReviewRequired_RecordsConflictWithoutWriting()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var guard = new FixedMemoryProposalGuard(new MemoryPollutionDecision
+        {
+            Action = "review_required",
+            ReviewRequired = true,
+            Reason = "conflict_detected",
+            ConflictResult = new MemoryConflictResult
+            {
+                HasConflict = true,
+                ExistingMemoryId = "mem_existing",
+                MemoryType = "preference",
+                ConflictKind = "preference_polarity",
+                Reason = "test_conflict"
+            }
+        });
+        var runner = CreateRunner(
+            new FakeDocumentRepository(),
+            pendingActions: store,
+            memoryProposalGuard: guard,
+            memoryProposalOptions: EnabledMemoryProposalOptions());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：我不喜欢 coffee" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.NotNull(response.ProposedAction);
+        Assert.False(response.WroteData);
+        Assert.Null(response.CreatedResourceId);
+
+        var payload = MemoryPreviewActionPayloadMapper.Map(response.ProposedAction!.Payload);
+        Assert.Equal("review_required", payload.GuardDecision);
+        Assert.True(payload.ReviewRequired);
+        Assert.Null(payload.Blocked);
+        Assert.NotNull(payload.ConflictResult);
+        Assert.True(payload.ConflictResult!.HasConflict);
+        Assert.Null(payload.MergeCandidate);
+        MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(response.ProposedAction.Payload);
+
+        var payloadJson = JsonSerializer.Serialize(response.ProposedAction.Payload);
+        Assert.Contains("\"GuardDecision\":\"review_required\"", payloadJson);
+        Assert.Contains("\"ReviewRequired\":true", payloadJson);
+        Assert.Contains("\"ConflictResult\"", payloadJson);
+        Assert.Contains("\"ExistingMemoryId\":\"mem_existing\"", payloadJson);
+        Assert.DoesNotContain("MergeCandidate", payloadJson);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryProposalGuardMergeCandidate_RecordsCandidateWithoutAutoMerge()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var guard = new FixedMemoryProposalGuard(new MemoryPollutionDecision
+        {
+            Action = "merge_candidate",
+            ReviewRequired = true,
+            Reason = "duplicate_like_proposal",
+            MergeCandidate = new MemoryMergeCandidate
+            {
+                HasCandidate = true,
+                ExistingMemoryId = "mem_existing",
+                MemoryType = "preference",
+                SimilarityScore = 0.9,
+                Reason = "test_duplicate"
+            }
+        });
+        var runner = CreateRunner(
+            new FakeDocumentRepository(),
+            pendingActions: store,
+            memoryProposalGuard: guard,
+            memoryProposalOptions: EnabledMemoryProposalOptions());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "帮我保存记忆：我喜欢 coffee" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.NotNull(response.ProposedAction);
+        Assert.False(response.WroteData);
+        Assert.Null(response.CreatedResourceId);
+
+        var payload = MemoryPreviewActionPayloadMapper.Map(response.ProposedAction!.Payload);
+        Assert.Equal("merge_candidate", payload.GuardDecision);
+        Assert.True(payload.ReviewRequired);
+        Assert.NotNull(payload.MergeCandidate);
+        Assert.True(payload.MergeCandidate!.HasCandidate);
+        Assert.Null(payload.ConflictResult);
+        MemoryPreviewActionPayloadMapper.ValidatePreviewPayload(response.ProposedAction.Payload);
+
+        var payloadJson = JsonSerializer.Serialize(response.ProposedAction.Payload);
+        Assert.Contains("\"GuardDecision\":\"merge_candidate\"", payloadJson);
+        Assert.Contains("\"ReviewRequired\":true", payloadJson);
+        Assert.Contains("\"MergeCandidate\"", payloadJson);
+        Assert.Contains("\"ExistingMemoryId\":\"mem_existing\"", payloadJson);
+        Assert.DoesNotContain("ConflictResult", payloadJson);
     }
 
     [Fact]
@@ -1760,7 +1956,9 @@ public class AgentSkeletonTest
         IRagChatService? ragChatService = null,
         IPendingAgentActionStore? pendingActions = null,
         int maxIterations = 3,
-        IMemoryContextProvider? memoryContextProvider = null)
+        IMemoryContextProvider? memoryContextProvider = null,
+        IMemoryProposalGuard? memoryProposalGuard = null,
+        MemoryProposalRuntimeOptions? memoryProposalOptions = null)
     {
         var tools = new IAgentTool[]
         {
@@ -1775,7 +1973,18 @@ public class AgentSkeletonTest
             executor,
             Options.Create(new AgentOptions { MaxIterations = maxIterations }),
             pendingActions ?? new InMemoryPendingAgentActionStore(),
-            memoryContextProvider);
+            memoryContextProvider,
+            memoryProposalGuard,
+            memoryProposalOptions is null ? null : Options.Create(memoryProposalOptions));
+    }
+
+    private static MemoryProposalRuntimeOptions EnabledMemoryProposalOptions()
+    {
+        return new MemoryProposalRuntimeOptions
+        {
+            EnableMemoryProposalRuntime = true,
+            EnableMemoryProposalGuard = true
+        };
     }
 
     private sealed class RecordingMemoryContextProvider : IMemoryContextProvider
@@ -1804,6 +2013,25 @@ public class AgentSkeletonTest
             CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("retrieval failed");
+        }
+    }
+
+    private sealed class FixedMemoryProposalGuard : IMemoryProposalGuard
+    {
+        private readonly MemoryPollutionDecision _decision;
+        public int CallCount { get; private set; }
+
+        public FixedMemoryProposalGuard(MemoryPollutionDecision decision)
+        {
+            _decision = decision;
+        }
+
+        public MemoryPollutionDecision Evaluate(
+            MemoryPreviewActionPayload proposal,
+            IReadOnlyList<Memory> existingMemories)
+        {
+            CallCount++;
+            return _decision;
         }
     }
 

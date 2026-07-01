@@ -1,3 +1,6 @@
+using LifeAgent.Api.Models.Memories;
+using System.Text.Json.Serialization;
+
 namespace LifeAgent.Api.Models.Agent;
 
 public sealed class MemoryPreviewActionPayload
@@ -12,4 +15,16 @@ public sealed class MemoryPreviewActionPayload
     public string? SourceText { get; set; }
     public Dictionary<string, object>? Metadata { get; set; }
     public DateTime? ExpiresAt { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GuardDecision { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Blocked { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ReviewRequired { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GuardReason { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MemoryConflictResult? ConflictResult { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MemoryMergeCandidate? MergeCandidate { get; set; }
 }

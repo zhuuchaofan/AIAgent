@@ -44,6 +44,9 @@ builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<ToolExecutor>();
 builder.Services.AddSingleton(sp =>
     Options.Create(MemoryContextProviderOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
+builder.Services.AddSingleton(sp =>
+    Options.Create(MemoryProposalRuntimeOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
+builder.Services.AddSingleton<IMemoryProposalGuard, MemoryProposalGuard>();
 builder.Services.AddScoped<IMemoryContextProvider>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<MemoryContextProviderOptions>>();

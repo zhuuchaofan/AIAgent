@@ -17,12 +17,14 @@ public class AgentRunner
         ToolExecutor toolExecutor,
         IOptions<AgentOptions> options,
         IPendingAgentActionStore pendingActions,
-        IMemoryContextProvider? memoryContextProvider = null)
+        IMemoryContextProvider? memoryContextProvider = null,
+        IMemoryProposalGuard? memoryProposalGuard = null,
+        IOptions<MemoryProposalRuntimeOptions>? memoryProposalOptions = null)
     {
         _options = options.Value;
         _intentResolver = new AgentIntentResolver();
         _contractValidator = new AgentContractValidator();
-        _actionExecutor = new AgentActionExecutor(toolExecutor, pendingActions);
+        _actionExecutor = new AgentActionExecutor(toolExecutor, pendingActions, memoryProposalGuard, memoryProposalOptions);
         _responseFinalizer = new AgentResponseFinalizer();
         _memoryContextProvider = memoryContextProvider ?? new NoopMemoryContextProvider();
     }

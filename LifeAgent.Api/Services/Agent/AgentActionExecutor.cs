@@ -1,6 +1,8 @@
 using System.Text.Json;
 using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Models.Memories;
+using LifeAgent.Api.Services.Memories;
+using Microsoft.Extensions.Options;
 
 namespace LifeAgent.Api.Services.Agent;
 
@@ -8,11 +10,19 @@ public sealed class AgentActionExecutor
 {
     private readonly ToolExecutor _toolExecutor;
     private readonly IPendingAgentActionStore _pendingActions;
+    private readonly IMemoryProposalGuard _memoryProposalGuard;
+    private readonly MemoryProposalRuntimeOptions _memoryProposalOptions;
 
-    public AgentActionExecutor(ToolExecutor toolExecutor, IPendingAgentActionStore pendingActions)
+    public AgentActionExecutor(
+        ToolExecutor toolExecutor,
+        IPendingAgentActionStore pendingActions,
+        IMemoryProposalGuard? memoryProposalGuard = null,
+        IOptions<MemoryProposalRuntimeOptions>? memoryProposalOptions = null)
     {
         _toolExecutor = toolExecutor;
         _pendingActions = pendingActions;
+        _memoryProposalGuard = memoryProposalGuard ?? new MemoryProposalGuard();
+        _memoryProposalOptions = memoryProposalOptions?.Value ?? MemoryProposalRuntimeOptions.Disabled;
     }
 
     public async Task<AgentExecutionResult> ExecuteAsync(
@@ -25,13 +35,11 @@ public sealed class AgentActionExecutor
     {
         if (contract.RequiresConfirmation)
         {
-            var proposedAction = await CreateProposedActionAsync(
+            return await CreateConfirmationExecutionAsync(
                 userId,
                 request.Message ?? string.Empty,
                 contract,
                 cancellationToken);
-
-            return AgentExecutionResult.Confirmation(proposedAction);
         }
 
         if (plan.Count == 0)
@@ -109,7 +117,7 @@ public sealed class AgentActionExecutor
         return context.MemoryContext.Enabled;
     }
 
-    private async Task<AgentProposedAction> CreateProposedActionAsync(
+    private async Task<AgentExecutionResult> CreateConfirmationExecutionAsync(
         string userId,
         string message,
         AgentExecutionContract contract,
@@ -138,6 +146,14 @@ public sealed class AgentActionExecutor
                 previewOnly = true
             }
         };
+        if (payload is MemoryPreviewActionPayload memoryPayload)
+        {
+            var guardDecision = ApplyMemoryProposalGuard(userId, memoryPayload);
+            if (guardDecision.Blocked)
+            {
+                return AgentExecutionResult.BlockedMemoryProposal(memoryPayload);
+            }
+        }
 
         var pending = await _pendingActions.CreateAsync(
             userId,
@@ -149,7 +165,38 @@ public sealed class AgentActionExecutor
             TimeSpan.FromMinutes(10),
             cancellationToken);
 
-        return pending.ProposedAction;
+        return AgentExecutionResult.Confirmation(pending.ProposedAction);
+    }
+
+    private MemoryPollutionDecision ApplyMemoryProposalGuard(
+        string userId,
+        MemoryPreviewActionPayload payload)
+    {
+        if (!_memoryProposalOptions.IsEnabledForUser(userId))
+        {
+            return new MemoryPollutionDecision
+            {
+                Action = "disabled",
+                Reason = "memory_proposal_runtime_disabled"
+            };
+        }
+
+        var decision = _memoryProposalGuard.Evaluate(payload, Array.Empty<Memory>());
+        payload.GuardDecision = decision.Action;
+        payload.Blocked = decision.Blocked ? true : null;
+        payload.ReviewRequired = decision.ReviewRequired ? true : null;
+        payload.GuardReason = decision.Reason;
+        payload.ConflictResult = decision.ConflictResult?.HasConflict == true
+            ? decision.ConflictResult
+            : null;
+        payload.MergeCandidate = decision.MergeCandidate?.HasCandidate == true
+            ? decision.MergeCandidate
+            : null;
+        payload.Metadata ??= new Dictionary<string, object>();
+        payload.Metadata["guardDecision"] = decision.Action;
+        payload.Metadata["guardReason"] = decision.Reason;
+
+        return decision;
     }
 
     private static string BuildReminderPreviewTitle(string message)
@@ -281,6 +328,19 @@ public sealed record AgentExecutionResult(
     public static AgentExecutionResult Confirmation(AgentProposedAction proposedAction)
     {
         return new AgentExecutionResult(proposedAction, new List<AgentToolCallResult>(), proposedAction.Payload);
+    }
+
+    public static AgentExecutionResult BlockedMemoryProposal(MemoryPreviewActionPayload payload)
+    {
+        return new AgentExecutionResult(null, new List<AgentToolCallResult>(), new
+        {
+            actionType = AgentActionTypes.SaveMemoryPreview,
+            previewOnly = true,
+            wroteData = false,
+            blocked = true,
+            guardDecision = payload.GuardDecision,
+            reason = payload.GuardReason
+        });
     }
 
     public static AgentExecutionResult Fallback(object payload)
