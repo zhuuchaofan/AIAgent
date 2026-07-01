@@ -7,6 +7,7 @@ using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.Tools;
 using LifeAgent.Api.Services.LifeEvents;
+using LifeAgent.Api.Services.Memories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;
@@ -159,6 +160,117 @@ public class AgentSkeletonTest
         Assert.Empty(response.ToolCalls);
         Assert.Contains("支持文档列表、文档状态查询和只读 RAG 问答", response.Answer);
         Assert.False(writeTool.WasCalled);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryRetrievalDisabled_FallbackPayloadDoesNotContainMemoryContext()
+    {
+        var provider = new RecordingMemoryContextProvider(MemoryRuntimeContext.Disabled());
+        var runner = CreateRunner(new FakeDocumentRepository(), memoryContextProvider: provider);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "随便聊聊今天的天气" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.False(response.WroteData);
+        Assert.Null(response.ProposedAction);
+        Assert.Equal(1, provider.CallCount);
+
+        var json = JsonSerializer.Serialize(response.Payload);
+        Assert.DoesNotContain("memoryContext", json);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryRetrievalDisabled_ToolPayloadDoesNotContainMemoryContext()
+    {
+        var repository = new FakeDocumentRepository();
+        repository.Documents["user_a"] = new List<KnowledgeDocument>
+        {
+            new KnowledgeDocument { Id = "doc_a", UserId = "user_a", FileName = "a.md", Status = "success", ChunkCount = 1 }
+        };
+        var provider = new RecordingMemoryContextProvider(MemoryRuntimeContext.Disabled());
+        var runner = CreateRunner(repository, memoryContextProvider: provider);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "列出我的文档" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.False(response.WroteData);
+        Assert.Null(response.ProposedAction);
+        Assert.Single(response.ToolCalls);
+        Assert.Equal(1, provider.CallCount);
+
+        var json = JsonSerializer.Serialize(response.Payload);
+        Assert.DoesNotContain("memoryContext", json);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryRetrievalEnabled_DoesNotCreatePendingActionOrWrite()
+    {
+        var store = new InMemoryPendingAgentActionStore();
+        var provider = new RecordingMemoryContextProvider(new MemoryRuntimeContext
+        {
+            Enabled = true,
+            Status = "ready",
+            ResultCount = 1,
+            MaxResults = 1,
+            Results =
+            [
+                new MemoryRuntimeContextItem
+                {
+                    MemoryId = "mem_1",
+                    MemoryType = "preference",
+                    Score = 1,
+                    Reason = "test"
+                }
+            ],
+            FormattedContext = "- [preference] 喜欢早上写代码"
+        });
+        var runner = CreateRunner(
+            new FakeDocumentRepository(),
+            pendingActions: store,
+            memoryContextProvider: provider);
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "随便聊聊今天的天气" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.False(response.RequiresConfirmation);
+        Assert.Null(response.ProposedAction);
+        Assert.False(response.WroteData);
+        Assert.Null(response.CreatedResourceId);
+        Assert.Equal(1, provider.CallCount);
+
+        var json = JsonSerializer.Serialize(response.Payload);
+        Assert.Contains("\"status\":\"ready\"", json);
+        Assert.Contains("\"resultCount\":1", json);
+        Assert.DoesNotContain("喜欢早上写代码", json);
+    }
+
+    [Fact]
+    public async Task AgentRunner_MemoryRetrievalFailure_FallsBackWithoutFailingRun()
+    {
+        var runner = CreateRunner(
+            new FakeDocumentRepository(),
+            memoryContextProvider: new ThrowingMemoryContextProvider());
+
+        var response = await runner.RunAsync(
+            "user_a",
+            new AgentRunRequest { Message = "随便聊聊今天的天气" },
+            CancellationToken.None);
+
+        AssertContractShape(response);
+        Assert.False(response.WroteData);
+        Assert.Null(response.ProposedAction);
+
+        var json = JsonSerializer.Serialize(response.Payload);
+        Assert.Contains("\"skippedReason\":\"retrieval_failed\"", json);
     }
 
     [Theory]
@@ -1647,7 +1759,8 @@ public class AgentSkeletonTest
         IRagSearchService? ragSearchService = null,
         IRagChatService? ragChatService = null,
         IPendingAgentActionStore? pendingActions = null,
-        int maxIterations = 3)
+        int maxIterations = 3,
+        IMemoryContextProvider? memoryContextProvider = null)
     {
         var tools = new IAgentTool[]
         {
@@ -1661,7 +1774,37 @@ public class AgentSkeletonTest
         return new AgentRunner(
             executor,
             Options.Create(new AgentOptions { MaxIterations = maxIterations }),
-            pendingActions ?? new InMemoryPendingAgentActionStore());
+            pendingActions ?? new InMemoryPendingAgentActionStore(),
+            memoryContextProvider);
+    }
+
+    private sealed class RecordingMemoryContextProvider : IMemoryContextProvider
+    {
+        private readonly MemoryRuntimeContext _context;
+        public int CallCount { get; private set; }
+
+        public RecordingMemoryContextProvider(MemoryRuntimeContext context)
+        {
+            _context = context;
+        }
+
+        public Task<MemoryRuntimeContext> GetContextAsync(
+            MemoryContextRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(_context);
+        }
+    }
+
+    private sealed class ThrowingMemoryContextProvider : IMemoryContextProvider
+    {
+        public Task<MemoryRuntimeContext> GetContextAsync(
+            MemoryContextRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("retrieval failed");
+        }
     }
 
     private sealed class FakeDocumentRepository : IDocumentRepository

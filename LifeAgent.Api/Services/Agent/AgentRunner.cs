@@ -1,4 +1,5 @@
 using LifeAgent.Api.Models.Agent;
+using LifeAgent.Api.Services.Memories;
 using Microsoft.Extensions.Options;
 
 namespace LifeAgent.Api.Services.Agent;
@@ -10,17 +11,20 @@ public class AgentRunner
     private readonly AgentContractValidator _contractValidator;
     private readonly AgentActionExecutor _actionExecutor;
     private readonly AgentResponseFinalizer _responseFinalizer;
+    private readonly IMemoryContextProvider _memoryContextProvider;
 
     public AgentRunner(
         ToolExecutor toolExecutor,
         IOptions<AgentOptions> options,
-        IPendingAgentActionStore pendingActions)
+        IPendingAgentActionStore pendingActions,
+        IMemoryContextProvider? memoryContextProvider = null)
     {
         _options = options.Value;
         _intentResolver = new AgentIntentResolver();
         _contractValidator = new AgentContractValidator();
         _actionExecutor = new AgentActionExecutor(toolExecutor, pendingActions);
         _responseFinalizer = new AgentResponseFinalizer();
+        _memoryContextProvider = memoryContextProvider ?? new NoopMemoryContextProvider();
     }
 
     public async Task<AgentRunResponse> RunAsync(
@@ -30,6 +34,10 @@ public class AgentRunner
     {
         var maxIterations = Math.Clamp(_options.MaxIterations <= 0 ? 3 : _options.MaxIterations, 1, 5);
         var runId = $"agent_run_{Guid.NewGuid():N}";
+        var intent = _intentResolver.Resolve(request);
+        var contract = _contractValidator.BuildContract(intent);
+        var memoryContext = await GetMemoryContextAsync(userId, request, intent, contract, cancellationToken);
+
         var context = new AgentContext
         {
             UserId = userId,
@@ -39,11 +47,10 @@ public class AgentRunner
                 : request.ConversationId!,
             ClientTimeZone = string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "UTC" : request.ClientTimeZone!,
             SelectedDocumentIds = request.DocumentIds?.ToArray() ?? Array.Empty<string>(),
-            MaxIterations = maxIterations
+            MaxIterations = maxIterations,
+            MemoryContext = memoryContext
         };
 
-        var intent = _intentResolver.Resolve(request);
-        var contract = _contractValidator.BuildContract(intent);
         var plan = _intentResolver.BuildPlan(request, contract);
         var execution = await _actionExecutor.ExecuteAsync(
             userId,
@@ -57,5 +64,28 @@ public class AgentRunner
         return validation.Success
             ? _responseFinalizer.Finalize(runId, maxIterations, contract, execution)
             : _responseFinalizer.ContractError(runId, maxIterations, validation.ErrorMessage ?? "unknown contract error");
+    }
+
+    private async Task<MemoryRuntimeContext> GetMemoryContextAsync(
+        string userId,
+        AgentRunRequest request,
+        AgentIntentResolution intent,
+        AgentExecutionContract contract,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _memoryContextProvider.GetContextAsync(new MemoryContextRequest
+            {
+                UserId = userId,
+                AgentRequest = request,
+                Intent = intent.Intent,
+                ActionType = contract.ActionType
+            }, cancellationToken);
+        }
+        catch
+        {
+            return MemoryRuntimeContext.Skipped("retrieval_failed");
+        }
     }
 }

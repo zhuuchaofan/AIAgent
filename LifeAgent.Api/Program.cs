@@ -8,7 +8,9 @@ using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.Tools;
 using LifeAgent.Api.Services.LifeEvents;
+using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Endpoints;
+using Microsoft.Extensions.Options;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("LifeAgent.Tests")]
 
@@ -40,6 +42,20 @@ builder.Services.AddScoped<IRagSearchService, RagSearchService>();
 builder.Services.AddScoped<AgentRunner>();
 builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<ToolExecutor>();
+builder.Services.AddSingleton(sp =>
+    Options.Create(MemoryContextProviderOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
+builder.Services.AddScoped<IMemoryContextProvider>(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<MemoryContextProviderOptions>>();
+    var value = options.Value;
+    if (!value.EnableMemoryRetrieval || !value.EnableMemoryContextInAgent)
+    {
+        return new NoopMemoryContextProvider();
+    }
+
+    var retrieval = new InMemoryMemoryRetrievalService(new InMemoryMemoryRepository());
+    return new ReadOnlyMemoryContextProvider(retrieval, options);
+});
 builder.Services.AddSingleton<IAgentWriteFeatureGate, AgentWriteFeatureGate>();
 builder.Services.AddScoped<AgentLifeEventConfirmationWriteCoordinator>();
 builder.Services.AddScoped<IAgentLifeEventWriter, FirestoreAgentLifeEventWriter>();

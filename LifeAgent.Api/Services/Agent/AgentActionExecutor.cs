@@ -36,12 +36,7 @@ public sealed class AgentActionExecutor
 
         if (plan.Count == 0)
         {
-            return AgentExecutionResult.Fallback(new
-            {
-                intent = contract.Intent,
-                fallback = AgentActionTypes.ReadonlyRag,
-                reason = contract.FallbackReason ?? "no_plan"
-            });
+            return AgentExecutionResult.Fallback(BuildFallbackPayload(context, contract));
         }
 
         var toolCalls = new List<AgentToolCallResult>();
@@ -61,11 +56,57 @@ public sealed class AgentActionExecutor
             }
         }
 
-        return AgentExecutionResult.Tools(toolCalls, new
+        return AgentExecutionResult.Tools(toolCalls, BuildToolsPayload(context, contract, plan));
+    }
+
+    private static object BuildFallbackPayload(AgentContext context, AgentExecutionContract contract)
+    {
+        var reason = contract.FallbackReason ?? "no_plan";
+        if (!ShouldIncludeMemoryDiagnostics(context))
+        {
+            return new
+            {
+                intent = contract.Intent,
+                fallback = AgentActionTypes.ReadonlyRag,
+                reason
+            };
+        }
+
+        return new
         {
             intent = contract.Intent,
-            toolPlan = plan.Select(step => step.ToolName).ToArray()
-        });
+            fallback = AgentActionTypes.ReadonlyRag,
+            reason,
+            memoryContext = context.MemoryContext.ToDiagnostics()
+        };
+    }
+
+    private static object BuildToolsPayload(
+        AgentContext context,
+        AgentExecutionContract contract,
+        IReadOnlyList<PlannedToolCall> plan)
+    {
+        var toolPlan = plan.Select(step => step.ToolName).ToArray();
+        if (!ShouldIncludeMemoryDiagnostics(context))
+        {
+            return new
+            {
+                intent = contract.Intent,
+                toolPlan
+            };
+        }
+
+        return new
+        {
+            intent = contract.Intent,
+            toolPlan,
+            memoryContext = context.MemoryContext.ToDiagnostics()
+        };
+    }
+
+    private static bool ShouldIncludeMemoryDiagnostics(AgentContext context)
+    {
+        return context.MemoryContext.Enabled;
     }
 
     private async Task<AgentProposedAction> CreateProposedActionAsync(
