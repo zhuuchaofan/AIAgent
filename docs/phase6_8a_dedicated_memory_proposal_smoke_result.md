@@ -4,7 +4,7 @@
 
 This document records the Phase 6.8A dedicated memory proposal default-off smoke result.
 
-This result only covers the dedicated default-off smoke attempt for `scripts/smoke-memory-proposal-preview.mjs`.
+This result only verifies the default-off dedicated smoke path for `scripts/smoke-memory-proposal-preview.mjs`.
 
 It does not mean:
 
@@ -13,27 +13,31 @@ It does not mean:
 - real Firestore Memory runtime is connected
 - Release Gate has passed
 
-## 2. Baseline
+## 2. Historical 401 Investigation
 
-- Smoke script commit: `4413a9be89f375340d9307aaaf28d2a6e85713bf`
-- API_BASE_URL: `https://life-agent-api-151587524132.us-central1.run.app`
-- Execution time: `2026-07-02 20:54:36 CST`
-- Retry time with refreshed temporary token: `2026-07-02 20:58:26 CST`
-- Second retry time with refreshed temporary token: `2026-07-02 21:04:44 CST`
-- API revision during follow-up read-only check: `life-agent-api-00038-w9d`
-- Revision timing: current online revision was created before the Phase 6.8A implementation and dedicated smoke script commits
-- Durable memory write: not enabled
-- Real Firestore Memory runtime: not connected
-- Cloud Run env modified: no
-- Firestore Rules modified: no
-- MCP modified: no
-- Deployed: no
-- Pushed: no
+Initial dedicated smoke attempts failed at the authenticated Agent request with `401 UNAUTHORIZED`.
+
+At that time, the likely cause was suspected to be online API revision / auth code version mismatch because:
+
+- token `iss` / `aud` matched `my-agent-app-a5e42`
+- Cloud Run env had `FIREBASE_PROJECT_ID=my-agent-app-a5e42`
+- local current auth code initialized Firebase Admin with `FIREBASE_PROJECT_ID=my-agent-app-a5e42`
+- the then-online revision was older than the Phase 6.8A implementation and dedicated smoke script commits
+
+Follow-up checks found a more specific root cause:
+
+- failed token length observed by the smoke script: `1150`
+- full token length verified by manual shell check: `1154`
+- manual retry with the full-length token passed
+
+Final corrected root cause: confirmed token copy truncation.
 
 ## 3. Token Handling
 
 - FIREBASE_ID_TOKEN: present
 - Temporary token used: yes
+- Token length verified: `1154`
+- Previous failed token length observed: `1150`
 - Full token recorded: no
 - Fake token: no
 - Mock auth: no
@@ -44,69 +48,67 @@ It does not mean:
 Executed command shape:
 
 ```bash
-FIREBASE_ID_TOKEN="[redacted temporary token]" \
 API_BASE_URL="https://life-agent-api-151587524132.us-central1.run.app" \
+FIREBASE_ID_TOKEN="$TOKEN" \
 node scripts/smoke-memory-proposal-preview.mjs
 ```
 
 Result:
 
-- `/health`: PASS
-- Default-off baseline: FAIL
-- Failure point: authenticated Agent run returned `401 UNAUTHORIZED`
-- Error summary: `{"success":false,"error":{"code":"UNAUTHORIZED","message":"无效或过期的 Token"}}`
-- Retry with refreshed temporary token: same `401 UNAUTHORIZED` result
-- Second retry with refreshed temporary token: same `401 UNAUTHORIZED` result
-- Guard-enabled checks: not reached
-- Overall result: FAIL
+- `scripts/smoke-memory-proposal-preview.mjs`: PASS
+- API `/health`: PASS
+- Default-off memory proposal baseline: PASS
+- Guard-enabled checks: SKIP
+- Failures: none in the manual full-length-token retry
 
 ## 5. Default-off Contract Verification
 
-The default-off contract verification did not complete because the authenticated Agent run failed before a `save_memory_preview` response was returned.
-
-- save_memory_preview returned: not verified
-- proposedAction.requiresConfirmation: not verified
-- payload.previewOnly: not verified
-- serialized payload omits `guardDecision`: not verified
-- serialized payload omits `blocked`: not verified
-- serialized payload omits `reviewRequired`: not verified
-- serialized payload omits `guardReason`: not verified
-- serialized payload omits `conflictResult`: not verified
-- serialized payload omits `mergeCandidate`: not verified
-- confirm previewOnly: not verified
-- confirm wroteData: not verified
-- createdResourceId null or empty: not verified
+- Explicit memory intent returned `save_memory_preview`: yes
+- `proposedAction.requiresConfirmation=true`: yes
+- `payload.previewOnly=true`: yes
+- Serialized payload omitted `guardDecision`: yes
+- Serialized payload omitted `blocked`: yes
+- Serialized payload omitted `reviewRequired`: yes
+- Serialized payload omitted `guardReason`: yes
+- Serialized payload omitted `conflictResult`: yes
+- Serialized payload omitted `mergeCandidate`: yes
+- Confirm `previewOnly=true`: yes
+- Confirm `wroteData=false`: yes
+- `createdResourceId` null or empty: yes
 
 ## 6. No-write Verification
 
-- wroteData=true observed: no
-- users/{userId}/memories write: not directly queried; no write signal was observed before the authenticated run failed
-- life_events write: no proposal runtime write signal observed
-- durable memory write enabled: no
-- extraction triggered: no
-- automatic RAG/chat/background memory proposal: no
+- `wroteData=true` observed: no
+- Firestore direct memory write queried: no
+- `users/{userId}/memories` write: not directly queried; inferred no-write from response contract and disabled durable write flags
+- `life_events` write from proposal runtime: no observed signal
+- Durable memory write: not enabled
+- Extraction trigger: no
+- RAG/chat/background auto memory proposal: no
 
 No Firestore direct query was performed by this script. Do not treat this result as a direct Firestore no-write audit.
 
-## 7. Known Limits
+## 7. Environment / Deployment Boundary
+
+- Push: no
+- Deploy: no during the final manual smoke retry
+- Cloud Run env modified: no
+- Firestore Rules modified: no
+- MCP modified: no
+- Mock auth enabled: no
+- Mock LLM enabled: no
+- Durable memory write enabled: no
+- Real Firestore Memory runtime connected: no
+
+Note: a user-approved preview-only API redeploy was performed before the final manual retry to ensure the online API was running the current code. That redeploy did not modify Cloud Run env, did not enable mock auth, did not enable mock LLM, and did not enable write flags.
+
+## 8. Known Limits
 
 - The script did not directly query Firestore.
-- users/{userId}/memories no-write is based only on response behavior before failure and durable write remaining disabled.
-- Guard-enabled online checks were not executed because the default-off authenticated flow failed first and expectation flags were not set.
-- The supplied temporary token was present but rejected by the API as invalid or expired.
-- A refreshed temporary token was also rejected by the API as invalid or expired.
-- A second refreshed temporary token was also rejected by the API as invalid or expired.
-- Follow-up read-only check found the token `iss` / `aud` matched `my-agent-app-a5e42`, Cloud Run env had `FIREBASE_PROJECT_ID=my-agent-app-a5e42`, and local current auth code also initializes Firebase Admin with `FIREBASE_PROJECT_ID=my-agent-app-a5e42`.
-- The repeated 401 is therefore more likely caused by the online API revision / auth code version mismatch than by the temporary token itself.
-- Continuing to rotate tokens is not recommended until the online API revision is updated or otherwise proven to run the current auth code.
-- Changing auth code is not recommended based on the current local code review.
+- `users/{userId}/memories` no-write is inferred from response contract and disabled durable write flags.
+- Guard-enabled online checks were skipped because expectation flags were not set.
+- Future guard-enabled smoke requires a separate preview-only / canary environment and separate approval.
 
-## 8. Final Conclusion
+## 9. Final Conclusion
 
-Phase 6.8A dedicated memory proposal default-off smoke failed. The failure point was authenticated Agent run returning `401 UNAUTHORIZED`.
-
-The likely root cause is online API revision / auth code version mismatch. The recommended next step is separate user approval for a preview-only API redeploy.
-
-Any redeploy must not modify Cloud Run env, must not enable mock auth, must not enable mock LLM, and must not enable write flags.
-
-Durable memory write remains disabled. Real Firestore Memory runtime remains disconnected. Guard-enabled online smoke remains pending.
+Phase 6.8A dedicated memory proposal default-off smoke passed after retrying with a full-length temporary Firebase ID token. The previous 401 was caused by token copy truncation, not by confirmed API auth-code mismatch. Default-off serialized `save_memory_preview` payload remains unchanged. Confirm remains `previewOnly=true` / `wroteData=false`. Durable memory write remains disabled. Real Firestore Memory runtime remains disconnected. Guard-enabled online smoke remains pending.
