@@ -1,5 +1,18 @@
 # Phase 7.0 Runtime Tooling Architecture
 
+Date: 2026-07-02
+
+## Scope
+
+Phase 7.0 is a design-only architecture phase. It documents the target runtime
+tooling model for future Agent multi-tool expansion.
+
+This document does not implement code, change API runtime behavior, change
+frontend behavior, deploy services, modify Cloud Run environment variables,
+modify Firestore Rules, modify MCP, enable durable memory writes, connect a real
+Firestore Memory runtime, write `users/{userId}/memories`, write `life_events`,
+or enable mock auth / mock LLM.
+
 ## 1. Phase 7 Goal
 
 Phase 7 expands the Agent from a single preview / confirm capability into a safe multi-tool runtime.
@@ -26,6 +39,7 @@ Current system capabilities:
 - Guarded memory proposal preview runtime
 - Durable memory write disabled
 - Real Firestore Memory runtime disconnected
+- Frontend does not yet have full Memory UI / Dashboard
 
 Current verified Phase 6 state:
 
