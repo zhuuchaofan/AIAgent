@@ -2,54 +2,85 @@
 
 Date: 2026-07-02
 
-## Scope
+## 1. Background
 
-Phase 7.0 is a design-only architecture phase. It documents the target runtime
-tooling model for future Agent multi-tool expansion.
+LifeOS / LifeAgent has moved through the foundation phases that make a safe
+multi-tool Agent runtime possible:
 
-This document does not implement code, change API runtime behavior, change
-frontend behavior, deploy services, modify Cloud Run environment variables,
-modify Firestore Rules, modify MCP, enable durable memory writes, connect a real
-Firestore Memory runtime, write `users/{userId}/memories`, write `life_events`,
-or enable mock auth / mock LLM.
+- Phase 1 established the authenticated application, API, Firestore-backed user
+  data boundaries, and Cloud Run deployment shape.
+- Phase 2 added life data, reminders, and daily summaries under user-scoped
+  data paths.
+- Phase 3 added document upload, processing, vector retrieval, and RAG document
+  QA.
+- Phase 4 introduced controlled Agent preview behavior, pending actions, and
+  confirmation lifecycle concepts.
+- Phase 5 completed the first Agent write MVP around `create_life_event`, while
+  keeping real production writes behind feature gates and Release Gate review.
+- Phase 6 completed the Memory Engine foundation: memory schema, proposal
+  contract, retrieval skeleton, merge / conflict / pollution guard,
+  timeline / summary extraction skeleton, read-only runtime context, and guarded
+  memory proposal preview runtime.
 
-## 1. Phase 7 Goal
+Phase 6 is closed for preview-only / default-off implementation. Durable memory
+write is not enabled, real Firestore Memory runtime is not connected, and
+`users/{userId}/memories` is not being written. Memory proposal runtime must not
+write `life_events`.
 
-Phase 7 expands the Agent from a single preview / confirm capability into a safe multi-tool runtime.
+Phase 7 starts from the Phase 6 handoff recommendation: continue with runtime
+integration and multi-tool expansion planning rather than opening durable memory
+write. Phase 7.0 therefore defines the architecture for future multi-tool
+runtime behavior. It does not release real writes.
 
-The goal is to define how tools are declared, selected, gated, executed, traced, previewed, confirmed, audited, and eventually promoted through Release Gates.
+The recent dedicated smoke blocker has also been clarified: the final cause of
+the 401 was an incomplete `FIREBASE_ID_TOKEN` copy, not an API revision mismatch
+or auth code inconsistency. That correction should prevent future Phase 7 work
+from chasing the wrong auth conclusion.
 
-Phase 7 is not:
+## 2. Phase 7 Goal
 
-- durable memory write enablement
-- production memory repository rollout
-- unrestricted autonomous agent behavior
-- background auto-execution system
-- direct production mutation without preview / confirm
+Phase 7 evolves the Agent from a narrow RAG / memory proposal surface into a
+safe multi-tool runtime.
 
-## 2. Current Baseline
+Phase 7 should support:
 
-Current system capabilities:
+- read-only tools
+- preview-producing tools
+- confirm-required write tools
+- a unified tool invocation contract
+- shared trace, audit, validation, and safety guard semantics
+- default-off feature flags
+- Release Gate separation for production-impacting writes
 
-- RAG chat / document QA
-- Agent preview / confirm contract
-- `create_life_event` preview-only write path
-- Memory schema / proposal / retrieval / guard / extraction skeleton
-- Read-only memory context provider
-- Guarded memory proposal preview runtime
-- Durable memory write disabled
-- Real Firestore Memory runtime disconnected
-- Frontend does not yet have full Memory UI / Dashboard
+The architectural goal is not "more autonomy"; it is controlled tool expansion.
+Every tool must be classified, gated, observable, and reversible according to
+its risk.
 
-Current verified Phase 6 state:
+## 3. Non-goals
 
-- `dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj`: 323 passed
-- `scripts/smoke-memory-proposal-preview.mjs`: PASS
-- Default-off memory proposal baseline: PASS
-- Guard-enabled online checks: SKIP
-- Memory proposal confirm remains `previewOnly=true` / `wroteData=false`
+Phase 7.0 does not:
 
-## 3. Tool Categories
+- implement runtime code
+- modify API runtime behavior
+- modify frontend behavior
+- enable durable memory write
+- connect real Firestore Memory runtime
+- write `life_events`
+- write `users/{userId}/memories`
+- change Firestore Rules
+- change Cloud Run environment variables
+- deploy
+- enable MCP
+- enable agent write flags
+- enable memory proposal flags
+- enable mock auth or mock LLM
+- enable real external side-effect tools
+
+Any durable write, production memory repository rollout, Cloud Run env change,
+Firestore Rules change, MCP enablement, deployment, or production data mutation
+must remain separately approved and separately verified.
+
+## 4. Tool Categories
 
 ### Read-only Tools
 
@@ -57,322 +88,334 @@ Examples:
 
 - RAG retrieval
 - memory retrieval
-- calendar read
+- timeline retrieval
+- daily summary retrieval
 - document search
 - status / diagnostics
 
-Rules:
+Default behavior:
 
-- May execute directly after eligibility and feature gate checks.
-- Must emit a user-visible or auditable trace.
+- May execute after auth, eligibility, and feature gate checks.
+- Must emit trace.
 - Must not write user data.
-- Must not create pending write actions.
-- Must not silently upgrade into a mutating tool.
+- Must not create pending actions.
+- Must not trigger extraction or proposal generation as a hidden side effect.
 
-### Preview-only Mutating Tools
+Risk level: low to medium, depending on sensitivity of retrieved data and
+prompt exposure. Read-only does not mean privacy-free.
+
+### Preview-producing Tools
 
 Examples:
 
-- `create_life_event` preview
-- `save_memory_preview`
+- life event proposal
+- memory proposal
+- task proposal
+- note proposal
 - future calendar event preview
 - future document update preview
 
-Rules:
+Default behavior:
 
-- May generate a pending action.
-- Must require user confirmation before any durable write.
-- Must default to no-write.
-- Must be feature gated.
-- Must expose a clear preview summary and risk level.
+- May produce a pending proposal.
+- Must be user-visible.
+- Must remain no-write until confirmation and write gates allow otherwise.
+- Must validate payloads server-side.
+- Must include risk and guard results when applicable.
 
-### Durable Mutating Tools
+Risk level: medium. These tools can shape user decisions and create pending
+actions, but they must not durably mutate user data by themselves.
+
+### Confirm-required Write Tools
 
 Examples:
 
 - confirmed `life_event` write
-- confirmed memory write
-- calendar create / update / delete
-- document write / update
+- durable memory write
+- future task / reminder write
+- future calendar create / update / delete
+- future document write / update
 
-Rules:
+Default behavior:
 
-- Must pass a separate Release Gate.
-- Must be controlled by feature flags.
-- Must have idempotency.
-- Must have audit.
-- Must have rollback.
 - Must require explicit user confirmation.
-- Must never run from Planner output alone.
+- Must reference a server-side pending action.
+- Must use idempotency.
+- Must emit audit.
+- Must remain default-off.
+- Must pass Release Gate before production durable writes.
 
-### Forbidden / Out-of-scope Tools
+Risk level: high. These tools can mutate durable user data and must never run
+directly from LLM output or Planner selection alone.
+
+### External Side-effect Tools
 
 Examples:
 
-- silent background write
-- cross-user data access
-- unconfirmed durable mutation
-- unrestricted shell execution
-- direct production env mutation
+- calendar
+- email
+- file / Drive
+- MCP tools
+- third-party APIs
 
-Rules:
+Default behavior:
 
-- Must not be registered as runtime tools.
-- Must not be exposed through Planner selection.
-- Must not be made available through feature flag shortcuts.
+- Read-only external tools require explicit capability design, auth scoping, and
+  trace.
+- Mutating external tools require preview, confirmation, audit, idempotency,
+  rollback or compensation strategy, and separate Release Gate approval.
+- MCP tools are out of scope for normal Phase 7 implementation unless a
+  dedicated MCP boundary phase is approved.
 
-## 4. Tool Registry Design
+Risk level: medium to critical, depending on whether the tool can notify others,
+modify external systems, delete files, or expose private content.
 
-The Tool Registry declares tool capabilities. A registry entry should include:
+## 5. Runtime Contract
 
-- tool name
-- tool category
+Future tool invocation should use a uniform contract. A tool call record should
+contain at least:
+
+- `toolName`
+- `toolVersion`
+- `actionType`
+- `userId`, resolved from auth context and never from frontend payload
+- `input`
+- `preview`
+- `confirmationRequired`
+- `idempotencyKey`
+- `riskLevel`
+- `writesData`
+- `sideEffects`
+- `traceId`
+- `correlationId`
+- `result`
+- `error`
+
+The runtime contract must preserve the userId trust boundary. Frontend payloads,
+LLM output, tool input, query strings, and request bodies are not trusted sources
+for protected user identity. Server-side auth context is the only source for
+user-scoped reads and writes.
+
+Tool input should describe requested behavior, not authority. The runtime owns
+authorization, feature gate checks, risk classification, pending action lookup,
+and write eligibility.
+
+## 6. Preview / Confirm / Write Strategy
+
+Read-only tools may execute directly after eligibility checks, but they must
+produce trace and must not write.
+
+Preview-producing tools may create pending proposals, but they cannot perform
+durable mutations. Their output should be serialized in a stable preview
+contract that can be shown to the user and later confirmed by reference.
+
+Confirm-required write tools must execute only after the user confirms a
+server-side pending action. Confirm must not trust a frontend-resubmitted
+payload. The confirm request should reference the pending action id; the server
+then loads the action, validates ownership, checks status and expiration,
+revalidates gates, applies idempotency, and only then calls a write coordinator
+when a Release Gate has allowed that write path.
+
+Write paths must remain default-off. A disabled write gate should produce a
+safe no-write response such as `previewOnly=true`, `wroteData=false`, and a
+clear user-visible explanation.
+
+Release Gates remain independent from development phases. Phase 7 development
+can design and build default-off contracts, but it must not silently enable
+production durable writes.
+
+## 7. Tool Registry Design
+
+The Tool Registry is a declarative capability catalog. It does not enable a
+tool by itself.
+
+A registry entry should include:
+
+- tool metadata
+- tool name and version
+- capability declaration
+- category
+- risk classification
 - input schema
 - output schema
-- risk level
-- `requiresConfirmation`
-- `supportsPreview`
-- `durableWriteCapable`
-- feature flags
-- owner service
+- feature flag binding
+- preview / confirm / write support matrix
+- auth requirements
 - audit requirements
+- owner service
+- allowed side effects
+- blocked side effects
 
-The registry is declarative. It is not an enablement mechanism by itself.
+Registry boundaries:
 
-Important boundaries:
+- Registry presence does not mean runtime availability.
+- Feature flags determine whether a tool may be selected or executed.
+- Tool category determines the required execution path.
+- Durable write capability does not mean durable write is enabled.
+- Planner cannot use registry metadata to bypass confirmation, auth, or feature
+  gates.
 
-- Registry presence does not mean a tool is runtime-available.
-- Feature flags decide whether a tool can be used.
-- Category and risk level decide the required safety path.
-- Durable write capability does not imply durable write is enabled.
+Phase 7.0 only designs this concept. It does not implement a registry.
 
-## 5. Planner Contract
+## 8. Execution Trace / Audit
 
-When the Planner selects a tool, it must produce:
+Future runtime should emit trace and audit records that explain what happened
+without exposing sensitive internals.
 
-- intended tool
-- reason
-- confidence
+Trace / audit dimensions:
+
+- request trace
+- tool selection trace
+- preview trace
+- confirm trace
+- write trace
+- no-write reason
+- skipped reason
+- error reason
+- feature gate state
 - risk level
-- whether preview is required
-- whether confirmation is required
 - user-visible explanation
-- fallback when unsafe
-
-Planner restrictions:
-
-- Planner cannot directly execute durable writes.
-- Planner cannot bypass feature gates.
-- Planner cannot promote a read-only tool into a mutating tool.
-- Planner cannot create a durable resource id by itself.
-- Planner must ask, no-op, or fall back when confidence is low.
-
-## 6. Runtime Execution Flow
-
-Unified flow:
-
-```text
-User request
--> Agent Planner
--> Tool eligibility check
--> Feature gate check
--> Risk classification
--> Read-only execute or preview action creation
--> User-visible trace
--> Optional confirm
--> Write coordinator if allowed
--> Audit / result
-```
-
-Read-only flow:
-
-- Planner selects a read-only tool.
-- Runtime checks tool eligibility and feature flags.
-- Tool executes without creating pending actions.
-- Runtime records trace and returns result.
-- `wroteData` remains false.
-
-Preview-only flow:
-
-- Planner selects a preview-capable mutating tool.
-- Runtime checks feature flags, validation, and guard results.
-- Runtime creates a pending action.
-- User sees preview and trace.
-- No durable write occurs.
-
-Confirm flow:
-
-- User confirms an existing pending action.
-- Runtime validates action ownership, status, expiration, and idempotency.
-- If the write path is not release-gated on, confirm remains preview-only.
-- If a future Release Gate allows write, the write coordinator performs the durable mutation.
-
-Blocked flow:
-
-- Runtime blocks when the tool is unavailable, feature-gated off, invalid, unsafe, cross-user, expired, or too risky.
-- Runtime returns a user-visible reason.
-- No pending write action or durable write occurs unless explicitly allowed by the category and gate.
-
-Failure flow:
-
-- Tool failures return structured diagnostics.
-- Read-only failures fall back to no-tool behavior where possible.
-- Preview failures return no pending action unless a safe partial preview is explicitly supported.
-- Durable write failures must not be retried unsafely without idempotency.
-
-## 7. Preview / Confirm Contract
-
-Phase 7 should unify the existing preview / confirm contract across tools:
-
-- `previewOnly`
-- `wroteData`
-- `createdResourceId`
-- `actionType`
-- `requiresConfirmation`
-- `pendingActionId`
-- `expiresAt`
-- `validationResult`
-- `guardResult`
-- `userVisibleSummary`
-
-Contract rules:
-
-- Default-off serialized contract must remain stable.
-- No hidden write is allowed.
-- Confirm must be idempotent.
-- Expired actions must not write.
-- Cancelled actions must not write.
-- Invalid actions must not write.
-- Cross-user actions must not write.
-
-## 8. Execution Trace
-
-Future frontend trace should explain what the Agent did without exposing sensitive internals.
-
-Trace fields may include:
-
-- tool considered
-- tool selected
-- why selected
-- safety check result
-- preview generated
-- confirmation required
-- write skipped / write executed
-- error / fallback reason
+- correlation id across request, pending action, and result
 
 Trace restrictions:
 
-- Must not leak tokens.
-- Must not leak internal credentials.
-- Must not output prompt secrets.
-- Must avoid exposing sensitive memory or document content in logs by default.
-- Should help users understand Agent behavior and safety decisions.
+- Do not log tokens.
+- Do not log credentials.
+- Do not expose prompt secrets.
+- Do not log full sensitive memory, document, email, or external content by
+  default.
+- Prefer ids, summaries, categories, and redacted snippets for diagnostics.
 
-## 9. Error Handling and Fallback
+Trace should help the user understand Agent behavior: which tool was considered,
+why it was selected or skipped, whether a preview was generated, whether
+confirmation is required, and whether a write was skipped or executed.
 
-The runtime must handle:
+## 9. Error Handling
 
-- tool unavailable
-- feature flag off
-- validation failed
-- guard blocked
-- auth failed
-- external service failed
-- partial failure
-- timeout
-- confirm expired
-- idempotency conflict
+The runtime should use structured error categories:
 
-Required behavior:
+| Error | Retry | User-visible | Audit |
+| --- | --- | --- | --- |
+| `validation_error` | Usually no, after user edits | Yes | Optional |
+| `unauthorized` | After re-auth | Yes | Yes |
+| `forbidden_cross_user` | No | Yes, generic | Yes |
+| `feature_disabled` | No | Yes | Yes |
+| `preview_only` | No | Yes | Yes |
+| `confirmation_required` | After user confirms | Yes | Optional |
+| `pending_action_not_found` | No | Yes | Yes |
+| `pending_action_expired` | User can regenerate preview | Yes | Yes |
+| `idempotency_conflict` | No automatic retry | Yes | Yes |
+| `tool_unavailable` | Maybe | Yes | Yes |
+| `external_side_effect_blocked` | No | Yes | Yes |
+| `write_failed` | Only through idempotent coordinator | Yes | Yes |
+| `partial_failure` | Case-specific compensation | Yes | Yes |
 
-- safe fallback
-- no accidental durable write
-- user-visible explanation
-- structured diagnostics
-- no silent mutation
-- no auto-escalation from read-only to mutating behavior
+Error handling rules:
 
-## 10. Security Boundary
+- Fail closed for mutating and external side-effect tools.
+- Prefer no-op or read-only fallback over unsafe escalation.
+- Never convert a failed preview into a write.
+- Never retry a durable write without idempotency.
+- Expose a clear user-facing explanation without leaking internals.
+- Emit diagnostics sufficient for future debugging and audit.
 
-Security boundaries:
+## 10. Safety Boundaries
 
-- `userId` is the trust boundary for user data.
-- Auth is required for user data access.
+Phase 7 runtime design must preserve these boundaries:
+
+- Frontend-provided `userId` is not trusted.
+- User data access requires authenticated server-side identity.
 - Cross-user access is forbidden.
-- Direct client-side durable mutation is forbidden without server validation.
-- Mock auth must not be enabled in production.
-- Durable writes must not happen without a Release Gate.
-- Runtime Agent must not mutate env, deployment, Cloud Run, Firestore Rules, or MCP.
-- Tools must not accept caller-supplied user ids for protected resources.
-- Tool outputs must not leak credentials or internal secrets.
+- New capabilities remain default-off.
+- No implicit write.
+- No silent durable memory write.
+- No `life_events` write from memory proposal runtime.
+- No external side effect without confirmation.
+- No MCP enablement in a normal implementation phase.
+- No deployment mixed with docs or code phases.
+- No Firestore Rules change without explicit approval.
+- No Cloud Run env change without explicit approval.
+- No production Firestore or Cloud Storage write without explicit approval.
+- No mock auth or mock LLM in production.
+- No LLM output directly writes Firestore data.
 
-## 11. Feature Flag Strategy
+The runtime Agent must not mutate deployment configuration, Cloud Run env,
+Firestore Rules, MCP configuration, or production infrastructure.
 
-Existing flags:
+## 11. Relationship with Phase 6 Memory Engine
 
-- `ENABLE_AGENT_WRITE_TOOLS`
-- `ENABLE_CREATE_LIFE_EVENT_TOOL`
-- `ENABLE_MEMORY_RETRIEVAL`
-- `ENABLE_MEMORY_CONTEXT_IN_AGENT`
-- `ENABLE_MEMORY_PROPOSAL_RUNTIME`
-- `ENABLE_MEMORY_PROPOSAL_GUARD`
+Phase 6 Memory Engine outputs become candidate Phase 7 tools:
 
-Future recommended flags:
+- Memory retrieval is a read-only tool candidate.
+- Memory context injection is a read-only runtime context candidate, not an
+  instruction source.
+- Memory proposal is a preview-producing tool candidate.
+- `save_memory_preview` remains proposal-only.
+- Durable memory write is a confirm-required write tool candidate and still
+  requires a separate Release Gate.
+- Real Firestore Memory runtime remains disconnected.
+- `users/{userId}/memories` remains unwritten.
+- Memory proposal runtime must not write `life_events`.
 
-- `ENABLE_TOOL_REGISTRY`
-- `ENABLE_RUNTIME_TOOL_TRACE`
-- `ENABLE_READONLY_TOOL_RUNTIME`
-- `ENABLE_MUTATING_TOOL_PREVIEW`
-- `ENABLE_DURABLE_TOOL_WRITE`
-- `ENABLE_CALENDAR_READ_TOOL`
-- `ENABLE_CALENDAR_WRITE_TOOL`
+Phase 7 should treat Phase 6 memory work as a controlled tool subset rather than
+as permission to enable durable memory persistence.
 
-Strategy:
+## 12. Proposed Phase 7 Breakdown
 
-- Default false.
-- Preview before write.
-- Canary before production.
-- Read-only before mutating.
-- Tool-specific flags before broad class flags.
-- Durable writes require explicit Release Gate approval.
+Suggested future phases:
 
-## 12. Frontend Impact
+- Phase 7.1 Tool Registry Contract Design
+- Phase 7.2 Read-only Runtime Tool Adapter Design
+- Phase 7.3 Runtime Trace / Audit Contract
+- Phase 7.4 Preview Tool Adapter Skeleton
+- Phase 7.5 Confirm-required Tool Contract
+- Phase 7.6 External Tool / MCP Boundary Design
+- Phase 7.7 Phase 7 closeout
 
-Future Phase 7 frontend work may need:
+These are planning recommendations only. This document does not implement any
+of them.
 
-- tool execution trace panel
-- pending action card
-- preview / confirm UI
-- tool result display
-- blocked action message
-- memory proposal card
-- future memory dashboard handoff
+## 13. Verification Plan
 
-Phase 7.0 does not implement frontend changes. It only defines architecture and expected future surfaces.
+Phase 7.0 verification is docs-only:
 
-## 13. Proposed Phase 7 Breakdown
+- confirm docs-only diff
+- confirm no runtime code changed
+- confirm no frontend changed
+- confirm no Cloud Run env changed
+- confirm no Firestore Rules changed
+- confirm no MCP changed
+- confirm no deployment occurred
+- confirm no feature flags were enabled
+- confirm no durable writes were enabled
+- confirm no `users/{userId}/memories` writes occurred
+- confirm no `life_events` writes occurred from memory proposal runtime
 
-- Phase 7.0 Runtime Tooling Architecture
-- Phase 7.1 Tool Registry Skeleton
-- Phase 7.2 Read-only Tool Runtime
-- Phase 7.3 Tool Execution Trace Contract
-- Phase 7.4 Preview Action Unification
-- Phase 7.5 Frontend Pending Action / Trace UI Design
-- Phase 7.6 Calendar / External Tool Read-only Pilot
-- Release Gate: Durable Tool Write Enablement
+Recommended local checks:
 
-## 14. Acceptance Criteria
+- `git diff --stat`
+- `git diff -- docs/phase7_0_runtime_tooling_architecture.md`
+- `git status --short`
+- markdown lint only if an existing project command is available
+
+## 14. Closeout Criteria
 
 Phase 7.0 is complete when:
 
-- Runtime tool architecture is documented.
-- Read-only / preview-only / durable mutating categories are defined.
-- Planner feature gate and confirmation boundaries are explicit.
-- Planner cannot bypass confirmation or feature gates.
-- Frontend trace direction is defined.
+- `docs/phase7_0_runtime_tooling_architecture.md` exists.
+- The document is consistent with Phase 6 closeout and handoff.
+- Durable memory write remains explicitly out of scope.
+- Real Firestore Memory runtime remains disconnected.
+- Runtime tool categories and safety boundaries are defined.
+- Preview / confirm / write strategy is defined.
+- Tool registry, trace / audit, and error handling are designed at architecture
+  level.
 - Future Phase 7 breakdown is documented.
-- Durable writes remain behind a separate Release Gate.
+- Local docs-only commit is created.
+- No push is performed.
 
-## 15. Final Conclusion
-
-Phase 7.0 establishes the runtime tooling architecture for safe multi-tool Agent expansion. It does not enable durable writes, production memory persistence, or autonomous mutation. All mutating capabilities remain gated by preview / confirm, feature flags, audit, and future Release Gates.
+Final conclusion: Phase 7.0 establishes the architecture for safe multi-tool
+Agent expansion. It does not enable durable writes, production memory
+persistence, external side-effect tools, deployment changes, or autonomous
+mutation. All mutating capabilities remain behind preview / confirm, feature
+flags, audit, idempotency, and future Release Gates.
