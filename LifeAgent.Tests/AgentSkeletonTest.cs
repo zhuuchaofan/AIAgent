@@ -38,6 +38,28 @@ public class AgentSkeletonTest
     }
 
     [Fact]
+    public void ToolRegistry_ExposesPhase72ReadOnlyMetadata()
+    {
+        var registry = new ToolRegistry(new IAgentTool[]
+        {
+            new StubAgentTool("list_documents")
+        });
+
+        Assert.True(registry.TryGetEntry("LIST_DOCUMENTS", out var entry));
+        Assert.NotNull(entry);
+        Assert.Equal(ToolCategories.ReadOnlyRetrieval, entry!.Category);
+        Assert.Equal("medium_sensitive_read", entry.RiskLevel);
+        Assert.True(entry.AuthRequired);
+        Assert.True(entry.UserScoped);
+        Assert.True(entry.ReadsData);
+        Assert.False(entry.WritesData);
+        Assert.False(entry.ExternalSideEffect);
+        Assert.True(entry.TraceRequired);
+        Assert.True(entry.AuditRequired);
+        Assert.True(entry.IsReadOnlyEligible);
+    }
+
+    [Fact]
     public async Task ToolExecutor_RejectsUnknownTool()
     {
         var registry = new ToolRegistry(Array.Empty<IAgentTool>());
@@ -53,6 +75,64 @@ public class AgentSkeletonTest
 
         Assert.Equal("failed", result.Status);
         Assert.Contains("Unknown agent tool", result.ErrorMessage);
+        Assert.True(result.NoWrite);
+        Assert.False(result.WritesData);
+        Assert.False(result.PendingActionCreated);
+        Assert.False(result.ExternalSideEffect);
+    }
+
+    [Fact]
+    public async Task ToolExecutor_ReadOnlyTool_EmitsPhase72TraceAndNoWriteContract()
+    {
+        var registry = new ToolRegistry(new IAgentTool[]
+        {
+            new StubAgentTool("list_documents")
+        });
+        var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
+
+        var result = await executor.ExecuteAsync(
+            new AgentContext { UserId = "user_a", RunId = "run_1" },
+            "list_documents",
+            JsonSerializer.SerializeToElement(new { userId = "user_b" }),
+            2,
+            CancellationToken.None);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("1.0", result.ToolVersion);
+        Assert.Equal(ToolCategories.ReadOnlyRetrieval, result.Category);
+        Assert.Equal("retrieval", result.CapabilityType);
+        Assert.Equal("medium_sensitive_read", result.RiskLevel);
+        Assert.Equal("run_1:tool:2", result.TraceId);
+        Assert.True(result.TraceRequired);
+        Assert.True(result.AuditRequired);
+        Assert.True(result.NoWrite);
+        Assert.False(result.WritesData);
+        Assert.False(result.ExternalSideEffect);
+        Assert.False(result.PendingActionCreated);
+        Assert.False(result.ConfirmationRequired);
+    }
+
+    [Fact]
+    public async Task ToolExecutor_WriteTool_FailsClosedBeforeExecution()
+    {
+        var writeTool = new StubAgentTool("create_life_event", AgentToolRisk.Write, requiresConfirmation: true);
+        var registry = new ToolRegistry(new IAgentTool[] { writeTool });
+        var executor = new ToolExecutor(registry, NullLogger<ToolExecutor>.Instance);
+
+        var result = await executor.ExecuteAsync(
+            new AgentContext { UserId = "user_a", RunId = "run_1" },
+            "create_life_event",
+            JsonSerializer.SerializeToElement(new { title = "test" }),
+            1,
+            CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Contains("not eligible for Phase 7.2 read-only direct execution", result.ErrorMessage);
+        Assert.False(writeTool.WasCalled);
+        Assert.True(result.NoWrite);
+        Assert.False(result.WritesData);
+        Assert.False(result.ExternalSideEffect);
+        Assert.False(result.PendingActionCreated);
     }
 
     [Fact]
