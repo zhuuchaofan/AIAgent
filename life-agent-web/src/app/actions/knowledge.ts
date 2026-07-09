@@ -220,3 +220,90 @@ export async function confirmAgentAction(actionId: string, decision: "confirm" |
     return { success: false, message: errMsg || "连接 Agent 确认服务异常" };
   }
 }
+
+export async function createPhase80PendingAction(title?: string, summary?: string) {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}/api/agent/pending-actions/demo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title,
+        summary,
+      }),
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || `生成待确认动作失败 (${res.status})` };
+    }
+
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "连接待确认动作服务异常" };
+  }
+}
+
+export async function listPhase80PendingActions() {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}/api/agent/pending-actions/demo`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || `获取待确认动作失败 (${res.status})` };
+    }
+
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "连接待确认动作服务异常" };
+  }
+}
+
+export async function confirmPhase80PendingAction(actionId: string) {
+  return updatePhase80PendingAction(actionId, "confirm");
+}
+
+export async function cancelPhase80PendingAction(actionId: string) {
+  return updatePhase80PendingAction(actionId, "cancel");
+}
+
+async function updatePhase80PendingAction(actionId: string, decision: "confirm" | "cancel") {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}/api/agent/pending-actions/demo/${actionId}/${decision}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || `更新待确认动作失败 (${res.status})` };
+    }
+
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "连接待确认动作服务异常" };
+  }
+}

@@ -1,5 +1,6 @@
 using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Services.Agent;
+using LifeAgent.Api.Services.Agent.Phase8;
 using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,6 +8,8 @@ namespace LifeAgent.Api.Endpoints;
 
 public static class AgentEndpoints
 {
+    private static readonly Phase80PendingActionRuntime Phase80PendingActions = new();
+
     public static void MapAgentEndpoints(this WebApplication app)
     {
         app.MapPost("/api/agent/run", RunAgentPreviewAsync)
@@ -16,6 +19,22 @@ public static class AgentEndpoints
         app.MapPost("/api/agent/confirm", ConfirmAgentActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("high-cost");
+
+        app.MapPost("/api/agent/pending-actions/demo", CreatePhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapGet("/api/agent/pending-actions/demo", ListPhase80PendingActionsAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapPost("/api/agent/pending-actions/demo/{actionId}/confirm", ConfirmPhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapPost("/api/agent/pending-actions/demo/{actionId}/cancel", CancelPhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
     }
 
     public static async Task<IResult> RunAgentPreviewAsync(
@@ -37,6 +56,57 @@ public static class AgentEndpoints
             Success = true,
             Data = response
         });
+    }
+
+    public static IResult CreatePhase80PendingActionAsync(
+        HttpContext httpContext,
+        [FromBody] Phase80CreatePendingActionRequest? request)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        var result = Phase80PendingActions.Create(userId, request);
+        return Results.Ok(result);
+    }
+
+    public static IResult ListPhase80PendingActionsAsync(HttpContext httpContext)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = Phase80PendingActions.List(userId)
+        });
+    }
+
+    public static IResult ConfirmPhase80PendingActionAsync(HttpContext httpContext, string actionId)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        return Results.Ok(Phase80PendingActions.Confirm(userId, actionId));
+    }
+
+    public static IResult CancelPhase80PendingActionAsync(HttpContext httpContext, string actionId)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        return Results.Ok(Phase80PendingActions.Cancel(userId, actionId));
     }
 
     public static Task<IResult> ConfirmAgentActionAsync(
