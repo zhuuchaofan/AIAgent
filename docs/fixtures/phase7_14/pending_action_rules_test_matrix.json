@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "phase7.14.pending_action_rules_matrix.v1",
+  "fixtureSetId": "phase7_14_pending_action_rules_test_matrix",
+  "description": "Fake-only Firestore Rules test matrix for future Pending Action Store emulator tests. This file is not production rules and is not executable by itself.",
+  "collectionCandidate": "users/{userId}/pendingActions/{pendingActionId}",
+  "fakeSubjects": {
+    "ownerUserId": "user_fixture_owner",
+    "ownerUserIdHash": "hash_user_fixture_owner",
+    "otherUserId": "user_fixture_other",
+    "otherUserIdHash": "hash_user_fixture_other",
+    "sessionIdHash": "hash_session_fixture"
+  },
+  "basePendingAction": {
+    "pendingActionId": "pa_fixture_phase714",
+    "previewId": "preview_fixture_phase714",
+    "confirmationId": "confirm_fixture_phase714",
+    "status": "confirmed",
+    "riskLevel": "medium_preview_only",
+    "expiresAt": "2099-01-01T00:00:00Z",
+    "sanitizedPreviewRef": "safe_preview_fixture_phase714",
+    "serverOnlyPayloadRef": "payload_ref_fixture_phase714",
+    "auditEventRefs": [
+      "audit_ref_fixture_created",
+      "audit_ref_fixture_confirmed"
+    ],
+    "traceId": "trace_fixture_phase714",
+    "schemaVersion": "phase7.9.pending_action.v1"
+  },
+  "prohibitedFieldsExpectedAbsent": [
+    "rawSecret",
+    "rawPrompt",
+    "fullContext",
+    "providerRequest",
+    "executablePayload",
+    "firestoreDocumentBody",
+    "token",
+    "apiKey"
+  ],
+  "cases": [
+    {
+      "caseId": "unauthenticated_read_denied",
+      "actor": "unauthenticated",
+      "operation": "get",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": null,
+      "expectedAllow": false,
+      "expectedDenyReason": "missing_auth",
+      "securityAssertions": ["default_deny", "unauthenticated_denied"]
+    },
+    {
+      "caseId": "same_user_full_read_denied",
+      "actor": "owner_user",
+      "operation": "get",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": null,
+      "expectedAllow": false,
+      "expectedDenyReason": "full_document_read_denied",
+      "securityAssertions": ["direct_client_full_document_read_denied"]
+    },
+    {
+      "caseId": "same_user_direct_create_denied",
+      "actor": "owner_user",
+      "operation": "create",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "status": "confirmation_required",
+        "riskLevel": "medium_preview_only"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "direct_client_write_denied",
+      "securityAssertions": ["direct_client_write_denied"]
+    },
+    {
+      "caseId": "same_user_status_update_denied",
+      "actor": "owner_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "status": "executed"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "status_update_denied",
+      "securityAssertions": ["direct_client_status_update_denied", "client_cannot_set_executed"]
+    },
+    {
+      "caseId": "cross_user_read_denied",
+      "actor": "other_user",
+      "operation": "get",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": null,
+      "expectedAllow": false,
+      "expectedDenyReason": "cross_user_denied",
+      "securityAssertions": ["cross_user_denied"]
+    },
+    {
+      "caseId": "cross_user_write_denied",
+      "actor": "other_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "blockedReason": "fake_cross_user_update"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "cross_user_write_denied",
+      "securityAssertions": ["cross_user_denied", "direct_client_write_denied"]
+    },
+    {
+      "caseId": "server_only_payload_read_denied",
+      "actor": "owner_user",
+      "operation": "get",
+      "targetPath": "users/user_fixture_owner/pendingActionPayloads/payload_ref_fixture_phase714",
+      "attemptedMutation": null,
+      "expectedAllow": false,
+      "expectedDenyReason": "server_only_payload_denied",
+      "securityAssertions": ["client_cannot_access_server_only_payload"]
+    },
+    {
+      "caseId": "audit_refs_read_denied",
+      "actor": "owner_user",
+      "operation": "get",
+      "targetPath": "users/user_fixture_owner/pendingActionAuditRefs/audit_ref_fixture_created",
+      "attemptedMutation": null,
+      "expectedAllow": false,
+      "expectedDenyReason": "audit_ref_denied",
+      "securityAssertions": ["audit_only_direct_access_denied"]
+    },
+    {
+      "caseId": "prohibited_fields_create_denied",
+      "actor": "owner_user",
+      "operation": "create",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_prohibited",
+      "attemptedMutation": {
+        "rawSecret": "fake_secret_marker_must_not_be_allowed",
+        "rawPrompt": "fake_raw_prompt_marker_must_not_be_allowed",
+        "fullContext": "fake_full_context_marker_must_not_be_allowed"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "prohibited_fields_denied",
+      "securityAssertions": ["no_raw_secret", "no_raw_prompt", "no_full_context"]
+    },
+    {
+      "caseId": "status_modify_denied",
+      "actor": "owner_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "status": "execution_ready"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "status_modify_denied",
+      "securityAssertions": ["client_cannot_set_status"]
+    },
+    {
+      "caseId": "expires_at_modify_denied",
+      "actor": "owner_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "expiresAt": "2100-01-01T00:00:00Z"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "expires_at_modify_denied",
+      "securityAssertions": ["direct_client_write_denied"]
+    },
+    {
+      "caseId": "server_only_payload_ref_modify_denied",
+      "actor": "owner_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "serverOnlyPayloadRef": "payload_ref_client_injected"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "server_only_payload_ref_modify_denied",
+      "securityAssertions": ["client_cannot_access_server_only_payload"]
+    },
+    {
+      "caseId": "release_gate_decision_inject_denied",
+      "actor": "owner_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "releaseGateDecisionRef": "release_gate_client_injected"
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "release_gate_inject_denied",
+      "securityAssertions": ["client_cannot_set_release_gate_decision"]
+    },
+    {
+      "caseId": "mark_executed_denied",
+      "actor": "owner_user",
+      "operation": "update",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "executed": true,
+        "wroteData": true
+      },
+      "expectedAllow": false,
+      "expectedDenyReason": "client_cannot_mark_executed",
+      "securityAssertions": ["client_cannot_set_executed", "confirmed_is_not_executed", "execution_ready_is_not_executed"]
+    },
+    {
+      "caseId": "server_admin_path_future_only",
+      "actor": "server_admin_sdk",
+      "operation": "set",
+      "targetPath": "users/user_fixture_owner/pendingActions/pa_fixture_phase714",
+      "attemptedMutation": {
+        "status": "confirmation_required"
+      },
+      "expectedAllow": "future_only",
+      "expectedDenyReason": null,
+      "securityAssertions": ["all_writes_server_side_only", "not_a_client_rules_allow_case"]
+    }
+  ]
+}
