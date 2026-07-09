@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, Loader2, Send, ShieldAlert, Wrench, X } from "lucide-react";
 import {
   cancelPhase80PendingAction,
   confirmAgentAction,
   confirmPhase80PendingAction,
   createPhase80PendingAction,
+  listPhase80PendingActions,
   runAgentPreview,
 } from "@/app/actions/knowledge";
 import { Markdown } from "./Markdown";
@@ -99,6 +100,12 @@ interface Phase80ActionResponse {
   data?: Phase80PendingAction;
 }
 
+interface Phase80ListResponse {
+  success: boolean;
+  message?: string;
+  data?: Phase80PendingAction[];
+}
+
 export function AgentPreview() {
   const [expanded, setExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -109,6 +116,7 @@ export function AgentPreview() {
   const [confirmationResult, setConfirmationResult] = useState<AgentConfirmationResponse | null>(null);
   const [phase80Actions, setPhase80Actions] = useState<Phase80PendingAction[]>([]);
   const [phase80Loading, setPhase80Loading] = useState(false);
+  const [phase80Refreshing, setPhase80Refreshing] = useState(false);
   const [phase80Updating, setPhase80Updating] = useState<string | null>(null);
   const [phase80Message, setPhase80Message] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -119,12 +127,44 @@ export function AgentPreview() {
   const actionResolved = !!confirmationResult || actionExpired;
   const showPendingAction = !!result?.requiresConfirmation && !!result.proposedAction && !actionResolved;
 
+  const loadPhase80Actions = useCallback(async () => {
+    setPhase80Refreshing(true);
+    setPhase80Message(null);
+
+    try {
+      const res = await listPhase80PendingActions() as Phase80ListResponse;
+      if (!res.success) {
+        setPhase80Message(res.message || "无法恢复待确认动作。");
+        return;
+      }
+
+      setPhase80Actions(res.data ?? []);
+      if ((res.data ?? []).length > 0) {
+        setPhase80Message("已从当前 API 实例内存恢复待确认动作；实例重启或切换后仍可能丢失。");
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setPhase80Message(errMsg || "无法恢复待确认动作。");
+    } finally {
+      setPhase80Refreshing(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!result?.proposedAction || confirmationResult) return;
 
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, [result?.proposedAction, confirmationResult]);
+
+  useEffect(() => {
+    if (!expanded) return;
+
+    const timer = window.setTimeout(() => {
+      void loadPhase80Actions();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [expanded, loadPhase80Actions]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -232,6 +272,13 @@ export function AgentPreview() {
     return "border-amber-500/30 text-amber-200 bg-amber-500/10";
   };
 
+  const phase80StatusLabel = (status: string) => {
+    if (status === "confirmed") return "已确认，尚未执行";
+    if (status === "cancelled") return "已取消";
+    if (status === "expired") return "已过期";
+    return "待确认";
+  };
+
   return (
     <section className="border border-zinc-800/50 bg-zinc-900/10 rounded-2xl overflow-hidden">
       <button
@@ -283,17 +330,32 @@ export function AgentPreview() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="text-zinc-200 font-semibold">待确认动作演示</div>
-                <div className="text-zinc-500 mt-1">安全演示模式：确认只改变状态，不写入真实数据，不执行工具</div>
+                <div className="text-zinc-500 mt-1">个人预览 / in-memory demo：确认只改变状态，不写入真实数据，不执行工具</div>
               </div>
-              <button
-                type="button"
-                onClick={handleCreatePhase80Action}
-                disabled={phase80Loading}
-                className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
-              >
-                {phase80Loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-                生成待确认动作
-              </button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={loadPhase80Actions}
+                  disabled={phase80Refreshing}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
+                >
+                  {phase80Refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  刷新状态
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreatePhase80Action}
+                  disabled={phase80Loading}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
+                >
+                  {phase80Loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+                  生成待确认动作
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-cyan-100 leading-relaxed">
+              当前为 Personal Agent Preview v1 的安全预览：状态保存在 API 进程内存中，刷新页面会尝试恢复；如果服务实例重启或请求切到其他实例，状态可能丢失。
             </div>
 
             {phase80Message && (
@@ -313,7 +375,7 @@ export function AgentPreview() {
                     <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
-                          {action.status}
+                          {phase80StatusLabel(action.status)}
                         </span>
                         <span className="text-zinc-200 font-medium">{action.title}</span>
                       </div>
@@ -349,28 +411,38 @@ export function AgentPreview() {
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
                         {action.message}
                         {action.status === "confirmed" ? "；已确认，尚未执行。" : ""}
-                        <span className="block mt-1">当前为安全演示模式，不会写入真实数据。</span>
+                        <span className="block mt-1">confirmed != executed；当前为安全演示模式，不会写入真实数据。</span>
                       </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdatePhase80Action(action.actionId, "confirm")}
-                          disabled={!pending || !!phase80Updating}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                        >
-                          {phase80Updating === confirmKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          确认
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdatePhase80Action(action.actionId, "cancel")}
-                          disabled={!pending || !!phase80Updating}
-                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                        >
-                          {phase80Updating === cancelKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                          取消
-                        </button>
-                      </div>
+                      {pending ? (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePhase80Action(action.actionId, "confirm")}
+                            disabled={!!phase80Updating}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                          >
+                            {phase80Updating === confirmKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            确认
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePhase80Action(action.actionId, "cancel")}
+                            disabled={!!phase80Updating}
+                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                          >
+                            {phase80Updating === cancelKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                            取消
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 text-zinc-400">
+                          {action.status === "confirmed"
+                            ? "该动作已确认，不能再次确认或取消；它仍未执行。"
+                            : action.status === "cancelled"
+                              ? "该动作已取消，不能再确认。"
+                              : "该动作不再可操作。"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
