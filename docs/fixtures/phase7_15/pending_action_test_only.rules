@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 7.15 test-only draft.
+    // This file is not production rules, is not referenced by firebase.json,
+    // and must not replace firestore.rules without a separate Release Gate.
+
+    match /users/{userId}/pendingActions/{pendingActionId} {
+      allow read, write: if false;
+    }
+
+    match /users/{userId}/pendingActionPayloads/{payloadId} {
+      allow read, write: if false;
+    }
+
+    match /users/{userId}/pendingActionAuditRefs/{auditRefId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
