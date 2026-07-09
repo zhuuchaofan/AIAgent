@@ -8,6 +8,8 @@ public sealed class Phase80PendingActionRuntime
     public const string Confirmed = "confirmed";
     public const string Cancelled = "cancelled";
     public const string Expired = "expired";
+    public const string SafetyMode = "phase8_fake_first_in_memory";
+    public const string GuardDecision = "deny_all_no_real_execution";
 
     private readonly ConcurrentDictionary<string, Phase80PendingActionRecord> _actions = new();
     private readonly TimeProvider _timeProvider;
@@ -49,7 +51,7 @@ public sealed class Phase80PendingActionRuntime
             Executed: false,
             WroteData: false,
             ExecutionReady: false,
-            GuardDecision: "deny_all_no_real_execution");
+            GuardDecision: GuardDecision);
 
         _actions[record.ActionId] = record;
 
@@ -109,7 +111,7 @@ public sealed class Phase80PendingActionRuntime
             Executed = false,
             WroteData = false,
             ExecutionReady = false,
-            GuardDecision = "deny_all_no_real_execution"
+            GuardDecision = GuardDecision
         };
 
         _actions[actionId] = updated;
@@ -155,7 +157,7 @@ public sealed class Phase80PendingActionRuntime
             Executed = false,
             WroteData = false,
             ExecutionReady = false,
-            GuardDecision = "deny_all_no_real_execution"
+            GuardDecision = GuardDecision
         };
 
         _actions[actionId] = updated;
@@ -207,7 +209,7 @@ public sealed class Phase80PendingActionRuntime
             Executed = false,
             WroteData = false,
             ExecutionReady = false,
-            GuardDecision = "deny_all_no_real_execution"
+            GuardDecision = GuardDecision
         };
         _actions[current.ActionId] = expired;
         return expired;
@@ -230,6 +232,9 @@ public sealed class Phase80PendingActionRuntime
             WroteData: record.WroteData,
             ExecutionReady: record.ExecutionReady,
             GuardDecision: record.GuardDecision,
+            SafetyMode: SafetyMode,
+            LegacyConfirmEndpointUsed: false,
+            RealWritePath: false,
             Message: record.Status switch
             {
                 Confirmed => "已确认，但未执行",
@@ -274,6 +279,9 @@ public sealed record Phase80PendingActionView(
     bool WroteData,
     bool ExecutionReady,
     string GuardDecision,
+    string SafetyMode,
+    bool LegacyConfirmEndpointUsed,
+    bool RealWritePath,
     string Message);
 
 public sealed record Phase80PendingActionResult(

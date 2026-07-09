@@ -86,6 +86,9 @@ interface Phase80PendingAction {
   wroteData: boolean;
   executionReady: boolean;
   guardDecision: string;
+  safetyMode: string;
+  legacyConfirmEndpointUsed: boolean;
+  realWritePath: boolean;
   message: string;
 }
 
@@ -236,10 +239,10 @@ export function AgentPreview() {
         onClick={() => setExpanded(prev => !prev)}
         className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-zinc-900/30 transition-colors"
       >
-        <span className="flex items-center gap-2 min-w-0">
+          <span className="flex items-center gap-2 min-w-0">
           <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
           <span className="text-sm font-semibold text-white">Agent Preview</span>
-          <span className="text-[10px] text-zinc-500 border border-zinc-800 rounded px-2 py-0.5">只读实验入口</span>
+          <span className="text-[10px] text-zinc-500 border border-zinc-800 rounded px-2 py-0.5">实验入口</span>
         </span>
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -279,8 +282,8 @@ export function AgentPreview() {
           <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4 text-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <div className="text-zinc-200 font-semibold">Phase 8.0 Pending Action</div>
-                <div className="text-zinc-500 mt-1">fake-first / in-memory / confirmed but not executed</div>
+                <div className="text-zinc-200 font-semibold">待确认动作演示</div>
+                <div className="text-zinc-500 mt-1">安全演示模式：确认只改变状态，不写入真实数据，不执行工具</div>
               </div>
               <button
                 type="button"
@@ -329,9 +332,24 @@ export function AgentPreview() {
                           <span className="font-mono text-zinc-300 break-all">{action.guardDecision}</span>
                         </div>
                       </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                          <span className="text-zinc-500">mode: </span>
+                          <span className="font-mono text-zinc-300 break-all">{action.safetyMode}</span>
+                        </div>
+                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                          <span className="text-zinc-500">legacyConfirm: </span>
+                          <span className="font-mono text-zinc-300">{String(action.legacyConfirmEndpointUsed)}</span>
+                        </div>
+                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                          <span className="text-zinc-500">realWritePath: </span>
+                          <span className="font-mono text-zinc-300">{String(action.realWritePath)}</span>
+                        </div>
+                      </div>
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
                         {action.message}
-                        {action.status === "confirmed" ? "；confirmed 不会自动执行。" : ""}
+                        {action.status === "confirmed" ? "；已确认，尚未执行。" : ""}
+                        <span className="block mt-1">当前为安全演示模式，不会写入真实数据。</span>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
@@ -358,7 +376,7 @@ export function AgentPreview() {
                 })}
               </div>
             ) : (
-              <div className="text-zinc-500">还没有 fake-first 待确认动作。</div>
+              <div className="text-zinc-500">还没有待确认动作。生成后可确认或取消，确认后仍不会执行。</div>
             )}
           </div>
 
@@ -407,9 +425,9 @@ export function AgentPreview() {
                     <div className="text-zinc-500">
                       生命周期：<span className="font-mono text-amber-200">{result.proposedAction.lifecycleStatus || "pending"}</span>
                     </div>
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
-                      当前为 preview，不会真正写入生活记录、提醒或记忆。
-                    </div>
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
+                    这是旧 Agent Preview 确认路径，不属于上方 Phase 8 demo。默认不会写入；部署前必须确认真实写入 flag 未开启。
+                  </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button

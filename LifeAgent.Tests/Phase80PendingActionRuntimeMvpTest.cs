@@ -17,6 +17,9 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(result.Data.WroteData);
         Assert.False(result.Data.ExecutionReady);
         Assert.Equal("deny_all_no_real_execution", result.Data.GuardDecision);
+        Assert.Equal("phase8_fake_first_in_memory", result.Data.SafetyMode);
+        Assert.False(result.Data.LegacyConfirmEndpointUsed);
+        Assert.False(result.Data.RealWritePath);
     }
 
     [Fact]
@@ -34,6 +37,8 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(confirmed.Data.Executed);
         Assert.False(confirmed.Data.WroteData);
         Assert.False(confirmed.Data.ExecutionReady);
+        Assert.False(confirmed.Data.LegacyConfirmEndpointUsed);
+        Assert.False(confirmed.Data.RealWritePath);
         Assert.Contains("未执行", confirmed.Message);
     }
 
@@ -49,6 +54,7 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.True(cancelled.Success);
         Assert.Equal("cancelled", cancelled.Data!.Status);
         Assert.False(cancelled.Data.Executed);
+        Assert.False(cancelled.Data.RealWritePath);
         Assert.False(confirmedAfterCancel.Success);
         Assert.Equal("cancelled", confirmedAfterCancel.Status);
     }
@@ -81,6 +87,7 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal("expired", result.Status);
         Assert.Equal("expired", result.Data!.Status);
         Assert.False(result.Data.Executed);
+        Assert.False(result.Data.RealWritePath);
     }
 
     [Fact]
@@ -107,5 +114,22 @@ public class Phase80PendingActionRuntimeMvpTest
 
         Assert.Single(actions);
         Assert.Equal(userA.Data!.ActionId, actions[0].ActionId);
+    }
+
+    [Fact]
+    public void Phase8DemoResultDeclaresItDoesNotUseLegacyConfirmOrRealWritePath()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+        var created = runtime.Create("user_a", new Phase80CreatePendingActionRequest("演示动作", "不携带执行 payload"));
+
+        var confirmed = runtime.Confirm("user_a", created.Data!.ActionId);
+
+        Assert.True(confirmed.Success);
+        Assert.Equal("phase8_fake_first_in_memory", confirmed.Data!.SafetyMode);
+        Assert.False(confirmed.Data.LegacyConfirmEndpointUsed);
+        Assert.False(confirmed.Data.RealWritePath);
+        Assert.False(confirmed.Data.Executed);
+        Assert.False(confirmed.Data.WroteData);
+        Assert.False(confirmed.Data.ExecutionReady);
     }
 }

@@ -20,6 +20,9 @@ public static class AgentEndpoints
             .WithTags("agent")
             .RequireRateLimiting("high-cost");
 
+        // Phase 8 fake-first demo endpoints are deliberately separate from the
+        // legacy /api/agent/confirm path. They never call IPendingAgentActionStore,
+        // FirestorePendingAgentActionStore, or the life_event write coordinator.
         app.MapPost("/api/agent/pending-actions/demo", CreatePhase80PendingActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
@@ -129,6 +132,10 @@ public static class AgentEndpoints
 
         async Task<IResult> ConfirmAsync()
         {
+            // Legacy Agent Preview confirmation path. This can enter the
+            // create_life_event write coordinator only when both real-write
+            // feature flags are explicitly enabled. Phase 8 demo confirmations
+            // must use /api/agent/pending-actions/demo/{actionId}/confirm.
             var logger = loggerFactory.CreateLogger("AgentEndpoints");
             var actionId = request.ActionId ?? string.Empty;
             var normalizedDecision = (request.Decision ?? string.Empty).Trim().ToLowerInvariant();
