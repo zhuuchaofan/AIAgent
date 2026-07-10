@@ -129,6 +129,10 @@ store serializer, even if an input record accidentally contains true values.
   mutations; this keeps confirmed/cancelled/expired history immutable for the
   Personal Agent v2 state memory path.
 - Confirmed is not executed. Real tool execution is still unavailable.
+- Personal Agent v2 endpoints return explicit failure status codes for release
+  smoke clarity: missing/cross-user actions return 404, finalized-state
+  conflicts return 409, and the JSON body still carries the current action view
+  when available so the UI can show the durable final state.
 
 ## IAM Requirements
 
@@ -214,6 +218,8 @@ Before release gate approval:
    - list endpoint exposes persistence metadata without requiring an action
    - Firestore schema serialization keeps execution flags false
    - Firestore schema readback preserves payload, audit refs, and safety fields
+   - endpoint failures use 404 for missing/cross-user actions and 409 for
+     finalized-state conflicts while preserving safe action view metadata
 
 Before production traffic:
 

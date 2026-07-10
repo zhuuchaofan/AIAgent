@@ -96,7 +96,7 @@ public static class AgentEndpoints
 
         var runtime = httpContext.RequestServices.GetRequiredService<Phase80PendingActionRuntime>();
         var result = await runtime.CreateAsync(userId, request, cancellationToken);
-        return Results.Ok(result);
+        return ToPhase80HttpResult(result);
     }
 
     public static async Task<IResult> ListPhase80PendingActionsAsync(
@@ -139,7 +139,7 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        return Results.Ok(await httpContext.RequestServices
+        return ToPhase80HttpResult(await httpContext.RequestServices
             .GetRequiredService<Phase80PendingActionRuntime>()
             .ConfirmAsync(userId, actionId, cancellationToken));
     }
@@ -155,9 +155,28 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        return Results.Ok(await httpContext.RequestServices
+        return ToPhase80HttpResult(await httpContext.RequestServices
             .GetRequiredService<Phase80PendingActionRuntime>()
             .CancelAsync(userId, actionId, cancellationToken));
+    }
+
+    private static IResult ToPhase80HttpResult(Phase80PendingActionResult result)
+    {
+        if (result.Success)
+        {
+            return Results.Ok(result);
+        }
+
+        var statusCode = result.Status switch
+        {
+            "not_found" => StatusCodes.Status404NotFound,
+            Phase80PendingActionRuntime.Confirmed => StatusCodes.Status409Conflict,
+            Phase80PendingActionRuntime.Cancelled => StatusCodes.Status409Conflict,
+            Phase80PendingActionRuntime.Expired => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status400BadRequest
+        };
+
+        return Results.Json(result, statusCode: statusCode);
     }
 
     public static Task<IResult> ConfirmAgentActionAsync(

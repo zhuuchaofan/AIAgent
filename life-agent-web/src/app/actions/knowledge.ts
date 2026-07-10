@@ -242,7 +242,7 @@ export async function createPhase80PendingAction(title?: string, summary?: strin
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.message || `生成待确认动作失败 (${res.status})` };
+      return { ...data, success: false, message: data.message || `生成待确认动作失败 (${res.status})` };
     }
 
     return data;
@@ -266,7 +266,7 @@ export async function listPhase80PendingActions() {
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.message || `获取待确认动作失败 (${res.status})` };
+      return { ...data, success: false, message: data.message || `获取待确认动作失败 (${res.status})` };
     }
 
     return data;
@@ -299,7 +299,7 @@ async function updatePhase80PendingAction(actionId: string, decision: "confirm" 
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.message || `更新待确认动作失败 (${res.status})` };
+      return { ...data, success: false, message: data.message || `更新待确认动作失败 (${res.status})` };
     }
 
     return data;

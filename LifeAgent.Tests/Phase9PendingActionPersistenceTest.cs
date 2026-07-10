@@ -102,6 +102,7 @@ public class Phase9PendingActionPersistenceTest
 
         Assert.Equal(StatusCodes.Status200OK, create.StatusCode);
         Assert.Contains(actionId, userAList.Body);
+        Assert.Equal(StatusCodes.Status404NotFound, userBConfirm.StatusCode);
         Assert.Equal("not_found", ReadString(userBConfirm.Body, "status"));
     }
 
@@ -305,6 +306,45 @@ public class Phase9PendingActionPersistenceTest
         Assert.Equal(before.Payload["summary"], after.Payload["summary"]);
         Assert.False(after.Executed);
         Assert.False(after.WroteData);
+    }
+
+    [Fact]
+    public async Task EndpointReturnsConflictWithActionViewForFinalizedState()
+    {
+        var services = BuildServices();
+        var context = AuthenticatedContext("user_a", services);
+        var create = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            context,
+            new Phase80CreatePendingActionRequest("http conflict", "finalized state")));
+        var actionId = ReadString(create.Body, "data", "actionId");
+
+        var confirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+            AuthenticatedContext("user_a", services),
+            actionId));
+        var cancelAfterConfirm = await ExecuteResultAsync(AgentEndpoints.CancelPhase80PendingActionAsync(
+            AuthenticatedContext("user_a", services),
+            actionId));
+
+        Assert.Equal(StatusCodes.Status200OK, create.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, confirm.StatusCode);
+        Assert.Equal(StatusCodes.Status409Conflict, cancelAfterConfirm.StatusCode);
+        Assert.False(ReadBool(cancelAfterConfirm.Body, "success"));
+        Assert.Equal("confirmed", ReadString(cancelAfterConfirm.Body, "status"));
+        Assert.Equal("confirmed", ReadString(cancelAfterConfirm.Body, "data", "status"));
+        Assert.False(ReadBool(cancelAfterConfirm.Body, "data", "executed"));
+        Assert.False(ReadBool(cancelAfterConfirm.Body, "data", "wroteData"));
+    }
+
+    [Fact]
+    public async Task EndpointReturnsNotFoundForMissingPendingAction()
+    {
+        var missing = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+            AuthenticatedContext("user_a"),
+            "missing_action"));
+
+        Assert.Equal(StatusCodes.Status404NotFound, missing.StatusCode);
+        Assert.False(ReadBool(missing.Body, "success"));
+        Assert.Equal("not_found", ReadString(missing.Body, "status"));
     }
 
     [Fact]
