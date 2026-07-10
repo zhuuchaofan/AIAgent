@@ -410,6 +410,42 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task EndpointStatusMutationIsScopedByOwnerWhenActionIdsMatch()
+    {
+        var store = new InMemoryPendingActionStore();
+        await store.CreateAsync(CreateStoreRequest(
+            "pa_shared_endpoint_id",
+            "user_a",
+            title: "user a title",
+            summary: "user a summary",
+            idempotencyKeyHash: "idem_endpoint_a"));
+        await store.CreateAsync(CreateStoreRequest(
+            "pa_shared_endpoint_id",
+            "user_b",
+            title: "user b title",
+            summary: "user b summary",
+            idempotencyKeyHash: "idem_endpoint_b"));
+        var services = BuildServices(store);
+
+        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+            AuthenticatedContext("user_b", services),
+            "pa_shared_endpoint_id"));
+        var userARecord = await store.GetByIdAsync("user_a", "pa_shared_endpoint_id");
+        var userBRecord = await store.GetByIdAsync("user_b", "pa_shared_endpoint_id");
+
+        Assert.Equal(StatusCodes.Status200OK, userBConfirm.StatusCode);
+        Assert.Equal("confirmed", ReadString(userBConfirm.Body, "data", "status"));
+        Assert.Equal(PendingActionStatus.ConfirmationRequired, userARecord!.Status);
+        Assert.Equal(PendingActionStatus.Confirmed, userBRecord!.Status);
+        Assert.Equal("user a title", userARecord.Payload["title"]);
+        Assert.Equal("user b title", userBRecord.Payload["title"]);
+        Assert.False(userARecord.Executed);
+        Assert.False(userBRecord.Executed);
+        Assert.False(userARecord.WroteData);
+        Assert.False(userBRecord.WroteData);
+    }
+
+    [Fact]
     public async Task EndpointReturnsConflictWithActionViewForFinalizedState()
     {
         var services = BuildServices();
