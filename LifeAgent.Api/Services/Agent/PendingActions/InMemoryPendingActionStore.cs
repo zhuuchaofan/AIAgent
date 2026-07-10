@@ -67,7 +67,14 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             Executed = false
         };
 
-        _records[record.PendingActionId] = record;
+        if (!_records.TryAdd(record.PendingActionId, record))
+        {
+            return Task.FromResult(PendingActionStoreResult.Failed(
+                "duplicate",
+                "duplicate_pending_action",
+                "Pending action id already exists."));
+        }
+
         return Task.FromResult(PendingActionStoreResult.Succeeded(record));
     }
 

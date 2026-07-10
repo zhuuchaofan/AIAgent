@@ -309,6 +309,33 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task StoreCreateRejectsDuplicateActionIdWithoutPayloadOverwrite()
+    {
+        var store = new InMemoryPendingActionStore();
+        var first = await store.CreateAsync(CreateStoreRequest(
+            "pa_duplicate",
+            "user_a",
+            title: "original title",
+            summary: "original summary",
+            idempotencyKeyHash: "idem_original"));
+        var duplicate = await store.CreateAsync(CreateStoreRequest(
+            "pa_duplicate",
+            "user_a",
+            title: "overwritten title",
+            summary: "overwritten summary",
+            idempotencyKeyHash: "idem_different"));
+        var stored = await store.GetByIdAsync("user_a", "pa_duplicate");
+
+        Assert.True(first.Success);
+        Assert.False(duplicate.Success);
+        Assert.Equal("duplicate_pending_action", duplicate.ErrorCode);
+        Assert.Equal("original title", stored!.Payload["title"]);
+        Assert.Equal("original summary", stored.Payload["summary"]);
+        Assert.False(stored.Executed);
+        Assert.False(stored.WroteData);
+    }
+
+    [Fact]
     public async Task EndpointReturnsConflictWithActionViewForFinalizedState()
     {
         var services = BuildServices();
@@ -676,5 +703,46 @@ public class Phase9PendingActionPersistenceTest
             WroteData = false,
             Executed = false
         };
+    }
+
+    private static PendingActionCreateRequest CreateStoreRequest(
+        string id,
+        string userId,
+        string title,
+        string summary,
+        string idempotencyKeyHash)
+    {
+        return new PendingActionCreateRequest(
+            PendingActionId: id,
+            PreviewId: $"preview_{id}",
+            ToolId: "phase8_preview_tool",
+            ToolVersion: "1.0",
+            AdapterId: "phase8_preview_adapter",
+            ActionType: "phase8_fake_pending_action",
+            UserSubjectRef: userId,
+            SessionSubjectRef: "agent_preview_default_session",
+            RiskLevel: "low_preview_only",
+            ExpiresAt: DateTimeOffset.UtcNow.AddMinutes(10),
+            IdempotencyKeyHash: idempotencyKeyHash,
+            InputHash: $"input_{id}_{idempotencyKeyHash}",
+            PreviewHash: $"preview_hash_{id}_{idempotencyKeyHash}",
+            PolicySnapshotRef: $"policy_{id}",
+            TraceId: $"trace_{id}_{idempotencyKeyHash}",
+            AuditEventRefs: new[] { $"audit_{id}_{idempotencyKeyHash}" },
+            SanitizedPreviewRef: $"preview_ref_{id}",
+            ServerOnlyPayloadRef: $"payload_ref_{id}",
+            Payload: new Dictionary<string, string>
+            {
+                ["title"] = title,
+                ["summary"] = summary
+            },
+            RedactionMetadata: new Dictionary<string, string>
+            {
+                ["mode"] = "preview_only"
+            },
+            ValidationSnapshot: new Dictionary<string, string>
+            {
+                ["guardDecision"] = Phase80PendingActionRuntime.GuardDecision
+            });
     }
 }

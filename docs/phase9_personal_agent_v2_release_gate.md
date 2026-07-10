@@ -116,6 +116,9 @@ store serializer, even if an input record accidentally contains true values.
 - Cross-user access returns not found instead of leaking ownership.
 - Confirm uses the existing stored payload snapshot and does not accept a new
   payload.
+- Store create rejects duplicate `pendingActionId` writes with a different
+  idempotency key, preserving the original payload snapshot instead of
+  overwriting it.
 - Cancelled, expired, rejected, blocked, or executed terminal records cannot be
   moved back into a mutable state.
 - Store implementations reject direct `executed` status transitions. Execution
@@ -208,6 +211,8 @@ Before release gate approval:
    - invalid transition
    - cancelled cannot confirm
    - confirmed is not executed
+   - duplicate `pendingActionId` create cannot overwrite the original payload
+     snapshot
    - direct `executed` status transition is rejected
    - terminal records reject late metadata and guard mutations
    - shared transition policy rejects unsafe status changes

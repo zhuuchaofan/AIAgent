@@ -71,9 +71,28 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             Executed = false
         };
 
-        await Document(request.UserSubjectRef, request.PendingActionId)
-            .SetAsync(ToDocument(record), cancellationToken: cancellationToken);
-        return PendingActionStoreResult.Succeeded(record);
+        var document = Document(request.UserSubjectRef, request.PendingActionId);
+        return await _db.RunTransactionAsync(async transaction =>
+        {
+            var snapshot = await transaction.GetSnapshotAsync(document, cancellationToken);
+            if (snapshot.Exists)
+            {
+                var storedRecord = FromDocument(snapshot);
+                if (string.Equals(storedRecord.UserSubjectRef, request.UserSubjectRef, StringComparison.Ordinal) &&
+                    string.Equals(storedRecord.IdempotencyKeyHash, request.IdempotencyKeyHash, StringComparison.Ordinal))
+                {
+                    return PendingActionStoreResult.Succeeded(storedRecord, idempotent: true);
+                }
+
+                return PendingActionStoreResult.Failed(
+                    "duplicate",
+                    "duplicate_pending_action",
+                    "Pending action id already exists.");
+            }
+
+            transaction.Set(document, ToDocument(record));
+            return PendingActionStoreResult.Succeeded(record);
+        }, cancellationToken: cancellationToken);
     }
 
     public async Task<PendingActionRecord?> GetByIdAsync(
