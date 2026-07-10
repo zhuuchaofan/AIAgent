@@ -134,6 +134,8 @@ Do not broaden IAM for:
 ## DI Switch Plan
 
 The production DI candidate is present but defaults safe.
+`PendingActionStoreFactory` owns the runtime store selection so the release
+gate can test the switch independently from `Program.cs`.
 
 Default:
 
@@ -156,6 +158,14 @@ AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=true
 v2. It does not enable real tool execution and must not be paired with write
 flags for `life_events` or `memories`.
 
+Rollback modes:
+
+- unset all pending-action persistence env vars
+- or set `AGENT_PENDING_ACTION_STORE_MODE=in_memory`
+- or set `AGENT_PENDING_ACTION_STORE_ALLOW_FIRESTORE=false`
+
+All rollback modes select `InMemoryPendingActionStore`.
+
 ## Test Requirements
 
 Before release gate approval:
@@ -175,6 +185,8 @@ Before release gate approval:
    - direct `executed` status transition is rejected
    - payload is not modified by confirm
    - historical confirmed and cancelled records remain listable
+   - store factory defaults and rollback modes select in-memory
+   - store factory selects Firestore only when mode and approval are explicit
    - Firestore schema serialization keeps execution flags false
    - Firestore schema readback preserves payload, audit refs, and safety fields
 

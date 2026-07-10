@@ -144,6 +144,55 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public void StoreFactoryDefaultsToInMemoryForSafeAndRollbackModes()
+    {
+        var timeProvider = TimeProvider.System;
+        static Google.Cloud.Firestore.FirestoreDb UnexpectedFirestore()
+        {
+            throw new InvalidOperationException("Firestore should not be requested for safe in-memory modes.");
+        }
+
+        var defaultStore = PendingActionStoreFactory.Create(new PendingActionPersistenceOptions(), UnexpectedFirestore, timeProvider);
+        var disabledStore = PendingActionStoreFactory.Create(
+            new PendingActionPersistenceOptions
+            {
+                Mode = PendingActionPersistenceOptions.ModeDisabled,
+                AllowFirestore = true
+            },
+            UnexpectedFirestore,
+            timeProvider);
+        var unapprovedFirestore = PendingActionStoreFactory.Create(
+            new PendingActionPersistenceOptions
+            {
+                Mode = PendingActionPersistenceOptions.ModeFirestore,
+                AllowFirestore = false
+            },
+            UnexpectedFirestore,
+            timeProvider);
+
+        Assert.IsType<InMemoryPendingActionStore>(defaultStore);
+        Assert.IsType<InMemoryPendingActionStore>(disabledStore);
+        Assert.IsType<InMemoryPendingActionStore>(unapprovedFirestore);
+    }
+
+    [Fact]
+    public void StoreFactorySelectsFirestoreOnlyForExplicitApprovedMode()
+    {
+        var firestore = Google.Cloud.Firestore.FirestoreDb.Create("test-project");
+        var store = PendingActionStoreFactory.Create(
+            new PendingActionPersistenceOptions
+            {
+                Mode = PendingActionPersistenceOptions.ModeFirestore,
+                AllowFirestore = true,
+                PreviewOnly = true
+            },
+            () => firestore,
+            TimeProvider.System);
+
+        Assert.IsType<FirestorePendingActionStore>(store);
+    }
+
+    [Fact]
     public async Task EndpointUsesInjectedPendingActionStoreForPersonalAgentV2()
     {
         var store = new InMemoryPendingActionStore();

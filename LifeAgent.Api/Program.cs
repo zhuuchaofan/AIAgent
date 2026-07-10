@@ -53,14 +53,10 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp =>
     Options.Create(PendingActionPersistenceOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
 builder.Services.AddSingleton<IPendingActionStore>(sp =>
-{
-    var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
-    return options.UseFirestore
-        ? new FirestorePendingActionStore(
-            sp.GetRequiredService<FirestoreDb>(),
-            sp.GetRequiredService<TimeProvider>())
-        : new InMemoryPendingActionStore(sp.GetRequiredService<TimeProvider>());
-});
+    PendingActionStoreFactory.Create(
+        sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>(),
+        sp.GetRequiredService<FirestoreDb>(),
+        sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp =>
 {
     var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
