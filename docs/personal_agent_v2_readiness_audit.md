@@ -56,8 +56,8 @@ path.
 | View historical pending actions | `ListAsync` returns all user-scoped records, including confirmed and cancelled; `ListReturnsHistoricalConfirmedAndCancelledActions` covers this | Locally ready |
 | Confirm persists status | `ConfirmStatusPersistsAndDoesNotExecute` covers status persistence through shared store | Locally ready |
 | Cancel persists status | `CancelStatusPersistsAndCannotConfirm` covers status persistence through shared store | Locally ready |
-| User can only access own data | `CrossUserAccessIsBlocked`; endpoint owner comes from auth context | Locally ready |
-| Status transitions are safe | `PendingActionTransitionPolicy`; `TransitionPolicyRejectsUnsafeStatusChanges`; direct `executed` transition rejected | Locally ready |
+| User can only access own data | `CrossUserAccessIsBlocked`; endpoint owner comes from auth context; cross-user endpoint confirmation returns 404 | Locally ready |
+| Status transitions are safe | `PendingActionTransitionPolicy`; `TransitionPolicyRejectsUnsafeStatusChanges`; direct `executed` transition rejected; finalized records reject late metadata, guard, and status mutations | Locally ready |
 | Agent does not auto execute | `executed=false`, `wroteData=false`, `executionReady=false`; store serializers force false; tests cover no execution | Locally ready |
 | Firestore persistence enabled | Requires Cloud Run env change and deployment approval | Blocked by release gate |
 | Production smoke proves refresh restore | Requires deployed Firestore persistence and authenticated browser/API smoke | Blocked by release gate |
@@ -70,9 +70,14 @@ Backend:
 - `InMemoryPendingActionStore` is the default safe store.
 - `FirestorePendingActionStore` is the durable candidate.
 - `PendingActionStoreFactory` owns mode selection.
-- `PendingActionPersistenceOptions` requires explicit Firestore approval.
+- `PendingActionPersistenceOptions` requires explicit Firestore approval and
+  `PreviewOnly=true`.
 - `PendingActionTransitionPolicy` centralizes status transition checks.
 - `AgentEndpoints` exposes `/api/agent/pending-actions` as the v2 path.
+- v2 endpoint failures use release-smoke-friendly HTTP status codes:
+  - missing or cross-user action: 404
+  - finalized state conflict: 409
+  - error bodies preserve safe action view metadata when available
 
 Frontend:
 
@@ -82,6 +87,8 @@ Frontend:
   - `firestorePersistence`
   - `previewOnly`
   - `safetyMode`
+- Server actions preserve non-2xx v2 response bodies so the UI can keep showing
+  confirmed/cancelled state after a 409 conflict.
 - Terminal states do not show active confirm/cancel controls.
 
 Docs:
@@ -107,6 +114,14 @@ Candidate behavior:
 - `executed=false` and `wroteData=false` are forced by serialization and
   readback.
 - Direct `executed` transition is rejected before write.
+- Owner-checked status and metadata mutations run inside Firestore transactions
+  in the durable candidate, avoiding stale read-then-set overwrites during
+  concurrent confirm/cancel requests.
+- Confirmed, cancelled, expired, rejected, blocked, and executed states are
+  finalized for Personal Agent v2 state memory and cannot receive late status,
+  metadata, or guard-decision mutations.
+- The pending action Firestore resolver is lazy. Default in-memory and rollback
+  modes do not resolve `FirestoreDb` for the Personal Agent v2 store.
 
 Not enabled:
 
@@ -132,9 +147,14 @@ The following cannot be completed without explicit approval:
 Low risk locally:
 
 - The default mode remains in-memory.
-- Rollback modes select in-memory.
+- Rollback modes select in-memory, including
+  `AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=false`.
 - The v2 route is separate from legacy `/api/agent/confirm`.
 - No real write flags are enabled by code changes.
+- Firestore persistence requires all three gates:
+  `AGENT_PENDING_ACTION_STORE_MODE=firestore`,
+  `AGENT_PENDING_ACTION_STORE_ALLOW_FIRESTORE=true`, and
+  `AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=true`.
 
 Remaining production risks:
 
@@ -161,8 +181,10 @@ Remaining production risks:
 Proceed to:
 
 ```text
-Phase 9.1 Firestore Persistence Release Gate Review
+Phase 9.2 Firestore Persistence Preview Enablement
 ```
 
-The gate should be read-only first, then require explicit approval before any
-Cloud Run env change, deployment, or real Firestore persistence smoke.
+The read-only gate review is complete. The next step requires explicit approval
+before any Cloud Run env change, deployment, or real Firestore persistence
+smoke. Until that approval is granted, Personal Agent v2 remains locally ready
+but not production complete.
