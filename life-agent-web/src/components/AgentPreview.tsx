@@ -104,6 +104,14 @@ interface Phase80ListResponse {
   success: boolean;
   message?: string;
   data?: Phase80PendingAction[];
+  persistence?: Phase80PersistenceMetadata;
+}
+
+interface Phase80PersistenceMetadata {
+  storeMode: string;
+  firestorePersistenceEnabled: boolean;
+  previewOnly: boolean;
+  safetyMode: string;
 }
 
 export function AgentPreview() {
@@ -119,6 +127,7 @@ export function AgentPreview() {
   const [phase80Refreshing, setPhase80Refreshing] = useState(false);
   const [phase80Updating, setPhase80Updating] = useState<string | null>(null);
   const [phase80Message, setPhase80Message] = useState<string | null>(null);
+  const [phase80Persistence, setPhase80Persistence] = useState<Phase80PersistenceMetadata | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const toolCalls = useMemo(() => result?.toolCalls ?? [], [result]);
@@ -139,6 +148,7 @@ export function AgentPreview() {
       }
 
       setPhase80Actions(res.data ?? []);
+      setPhase80Persistence(res.persistence ?? null);
       if ((res.data ?? []).length > 0) {
         setPhase80Message("已恢复当前待确认动作；启用 Firestore persistence 后可跨刷新和实例保留。");
       }
@@ -357,6 +367,27 @@ export function AgentPreview() {
             <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-cyan-100 leading-relaxed">
               当前为 Personal Agent v2 preview-only 模式：后端已通过 IPendingActionStore 收敛，默认仍使用 in-memory store；Firestore persistence 需要单独 Release Gate 批准后才会启用。
             </div>
+
+            {phase80Persistence && (
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[10px]">
+                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                  <span className="text-zinc-500">storeMode: </span>
+                  <span className="font-mono text-zinc-300">{phase80Persistence.storeMode}</span>
+                </div>
+                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                  <span className="text-zinc-500">firestorePersistence: </span>
+                  <span className="font-mono text-zinc-300">{String(phase80Persistence.firestorePersistenceEnabled)}</span>
+                </div>
+                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                  <span className="text-zinc-500">previewOnly: </span>
+                  <span className="font-mono text-zinc-300">{String(phase80Persistence.previewOnly)}</span>
+                </div>
+                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
+                  <span className="text-zinc-500">safetyMode: </span>
+                  <span className="font-mono text-zinc-300 break-all">{phase80Persistence.safetyMode}</span>
+                </div>
+              </div>
+            )}
 
             {phase80Message && (
               <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3 text-zinc-300">

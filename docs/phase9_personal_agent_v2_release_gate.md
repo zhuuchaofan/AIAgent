@@ -39,6 +39,13 @@ Compatibility route:
 - New frontend calls use `/api/agent/pending-actions`.
 - Both routes use the same Personal Agent v2 runtime and `IPendingActionStore`.
 
+The list response includes persistence metadata even when no actions exist:
+
+- `storeMode`
+- `firestorePersistenceEnabled`
+- `previewOnly`
+- `safetyMode`
+
 Mainline pending action contract:
 
 - `IPendingActionStore`
@@ -190,6 +197,7 @@ Before release gate approval:
    - historical confirmed and cancelled records remain listable
    - store factory defaults and rollback modes select in-memory
    - store factory selects Firestore only when mode and approval are explicit
+   - list endpoint exposes persistence metadata without requiring an action
    - Firestore schema serialization keeps execution flags false
    - Firestore schema readback preserves payload, audit refs, and safety fields
 
@@ -199,10 +207,11 @@ Before production traffic:
 2. Run unauthenticated smoke.
 3. Run authenticated smoke with a real Firebase ID token.
 4. Create pending action.
-5. Refresh page and confirm the action remains visible.
-6. Confirm the action and refresh again.
-7. Cancel a separate action and refresh again.
-8. Confirm no `life_events`, `memories`, or real tool execution occurred.
+5. Confirm the UI/API reports `firestorePersistenceEnabled=true`.
+6. Refresh page and confirm the action remains visible.
+7. Confirm the action and refresh again.
+8. Cancel a separate action and refresh again.
+9. Confirm no `life_events`, `memories`, or real tool execution occurred.
 
 ## Deployment Steps
 

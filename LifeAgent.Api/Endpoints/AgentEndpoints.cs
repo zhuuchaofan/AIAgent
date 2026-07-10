@@ -1,8 +1,10 @@
 using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Services.Agent;
+using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
 using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -107,12 +109,22 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
+        var runtime = httpContext.RequestServices.GetRequiredService<Phase80PendingActionRuntime>();
+        var options = httpContext.RequestServices
+            .GetRequiredService<IOptions<PendingActionPersistenceOptions>>()
+            .Value;
+
         return Results.Ok(new
         {
             success = true,
-            data = await httpContext.RequestServices
-                .GetRequiredService<Phase80PendingActionRuntime>()
-                .ListAsync(userId, cancellationToken)
+            data = await runtime.ListAsync(userId, cancellationToken),
+            persistence = new
+            {
+                storeMode = options.Mode,
+                firestorePersistenceEnabled = options.UseFirestore,
+                previewOnly = options.PreviewOnly,
+                safetyMode = options.SafetyMode
+            }
         });
     }
 

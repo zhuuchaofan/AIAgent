@@ -211,6 +211,21 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task ListEndpointReturnsPersistenceMetadataWithoutActions()
+    {
+        var services = BuildServices();
+
+        var listed = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(
+            AuthenticatedContext("user_a", services)));
+
+        Assert.Equal(StatusCodes.Status200OK, listed.StatusCode);
+        Assert.Equal(PendingActionPersistenceOptions.ModeInMemory, ReadString(listed.Body, "persistence", "storeMode"));
+        Assert.False(ReadBool(listed.Body, "persistence", "firestorePersistenceEnabled"));
+        Assert.True(ReadBool(listed.Body, "persistence", "previewOnly"));
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", ReadString(listed.Body, "persistence", "safetyMode"));
+    }
+
+    [Fact]
     public async Task ConfirmDoesNotModifyPayloadSnapshot()
     {
         var store = new InMemoryPendingActionStore();
@@ -454,6 +469,19 @@ public class Phase9PendingActionPersistenceTest
         }
 
         return current.GetString() ?? string.Empty;
+    }
+
+    private static bool ReadBool(string json, params string[] path)
+    {
+        using var document = JsonDocument.Parse(json);
+        var current = document.RootElement;
+        foreach (var segment in path)
+        {
+            Assert.True(current.TryGetProperty(segment, out var next), $"Missing JSON property '{segment}'.");
+            current = next;
+        }
+
+        return current.GetBoolean();
     }
 
     private static IServiceProvider BuildServices(IPendingActionStore? store = null)
