@@ -3,6 +3,7 @@
 import { getToken } from "./auth";
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:5140";
+const PERSONAL_AGENT_PENDING_ACTIONS_PATH = "/api/agent/pending-actions";
 
 export async function getDocuments() {
   try {
@@ -226,7 +227,7 @@ export async function createPhase80PendingAction(title?: string, summary?: strin
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
 
-    const res = await fetch(`${API_BASE}/api/agent/pending-actions/demo`, {
+    const res = await fetch(`${API_BASE}${PERSONAL_AGENT_PENDING_ACTIONS_PATH}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -256,7 +257,7 @@ export async function listPhase80PendingActions() {
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
 
-    const res = await fetch(`${API_BASE}/api/agent/pending-actions/demo`, {
+    const res = await fetch(`${API_BASE}${PERSONAL_AGENT_PENDING_ACTIONS_PATH}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -288,7 +289,7 @@ async function updatePhase80PendingAction(actionId: string, decision: "confirm" 
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
 
-    const res = await fetch(`${API_BASE}/api/agent/pending-actions/demo/${actionId}/${decision}`, {
+    const res = await fetch(`${API_BASE}${PERSONAL_AGENT_PENDING_ACTIONS_PATH}/${actionId}/${decision}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

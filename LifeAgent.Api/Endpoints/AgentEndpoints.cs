@@ -18,7 +18,29 @@ public static class AgentEndpoints
             .WithTags("agent")
             .RequireRateLimiting("high-cost");
 
-        // Phase 8 fake-first demo endpoints are deliberately separate from the
+        // Personal Agent v2 pending action endpoints are deliberately separate
+        // from the legacy /api/agent/confirm path. They never call
+        // IPendingAgentActionStore, FirestorePendingAgentActionStore, or the
+        // life_event write coordinator.
+        app.MapPost("/api/agent/pending-actions", CreatePhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapGet("/api/agent/pending-actions", ListPhase80PendingActionsAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapPost("/api/agent/pending-actions/{actionId}/confirm", ConfirmPhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapPost("/api/agent/pending-actions/{actionId}/cancel", CancelPhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        // Compatibility aliases for the Phase 8 preview deployment.
+        // These routes hit the same Personal Agent v2 runtime and store.
+        // They remain separate from the
         // legacy /api/agent/confirm path. They never call IPendingAgentActionStore,
         // FirestorePendingAgentActionStore, or the life_event write coordinator.
         app.MapPost("/api/agent/pending-actions/demo", CreatePhase80PendingActionAsync)
@@ -149,7 +171,7 @@ public static class AgentEndpoints
             // Legacy Agent Preview confirmation path. This can enter the
             // create_life_event write coordinator only when both real-write
             // feature flags are explicitly enabled. Phase 8 demo confirmations
-            // must use /api/agent/pending-actions/demo/{actionId}/confirm.
+            // must use /api/agent/pending-actions/{actionId}/confirm.
             var logger = loggerFactory.CreateLogger("AgentEndpoints");
             var actionId = request.ActionId ?? string.Empty;
             var normalizedDecision = (request.Decision ?? string.Empty).Trim().ToLowerInvariant();

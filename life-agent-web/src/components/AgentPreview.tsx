@@ -140,7 +140,7 @@ export function AgentPreview() {
 
       setPhase80Actions(res.data ?? []);
       if ((res.data ?? []).length > 0) {
-        setPhase80Message("已从当前 API 实例内存恢复待确认动作；实例重启或切换后仍可能丢失。");
+        setPhase80Message("已恢复当前待确认动作；启用 Firestore persistence 后可跨刷新和实例保留。");
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -329,8 +329,8 @@ export function AgentPreview() {
           <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4 text-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <div className="text-zinc-200 font-semibold">待确认动作演示</div>
-                <div className="text-zinc-500 mt-1">个人预览 / in-memory demo：确认只改变状态，不写入真实数据，不执行工具</div>
+                <div className="text-zinc-200 font-semibold">Personal Agent v2 待确认动作</div>
+                <div className="text-zinc-500 mt-1">状态记忆预览：确认只改变 pending action 状态，不写入业务数据，不执行工具</div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
@@ -355,7 +355,7 @@ export function AgentPreview() {
             </div>
 
             <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-cyan-100 leading-relaxed">
-              当前为 Personal Agent Preview v1 的安全预览：状态保存在 API 进程内存中，刷新页面会尝试恢复；如果服务实例重启或请求切到其他实例，状态可能丢失。
+              当前为 Personal Agent v2 preview-only 模式：后端已通过 IPendingActionStore 收敛，默认仍使用 in-memory store；Firestore persistence 需要单独 Release Gate 批准后才会启用。
             </div>
 
             {phase80Message && (
@@ -411,7 +411,7 @@ export function AgentPreview() {
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
                         {action.message}
                         {action.status === "confirmed" ? "；已确认，尚未执行。" : ""}
-                        <span className="block mt-1">confirmed != executed；当前为安全演示模式，不会写入真实数据。</span>
+                        <span className="block mt-1">confirmed != executed；当前为 preview-only 模式，不会写入 memories / life_events。</span>
                       </div>
                       {pending ? (
                         <div className="flex flex-col sm:flex-row gap-2">

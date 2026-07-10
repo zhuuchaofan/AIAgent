@@ -16,7 +16,7 @@ Current preview path:
 
 ```text
 Agent Preview UI
-  -> /api/agent/pending-actions/demo
+  -> /api/agent/pending-actions
   -> Phase80PendingActionRuntime
   -> IPendingActionStore
   -> InMemoryPendingActionStore by default
@@ -26,12 +26,18 @@ Approved future persistence path:
 
 ```text
 Agent Preview UI
-  -> /api/agent/pending-actions/demo
+  -> /api/agent/pending-actions
   -> Phase80PendingActionRuntime
   -> IPendingActionStore
   -> FirestorePendingActionStore when explicitly gated
   -> users/{userId}/pendingActions/{pendingActionId}
 ```
+
+Compatibility route:
+
+- `/api/agent/pending-actions/demo` remains as a Phase 8 deployment alias.
+- New frontend calls use `/api/agent/pending-actions`.
+- Both routes use the same Personal Agent v2 runtime and `IPendingActionStore`.
 
 Mainline pending action contract:
 

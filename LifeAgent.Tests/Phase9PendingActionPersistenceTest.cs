@@ -124,6 +124,26 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public void PersistenceOptionsUseFirestoreOnlyWhenModeAndApprovalAreExplicit()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AgentRuntime:PendingActionStore:Mode"] = "firestore",
+                ["AgentRuntime:PendingActionStore:AllowFirestore"] = "true",
+                ["AgentRuntime:PendingActionStore:PreviewOnly"] = "true"
+            })
+            .Build();
+
+        var options = PendingActionPersistenceOptions.FromConfiguration(configuration);
+
+        Assert.True(options.AllowFirestore);
+        Assert.True(options.UseFirestore);
+        Assert.True(options.PreviewOnly);
+        Assert.Equal("personal_agent_v2_firestore_persistence_preview_only", options.SafetyMode);
+    }
+
+    [Fact]
     public async Task EndpointUsesInjectedPendingActionStoreForPersonalAgentV2()
     {
         var store = new InMemoryPendingActionStore();
