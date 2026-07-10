@@ -145,6 +145,48 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public void PersistenceOptionsReadCloudRunEnvStyleKeys()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AGENT_PENDING_ACTION_STORE_MODE"] = "firestore",
+                ["AGENT_PENDING_ACTION_STORE_ALLOW_FIRESTORE"] = "true",
+                ["AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY"] = "true"
+            })
+            .Build();
+
+        var options = PendingActionPersistenceOptions.FromConfiguration(configuration);
+
+        Assert.Equal(PendingActionPersistenceOptions.ModeFirestore, options.Mode);
+        Assert.True(options.AllowFirestore);
+        Assert.True(options.PreviewOnly);
+        Assert.True(options.UseFirestore);
+        Assert.Equal("personal_agent_v2_firestore_persistence_preview_only", options.SafetyMode);
+    }
+
+    [Fact]
+    public void PersistenceOptionsInvalidEnvStyleKeysFailSafe()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AGENT_PENDING_ACTION_STORE_MODE"] = "unknown",
+                ["AGENT_PENDING_ACTION_STORE_ALLOW_FIRESTORE"] = "not-a-bool",
+                ["AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY"] = "not-a-bool"
+            })
+            .Build();
+
+        var options = PendingActionPersistenceOptions.FromConfiguration(configuration);
+
+        Assert.Equal(PendingActionPersistenceOptions.ModeInMemory, options.Mode);
+        Assert.False(options.AllowFirestore);
+        Assert.True(options.PreviewOnly);
+        Assert.False(options.UseFirestore);
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", options.SafetyMode);
+    }
+
+    [Fact]
     public void PersistenceOptionsRequirePreviewOnlyForFirestorePersistence()
     {
         var configuration = new ConfigurationBuilder()

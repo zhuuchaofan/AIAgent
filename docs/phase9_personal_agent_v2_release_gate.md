@@ -224,6 +224,8 @@ Before release gate approval:
    - historical confirmed and cancelled records remain listable
    - store factory defaults and rollback modes select in-memory
    - store factory selects Firestore only when mode and approval are explicit
+   - Cloud Run env-style persistence keys are parsed correctly
+   - invalid env-style persistence values fail safe to in-memory
    - list endpoint exposes persistence metadata without requiring an action
    - Firestore schema serialization keeps execution flags false
    - Firestore schema readback preserves payload, audit refs, and safety fields
