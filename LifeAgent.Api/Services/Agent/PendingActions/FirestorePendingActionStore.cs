@@ -122,6 +122,14 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
                 "Pending action status did not match expected status.");
         }
 
+        if (update.NewStatus == PendingActionStatus.Executed)
+        {
+            return PendingActionStoreResult.Failed(
+                record.Status,
+                "execution_not_enabled",
+                "Pending action store cannot mark records as executed.");
+        }
+
         if (record.Status == PendingActionStatus.Cancelled &&
             update.NewStatus == PendingActionStatus.Confirmed)
         {
@@ -322,6 +330,14 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
                 record.Status,
                 "terminal_status",
                 "Terminal pending action cannot change status.");
+        }
+
+        if (status == PendingActionStatus.Executed)
+        {
+            return PendingActionStoreResult.Failed(
+                record.Status,
+                "execution_not_enabled",
+                "Pending action store cannot mark records as executed.");
         }
 
         var updated = Copy(record, status) with

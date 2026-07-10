@@ -181,6 +181,47 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task StoreRejectsDirectExecutedTransition()
+    {
+        var store = new InMemoryPendingActionStore();
+        var runtime = new Phase80PendingActionRuntime(store: store);
+        var created = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest("no execute", "store guard"));
+
+        var executeAttempt = await store.UpdateStatusAsync(new PendingActionStatusUpdate(
+            PendingActionId: created.Data!.ActionId,
+            UserSubjectRef: "user_a",
+            ExpectedStatus: PendingActionStatus.ConfirmationRequired,
+            NewStatus: PendingActionStatus.Executed));
+        var after = await store.GetByIdAsync("user_a", created.Data.ActionId);
+
+        Assert.False(executeAttempt.Success);
+        Assert.Equal("execution_not_enabled", executeAttempt.ErrorCode);
+        Assert.Equal(PendingActionStatus.ConfirmationRequired, after!.Status);
+        Assert.False(after.Executed);
+        Assert.False(after.WroteData);
+    }
+
+    [Fact]
+    public async Task ListReturnsHistoricalConfirmedAndCancelledActions()
+    {
+        var store = new InMemoryPendingActionStore();
+        var runtime = new Phase80PendingActionRuntime(store: store);
+        var confirmed = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest("confirmed history", null));
+        var cancelled = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest("cancelled history", null));
+        var otherUser = await runtime.CreateAsync("user_b", new Phase80CreatePendingActionRequest("hidden", null));
+
+        await runtime.ConfirmAsync("user_a", confirmed.Data!.ActionId);
+        await runtime.CancelAsync("user_a", cancelled.Data!.ActionId);
+
+        var history = await new Phase80PendingActionRuntime(store: store).ListAsync("user_a");
+
+        Assert.Equal(2, history.Count);
+        Assert.Contains(history, action => action.ActionId == confirmed.Data.ActionId && action.Status == "confirmed");
+        Assert.Contains(history, action => action.ActionId == cancelled.Data.ActionId && action.Status == "cancelled");
+        Assert.DoesNotContain(history, action => action.ActionId == otherUser.Data!.ActionId);
+    }
+
+    [Fact]
     public void FirestoreCandidateSerializesApprovedSchemaWithoutExecutionFlags()
     {
         var record = new PendingActionRecord
@@ -229,6 +270,66 @@ public class Phase9PendingActionPersistenceTest
         Assert.True(document.ContainsKey("audit"));
         Assert.False((bool)document["executed"]!);
         Assert.False((bool)document["wroteData"]!);
+    }
+
+    [Fact]
+    public void FirestoreCandidateRoundTripsPayloadAuditAndSafetyFields()
+    {
+        var record = new PendingActionRecord
+        {
+            PendingActionId = "pa_roundtrip",
+            PreviewId = "preview_pa_roundtrip",
+            ToolId = "phase8_preview_tool",
+            ToolVersion = "1.0",
+            AdapterId = "phase8_preview_adapter",
+            ActionType = "phase8_fake_pending_action",
+            UserSubjectRef = "user_a",
+            SessionSubjectRef = "agent_preview_default_session",
+            RiskLevel = "low_preview_only",
+            Status = PendingActionStatus.Cancelled,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            UpdatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            IdempotencyKeyHash = "idem_roundtrip",
+            InputHash = "input_roundtrip",
+            PreviewHash = "preview_roundtrip",
+            PolicySnapshotRef = "policy_roundtrip",
+            TraceId = "trace_roundtrip",
+            AuditEventRefs = new[] { "audit_created", "audit_cancelled" },
+            SanitizedPreviewRef = "preview_ref_roundtrip",
+            ServerOnlyPayloadRef = "payload_ref_roundtrip",
+            Payload = new Dictionary<string, string>
+            {
+                ["title"] = "roundtrip title",
+                ["summary"] = "roundtrip summary"
+            },
+            RedactionMetadata = new Dictionary<string, string>
+            {
+                ["mode"] = "preview_only"
+            },
+            ValidationSnapshot = new Dictionary<string, string>
+            {
+                ["guardDecision"] = Phase80PendingActionRuntime.GuardDecision
+            },
+            CancellationReason = "user_cancelled",
+            WroteData = true,
+            Executed = true
+        };
+
+        var document = FirestorePendingActionStore.ToDocument(record);
+        var restored = FirestorePendingActionStore.FromDictionary(document!);
+
+        Assert.Equal("pa_roundtrip", restored.PendingActionId);
+        Assert.Equal("user_a", restored.UserSubjectRef);
+        Assert.Equal(PendingActionStatus.Cancelled, restored.Status);
+        Assert.Equal("roundtrip title", restored.Payload["title"]);
+        Assert.Equal("roundtrip summary", restored.Payload["summary"]);
+        Assert.Equal("preview_only", restored.RedactionMetadata["mode"]);
+        Assert.Equal(Phase80PendingActionRuntime.GuardDecision, restored.ValidationSnapshot["guardDecision"]);
+        Assert.Equal(new[] { "audit_created", "audit_cancelled" }, restored.AuditEventRefs);
+        Assert.Equal("user_cancelled", restored.CancellationReason);
+        Assert.False(restored.Executed);
+        Assert.False(restored.WroteData);
     }
 
     private static DefaultHttpContext AuthenticatedContext(string userId, IServiceProvider? services = null)

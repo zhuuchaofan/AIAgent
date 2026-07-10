@@ -111,6 +111,8 @@ store serializer, even if an input record accidentally contains true values.
   payload.
 - Cancelled, expired, rejected, blocked, or executed terminal records cannot be
   moved back into a mutable state.
+- Store implementations reject direct `executed` status transitions. Execution
+  remains a separate future runtime and is not part of Personal Agent v2.
 - Confirmed is not executed. Real tool execution is still unavailable.
 
 ## IAM Requirements
@@ -170,8 +172,11 @@ Before release gate approval:
    - invalid transition
    - cancelled cannot confirm
    - confirmed is not executed
+   - direct `executed` status transition is rejected
    - payload is not modified by confirm
+   - historical confirmed and cancelled records remain listable
    - Firestore schema serialization keeps execution flags false
+   - Firestore schema readback preserves payload, audit refs, and safety fields
 
 Before production traffic:
 
