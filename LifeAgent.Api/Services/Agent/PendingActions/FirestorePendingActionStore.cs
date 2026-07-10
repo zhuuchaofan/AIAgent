@@ -432,7 +432,7 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             ["audit"] = new Dictionary<string, object?>
             {
                 ["createdByUserId"] = record.UserSubjectRef,
-                ["updatedAt"] = record.UpdatedAt,
+                ["updatedAt"] = ToTimestamp(record.UpdatedAt),
                 ["refs"] = record.AuditEventRefs
             },
             ["sanitizedPreviewRef"] = record.SanitizedPreviewRef,

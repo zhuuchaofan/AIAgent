@@ -534,6 +534,10 @@ public class Phase9PendingActionPersistenceTest
         Assert.True(document.ContainsKey("confirmedAt"));
         Assert.True(document.ContainsKey("cancelledAt"));
         Assert.True(document.ContainsKey("audit"));
+        var audit = Assert.IsType<Dictionary<string, object?>>(document["audit"]);
+        Assert.Equal("user_a", audit["createdByUserId"]);
+        Assert.IsType<Google.Cloud.Firestore.Timestamp>(audit["updatedAt"]);
+        Assert.Equal(new[] { "audit_created", "audit_confirmed" }, audit["refs"]);
         Assert.False((bool)document["executed"]!);
         Assert.False((bool)document["wroteData"]!);
     }

@@ -105,6 +105,8 @@ Document fields:
 
 Safety invariant: `wroteData=false` and `executed=false` are forced by the
 store serializer, even if an input record accidentally contains true values.
+Top-level time fields and `audit.updatedAt` are serialized as Firestore
+`Timestamp` values.
 
 ## Security Model
 
