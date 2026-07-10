@@ -67,7 +67,7 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             Executed = false
         };
 
-        if (!_records.TryAdd(record.PendingActionId, record))
+        if (!_records.TryAdd(StoreKey(record.UserSubjectRef, record.PendingActionId), record))
         {
             return Task.FromResult(PendingActionStoreResult.Failed(
                 "duplicate",
@@ -127,7 +127,7 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             CancellationReason = update.CancellationReason,
             AuditEventRefs = AppendAudit(record, update.AuditEventRef)
         };
-        _records[updated.PendingActionId] = updated;
+        _records[StoreKey(updated.UserSubjectRef, updated.PendingActionId)] = updated;
         return Task.FromResult(PendingActionStoreResult.Succeeded(updated));
     }
 
@@ -178,7 +178,7 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             ValidationSnapshot = Merge(record.ValidationSnapshot, "confirmationRequestHash", confirmationRequestHash),
             AuditEventRefs = AppendAudit(record, auditEventRef)
         };
-        _records[updated.PendingActionId] = updated;
+        _records[StoreKey(updated.UserSubjectRef, updated.PendingActionId)] = updated;
         return Task.FromResult(PendingActionStoreResult.Succeeded(updated));
     }
 
@@ -211,7 +211,7 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             BlockedReason = blockedReason,
             AuditEventRefs = AppendAudit(record, auditEventRef)
         };
-        _records[updated.PendingActionId] = updated;
+        _records[StoreKey(updated.UserSubjectRef, updated.PendingActionId)] = updated;
         return Task.FromResult(PendingActionStoreResult.Succeeded(updated));
     }
 
@@ -310,13 +310,13 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             CancellationReason = cancellationReason,
             AuditEventRefs = AppendAudit(record, auditEventRef)
         };
-        _records[updated.PendingActionId] = updated;
+        _records[StoreKey(updated.UserSubjectRef, updated.PendingActionId)] = updated;
         return Task.FromResult(PendingActionStoreResult.Succeeded(updated));
     }
 
     private bool TryGetOwned(string userSubjectRef, string pendingActionId, out PendingActionRecord record)
     {
-        if (_records.TryGetValue(pendingActionId, out var found) &&
+        if (_records.TryGetValue(StoreKey(userSubjectRef, pendingActionId), out var found) &&
             found.UserSubjectRef == userSubjectRef)
         {
             record = found;
@@ -334,8 +334,13 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
                      PendingActionStatus.IsActive(record.Status) &&
                      record.ExpiresAt <= now))
         {
-            _records[record.PendingActionId] = Copy(record, PendingActionStatus.Expired);
+            _records[StoreKey(record.UserSubjectRef, record.PendingActionId)] = Copy(record, PendingActionStatus.Expired);
         }
+    }
+
+    private static string StoreKey(string userSubjectRef, string pendingActionId)
+    {
+        return $"{userSubjectRef}/{pendingActionId}";
     }
 
     private PendingActionRecord Copy(PendingActionRecord record, string status)

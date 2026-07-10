@@ -163,6 +163,8 @@ gate can test the switch independently from `Program.cs`.
 The Firestore client resolver is lazy for the pending action store: default
 in-memory and rollback modes do not resolve `FirestoreDb` for Personal Agent v2
 pending action persistence.
+The in-memory fallback uses the same owner-scoped identity model as the
+Firestore path: `(userSubjectRef, pendingActionId)`.
 
 Default:
 

@@ -336,6 +336,38 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task StoreKeysPendingActionIdsByOwner()
+    {
+        var store = new InMemoryPendingActionStore();
+        var userA = await store.CreateAsync(CreateStoreRequest(
+            "pa_shared_id",
+            "user_a",
+            title: "user a title",
+            summary: "user a summary",
+            idempotencyKeyHash: "idem_a"));
+        var userB = await store.CreateAsync(CreateStoreRequest(
+            "pa_shared_id",
+            "user_b",
+            title: "user b title",
+            summary: "user b summary",
+            idempotencyKeyHash: "idem_b"));
+
+        var userARecord = await store.GetByIdAsync("user_a", "pa_shared_id");
+        var userBRecord = await store.GetByIdAsync("user_b", "pa_shared_id");
+        var userAList = await store.QueryAsync(new PendingActionQuery("user_a"));
+        var userBList = await store.QueryAsync(new PendingActionQuery("user_b"));
+
+        Assert.True(userA.Success);
+        Assert.True(userB.Success);
+        Assert.Equal("user a title", userARecord!.Payload["title"]);
+        Assert.Equal("user b title", userBRecord!.Payload["title"]);
+        Assert.Single(userAList);
+        Assert.Single(userBList);
+        Assert.Equal("user_a", userAList[0].UserSubjectRef);
+        Assert.Equal("user_b", userBList[0].UserSubjectRef);
+    }
+
+    [Fact]
     public async Task EndpointReturnsConflictWithActionViewForFinalizedState()
     {
         var services = BuildServices();
