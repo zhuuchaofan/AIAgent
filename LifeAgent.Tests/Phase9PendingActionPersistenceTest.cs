@@ -144,6 +144,27 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public void PersistenceOptionsRequirePreviewOnlyForFirestorePersistence()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AgentRuntime:PendingActionStore:Mode"] = "firestore",
+                ["AgentRuntime:PendingActionStore:AllowFirestore"] = "true",
+                ["AgentRuntime:PendingActionStore:PreviewOnly"] = "false"
+            })
+            .Build();
+
+        var options = PendingActionPersistenceOptions.FromConfiguration(configuration);
+
+        Assert.Equal(PendingActionPersistenceOptions.ModeFirestore, options.Mode);
+        Assert.True(options.AllowFirestore);
+        Assert.False(options.PreviewOnly);
+        Assert.False(options.UseFirestore);
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", options.SafetyMode);
+    }
+
+    [Fact]
     public void StoreFactoryDefaultsToInMemoryForSafeAndRollbackModes()
     {
         var timeProvider = TimeProvider.System;
@@ -169,10 +190,20 @@ public class Phase9PendingActionPersistenceTest
             },
             UnexpectedFirestore,
             timeProvider);
+        var notPreviewOnly = PendingActionStoreFactory.Create(
+            new PendingActionPersistenceOptions
+            {
+                Mode = PendingActionPersistenceOptions.ModeFirestore,
+                AllowFirestore = true,
+                PreviewOnly = false
+            },
+            UnexpectedFirestore,
+            timeProvider);
 
         Assert.IsType<InMemoryPendingActionStore>(defaultStore);
         Assert.IsType<InMemoryPendingActionStore>(disabledStore);
         Assert.IsType<InMemoryPendingActionStore>(unapprovedFirestore);
+        Assert.IsType<InMemoryPendingActionStore>(notPreviewOnly);
     }
 
     [Fact]

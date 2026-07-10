@@ -171,13 +171,17 @@ AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=true
 
 `AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY` must remain true for Personal Agent
 v2. It does not enable real tool execution and must not be paired with write
-flags for `life_events` or `memories`.
+flags for `life_events` or `memories`. The store factory treats
+`AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=false` as a safe rollback condition:
+even with Firestore mode and approval enabled, it selects
+`InMemoryPendingActionStore` instead of durable persistence.
 
 Rollback modes:
 
 - unset all pending-action persistence env vars
 - or set `AGENT_PENDING_ACTION_STORE_MODE=in_memory`
 - or set `AGENT_PENDING_ACTION_STORE_ALLOW_FIRESTORE=false`
+- or set `AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=false`
 
 All rollback modes select `InMemoryPendingActionStore`.
 

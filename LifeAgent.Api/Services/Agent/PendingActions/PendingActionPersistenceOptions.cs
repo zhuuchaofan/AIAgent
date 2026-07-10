@@ -15,6 +15,7 @@ public sealed record PendingActionPersistenceOptions
 
     public bool UseFirestore =>
         AllowFirestore &&
+        PreviewOnly &&
         string.Equals(Mode, ModeFirestore, StringComparison.OrdinalIgnoreCase);
 
     public string SafetyMode =>
