@@ -151,6 +151,9 @@ Do not broaden IAM for:
 The production DI candidate is present but defaults safe.
 `PendingActionStoreFactory` owns the runtime store selection so the release
 gate can test the switch independently from `Program.cs`.
+The Firestore client resolver is lazy for the pending action store: default
+in-memory and rollback modes do not resolve `FirestoreDb` for Personal Agent v2
+pending action persistence.
 
 Default:
 

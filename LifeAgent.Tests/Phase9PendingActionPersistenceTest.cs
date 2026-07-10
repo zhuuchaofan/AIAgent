@@ -224,6 +224,38 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public void StoreFactoryResolvesFirestoreOnlyAfterPersistenceGate()
+    {
+        var firestoreRequested = false;
+        Google.Cloud.Firestore.FirestoreDb FirestoreFactory()
+        {
+            firestoreRequested = true;
+            return Google.Cloud.Firestore.FirestoreDb.Create("test-project");
+        }
+
+        var defaultStore = PendingActionStoreFactory.Create(
+            Options.Create(new PendingActionPersistenceOptions()),
+            FirestoreFactory,
+            TimeProvider.System);
+
+        Assert.IsType<InMemoryPendingActionStore>(defaultStore);
+        Assert.False(firestoreRequested);
+
+        var firestoreStore = PendingActionStoreFactory.Create(
+            Options.Create(new PendingActionPersistenceOptions
+            {
+                Mode = PendingActionPersistenceOptions.ModeFirestore,
+                AllowFirestore = true,
+                PreviewOnly = true
+            }),
+            FirestoreFactory,
+            TimeProvider.System);
+
+        Assert.IsType<FirestorePendingActionStore>(firestoreStore);
+        Assert.True(firestoreRequested);
+    }
+
+    [Fact]
     public async Task EndpointUsesInjectedPendingActionStoreForPersonalAgentV2()
     {
         var store = new InMemoryPendingActionStore();

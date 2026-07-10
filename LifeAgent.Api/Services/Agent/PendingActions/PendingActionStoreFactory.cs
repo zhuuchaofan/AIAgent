@@ -13,6 +13,14 @@ public static class PendingActionStoreFactory
         return Create(options.Value, () => firestoreDb, timeProvider);
     }
 
+    public static IPendingActionStore Create(
+        IOptions<PendingActionPersistenceOptions> options,
+        Func<FirestoreDb> firestoreDbFactory,
+        TimeProvider timeProvider)
+    {
+        return Create(options.Value, firestoreDbFactory, timeProvider);
+    }
+
     internal static IPendingActionStore Create(
         PendingActionPersistenceOptions options,
         Func<FirestoreDb> firestoreDbFactory,
