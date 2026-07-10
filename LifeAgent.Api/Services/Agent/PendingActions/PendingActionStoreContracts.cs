@@ -19,6 +19,7 @@ public sealed record PendingActionCreateRequest(
     IReadOnlyList<string> AuditEventRefs,
     string SanitizedPreviewRef,
     string ServerOnlyPayloadRef,
+    IReadOnlyDictionary<string, string>? Payload = null,
     IReadOnlyDictionary<string, string>? RedactionMetadata = null,
     IReadOnlyDictionary<string, string>? ValidationSnapshot = null);
 

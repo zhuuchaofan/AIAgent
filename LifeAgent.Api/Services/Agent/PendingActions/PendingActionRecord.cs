@@ -24,6 +24,7 @@ public sealed record PendingActionRecord
     public IReadOnlyList<string> AuditEventRefs { get; init; } = Array.Empty<string>();
     public string SanitizedPreviewRef { get; init; } = string.Empty;
     public string ServerOnlyPayloadRef { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> Payload { get; init; } = new Dictionary<string, string>();
     public IReadOnlyDictionary<string, string> RedactionMetadata { get; init; } = new Dictionary<string, string>();
     public IReadOnlyDictionary<string, string> ValidationSnapshot { get; init; } = new Dictionary<string, string>();
     public string? BlockedReason { get; init; }

@@ -228,6 +228,11 @@ public class Phase80PendingActionRuntimeMvpTest
         return (context.Response.StatusCode, await reader.ReadToEndAsync());
     }
 
+    private static async Task<(int StatusCode, string Body)> ExecuteResultAsync(Task<IResult> result)
+    {
+        return await ExecuteResultAsync(await result);
+    }
+
     private static string ReadString(string json, params string[] path)
     {
         using var document = JsonDocument.Parse(json);

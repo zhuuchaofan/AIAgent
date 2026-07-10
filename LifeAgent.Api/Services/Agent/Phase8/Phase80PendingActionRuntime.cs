@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using LifeAgent.Api.Services.Agent.PendingActions;
 
 namespace LifeAgent.Api.Services.Agent.Phase8;
 
@@ -11,17 +11,32 @@ public sealed class Phase80PendingActionRuntime
     public const string SafetyMode = "phase8_fake_first_in_memory";
     public const string GuardDecision = "deny_all_no_real_execution";
 
-    private readonly ConcurrentDictionary<string, Phase80PendingActionRecord> _actions = new();
+    private readonly IPendingActionStore _store;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _ttl;
+    private readonly string _safetyMode;
 
-    public Phase80PendingActionRuntime(TimeProvider? timeProvider = null, TimeSpan? ttl = null)
+    public Phase80PendingActionRuntime(
+        TimeProvider? timeProvider = null,
+        TimeSpan? ttl = null,
+        IPendingActionStore? store = null,
+        string? safetyMode = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
         _ttl = ttl ?? TimeSpan.FromMinutes(15);
+        _store = store ?? new InMemoryPendingActionStore(_timeProvider);
+        _safetyMode = string.IsNullOrWhiteSpace(safetyMode) ? SafetyMode : safetyMode;
     }
 
     public Phase80PendingActionResult Create(string userId, Phase80CreatePendingActionRequest? request)
+    {
+        return CreateAsync(userId, request).GetAwaiter().GetResult();
+    }
+
+    public async Task<Phase80PendingActionResult> CreateAsync(
+        string userId,
+        Phase80CreatePendingActionRequest? request,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
@@ -36,65 +51,100 @@ public sealed class Phase80PendingActionRuntime
             ? "Phase 8.0 fake-first 待确认动作：确认后只改变状态，不写入 Firestore，也不执行真实 tool。"
             : request.Summary.Trim();
 
-        var record = new Phase80PendingActionRecord(
-            ActionId: $"phase8_action_{Guid.NewGuid():N}",
-            UserId: userId,
-            Status: Pending,
-            Title: title,
-            Summary: summary,
+        var actionId = $"phase8_action_{Guid.NewGuid():N}";
+        var created = await _store.CreateAsync(new PendingActionCreateRequest(
+            PendingActionId: actionId,
+            PreviewId: $"preview_{actionId}",
+            ToolId: "phase8_preview_tool",
+            ToolVersion: "1.0",
+            AdapterId: "phase8_preview_adapter",
             ActionType: "phase8_fake_pending_action",
-            CreatedAt: now,
-            UpdatedAt: now,
+            UserSubjectRef: userId,
+            SessionSubjectRef: "agent_preview_default_session",
+            RiskLevel: "low_preview_only",
             ExpiresAt: now.Add(_ttl),
-            ConfirmedAt: null,
-            CancelledAt: null,
-            Executed: false,
-            WroteData: false,
-            ExecutionReady: false,
-            GuardDecision: GuardDecision);
+            IdempotencyKeyHash: $"phase8_idem_{actionId}",
+            InputHash: $"phase8_input_{actionId}",
+            PreviewHash: $"phase8_preview_{actionId}",
+            PolicySnapshotRef: "phase8_preview_policy_default",
+            TraceId: $"phase8_trace_{actionId}",
+            AuditEventRefs: new[] { $"phase8_audit_{actionId}_created" },
+            SanitizedPreviewRef: $"phase8_sanitized_preview_{actionId}",
+            ServerOnlyPayloadRef: $"phase8_payload_ref_{actionId}",
+            Payload: new Dictionary<string, string>
+            {
+                ["title"] = title,
+                ["summary"] = summary
+            },
+            RedactionMetadata: new Dictionary<string, string>
+            {
+                ["mode"] = "preview_only"
+            },
+            ValidationSnapshot: new Dictionary<string, string>
+            {
+                ["guardDecision"] = GuardDecision
+            }),
+            cancellationToken);
 
-        _actions[record.ActionId] = record;
+        if (!created.Success || created.Record is null)
+        {
+            return Phase80PendingActionResult.Fail(
+                created.Status,
+                created.Message ?? "Pending action could not be created.");
+        }
 
         return Phase80PendingActionResult.Ok(
             "pending",
-            "已生成待确认动作。该动作仅保存在本进程内存中。",
-            ToView(record));
+            "已生成待确认动作。",
+            ToView(created.Record));
     }
 
     public IReadOnlyList<Phase80PendingActionView> List(string userId)
+    {
+        return ListAsync(userId).GetAwaiter().GetResult();
+    }
+
+    public async Task<IReadOnlyList<Phase80PendingActionView>> ListAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Array.Empty<Phase80PendingActionView>();
         }
 
-        var now = _timeProvider.GetUtcNow();
-        return _actions.Values
-            .Where(action => string.Equals(action.UserId, userId, StringComparison.Ordinal))
-            .Select(action => ToView(ExpireIfNeeded(action, now)))
-            .OrderByDescending(action => action.CreatedAt)
-            .ToArray();
+        var records = await _store.QueryAsync(new PendingActionQuery(userId), cancellationToken);
+        return records.Select(ToView).ToArray();
     }
 
     public Phase80PendingActionResult Confirm(string userId, string actionId)
     {
-        if (!TryGetOwnedAction(userId, actionId, out var current))
+        return ConfirmAsync(userId, actionId).GetAwaiter().GetResult();
+    }
+
+    public async Task<Phase80PendingActionResult> ConfirmAsync(
+        string userId,
+        string actionId,
+        CancellationToken cancellationToken = default)
+    {
+        var current = await _store.GetByIdAsync(userId, actionId, cancellationToken);
+        if (current is null)
         {
             return Phase80PendingActionResult.Fail("not_found", "Pending action was not found.");
         }
 
-        current = ExpireIfNeeded(current, _timeProvider.GetUtcNow());
-        if (current.Status == Expired)
+        var status = ToPhase80Status(current.Status);
+        if (status == Expired)
         {
             return Phase80PendingActionResult.Fail(Expired, "Pending action expired.", ToView(current));
         }
 
-        if (current.Status == Cancelled)
+        if (status == Cancelled)
         {
             return Phase80PendingActionResult.Fail(Cancelled, "Cancelled pending action cannot be confirmed.", ToView(current));
         }
 
-        if (current.Status == Confirmed)
+        if (status == Confirmed)
         {
             return Phase80PendingActionResult.Ok(
                 Confirmed,
@@ -102,45 +152,57 @@ public sealed class Phase80PendingActionRuntime
                 ToView(current));
         }
 
-        var now = _timeProvider.GetUtcNow();
-        var updated = current with
-        {
-            Status = Confirmed,
-            UpdatedAt = now,
-            ConfirmedAt = now,
-            Executed = false,
-            WroteData = false,
-            ExecutionReady = false,
-            GuardDecision = GuardDecision
-        };
+        var updated = await _store.UpdateStatusAsync(new PendingActionStatusUpdate(
+            PendingActionId: actionId,
+            UserSubjectRef: userId,
+            ExpectedStatus: PendingActionStatus.ConfirmationRequired,
+            NewStatus: PendingActionStatus.Confirmed,
+            ConfirmationId: $"phase8_confirmation_{actionId}",
+            AuditEventRef: $"phase8_audit_{actionId}_confirmed"),
+            cancellationToken);
 
-        _actions[actionId] = updated;
+        if (!updated.Success || updated.Record is null)
+        {
+            return Phase80PendingActionResult.Fail(
+                updated.Status,
+                updated.Message ?? "Pending action could not be confirmed.",
+                updated.Record is null ? null : ToView(updated.Record));
+        }
 
         return Phase80PendingActionResult.Ok(
             Confirmed,
             "已确认，但未执行；没有写入 Firestore，也没有执行真实 tool。",
-            ToView(updated));
+            ToView(updated.Record));
     }
 
     public Phase80PendingActionResult Cancel(string userId, string actionId)
     {
-        if (!TryGetOwnedAction(userId, actionId, out var current))
+        return CancelAsync(userId, actionId).GetAwaiter().GetResult();
+    }
+
+    public async Task<Phase80PendingActionResult> CancelAsync(
+        string userId,
+        string actionId,
+        CancellationToken cancellationToken = default)
+    {
+        var current = await _store.GetByIdAsync(userId, actionId, cancellationToken);
+        if (current is null)
         {
             return Phase80PendingActionResult.Fail("not_found", "Pending action was not found.");
         }
 
-        current = ExpireIfNeeded(current, _timeProvider.GetUtcNow());
-        if (current.Status == Expired)
+        var status = ToPhase80Status(current.Status);
+        if (status == Expired)
         {
             return Phase80PendingActionResult.Fail(Expired, "Pending action expired.", ToView(current));
         }
 
-        if (current.Status == Confirmed)
+        if (status == Confirmed)
         {
             return Phase80PendingActionResult.Fail(Confirmed, "Confirmed pending action cannot be cancelled in Phase 8.0.", ToView(current));
         }
 
-        if (current.Status == Cancelled)
+        if (status == Cancelled)
         {
             return Phase80PendingActionResult.Ok(
                 Cancelled,
@@ -148,100 +210,125 @@ public sealed class Phase80PendingActionRuntime
                 ToView(current));
         }
 
-        var now = _timeProvider.GetUtcNow();
-        var updated = current with
-        {
-            Status = Cancelled,
-            UpdatedAt = now,
-            CancelledAt = now,
-            Executed = false,
-            WroteData = false,
-            ExecutionReady = false,
-            GuardDecision = GuardDecision
-        };
+        var updated = await _store.CancelAsync(
+            userId,
+            actionId,
+            cancellationReason: "user_cancelled",
+            auditEventRef: $"phase8_audit_{actionId}_cancelled",
+            cancellationToken);
 
-        _actions[actionId] = updated;
+        if (!updated.Success || updated.Record is null)
+        {
+            return Phase80PendingActionResult.Fail(
+                updated.Status,
+                updated.Message ?? "Pending action could not be cancelled.",
+                updated.Record is null ? null : ToView(updated.Record));
+        }
 
         return Phase80PendingActionResult.Ok(
             Cancelled,
             "已取消；没有写入 Firestore，也没有执行真实 tool。",
-            ToView(updated));
+            ToView(updated.Record));
     }
 
     internal void SeedForTests(Phase80PendingActionRecord record)
     {
-        _actions[record.ActionId] = record;
+        var create = _store.CreateAsync(new PendingActionCreateRequest(
+            PendingActionId: record.ActionId,
+            PreviewId: $"preview_{record.ActionId}",
+            ToolId: "phase8_preview_tool",
+            ToolVersion: "1.0",
+            AdapterId: "phase8_preview_adapter",
+            ActionType: record.ActionType,
+            UserSubjectRef: record.UserId,
+            SessionSubjectRef: "agent_preview_default_session",
+            RiskLevel: "low_preview_only",
+            ExpiresAt: record.ExpiresAt,
+            IdempotencyKeyHash: $"phase8_idem_{record.ActionId}",
+            InputHash: $"phase8_input_{record.ActionId}",
+            PreviewHash: $"phase8_preview_{record.ActionId}",
+            PolicySnapshotRef: "phase8_preview_policy_default",
+            TraceId: $"phase8_trace_{record.ActionId}",
+            AuditEventRefs: new[] { $"phase8_audit_{record.ActionId}_seeded" },
+            SanitizedPreviewRef: $"phase8_sanitized_preview_{record.ActionId}",
+            ServerOnlyPayloadRef: $"phase8_payload_ref_{record.ActionId}",
+            Payload: new Dictionary<string, string>
+            {
+                ["title"] = record.Title,
+                ["summary"] = record.Summary
+            },
+            ValidationSnapshot: new Dictionary<string, string>
+            {
+                ["guardDecision"] = record.GuardDecision
+            })).GetAwaiter().GetResult();
+
+        if (create.Success && record.Status != Pending)
+        {
+            _ = _store.UpdateStatusAsync(new PendingActionStatusUpdate(
+                record.ActionId,
+                record.UserId,
+                PendingActionStatus.ConfirmationRequired,
+                ToPendingActionStatus(record.Status))).GetAwaiter().GetResult();
+        }
     }
 
-    private bool TryGetOwnedAction(string userId, string actionId, out Phase80PendingActionRecord record)
+    private Phase80PendingActionView ToView(PendingActionRecord record)
     {
-        record = default!;
-        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actionId))
-        {
-            return false;
-        }
-
-        if (!_actions.TryGetValue(actionId, out var current))
-        {
-            return false;
-        }
-
-        if (!string.Equals(current.UserId, userId, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        record = current;
-        return true;
-    }
-
-    private Phase80PendingActionRecord ExpireIfNeeded(Phase80PendingActionRecord current, DateTimeOffset now)
-    {
-        if (current.Status != Pending || current.ExpiresAt > now)
-        {
-            return current;
-        }
-
-        var expired = current with
-        {
-            Status = Expired,
-            UpdatedAt = now,
-            Executed = false,
-            WroteData = false,
-            ExecutionReady = false,
-            GuardDecision = GuardDecision
-        };
-        _actions[current.ActionId] = expired;
-        return expired;
-    }
-
-    private static Phase80PendingActionView ToView(Phase80PendingActionRecord record)
-    {
+        var status = ToPhase80Status(record.Status);
         return new Phase80PendingActionView(
-            ActionId: record.ActionId,
-            Status: record.Status,
-            Title: record.Title,
-            Summary: record.Summary,
+            ActionId: record.PendingActionId,
+            Status: status,
+            Title: ReadPayload(record, "title", "保存一条测试生活记录"),
+            Summary: ReadPayload(record, "summary", "Phase 8 fake-first 待确认动作。"),
             ActionType: record.ActionType,
             CreatedAt: record.CreatedAt,
             UpdatedAt: record.UpdatedAt,
             ExpiresAt: record.ExpiresAt,
-            ConfirmedAt: record.ConfirmedAt,
-            CancelledAt: record.CancelledAt,
-            Executed: record.Executed,
-            WroteData: record.WroteData,
-            ExecutionReady: record.ExecutionReady,
-            GuardDecision: record.GuardDecision,
-            SafetyMode: SafetyMode,
+            ConfirmedAt: status == Confirmed ? record.UpdatedAt : null,
+            CancelledAt: status == Cancelled ? record.UpdatedAt : null,
+            Executed: false,
+            WroteData: false,
+            ExecutionReady: false,
+            GuardDecision: GuardDecision,
+            SafetyMode: _safetyMode,
             LegacyConfirmEndpointUsed: false,
             RealWritePath: false,
-            Message: record.Status switch
+            Message: status switch
             {
                 Confirmed => "已确认，但未执行",
                 Cancelled => "已取消",
                 Expired => "已过期，不能确认",
                 _ => "待确认"
             });
+    }
+
+    private static string ReadPayload(PendingActionRecord record, string key, string fallback)
+    {
+        return record.Payload.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+    }
+
+    private static string ToPhase80Status(string status)
+    {
+        return status switch
+        {
+            PendingActionStatus.Confirmed => Confirmed,
+            PendingActionStatus.Cancelled => Cancelled,
+            PendingActionStatus.Expired => Expired,
+            _ => Pending
+        };
+    }
+
+    private static string ToPendingActionStatus(string status)
+    {
+        return status switch
+        {
+            Confirmed => PendingActionStatus.Confirmed,
+            Cancelled => PendingActionStatus.Cancelled,
+            Expired => PendingActionStatus.Expired,
+            _ => PendingActionStatus.ConfirmationRequired
+        };
     }
 }
 

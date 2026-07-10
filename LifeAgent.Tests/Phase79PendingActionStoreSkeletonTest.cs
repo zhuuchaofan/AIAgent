@@ -215,6 +215,7 @@ public class Phase79PendingActionStoreSkeletonTest
             AuditEventRefs: new[] { $"audit_{id}_created" },
             SanitizedPreviewRef: $"preview_ref_{id}",
             ServerOnlyPayloadRef: $"payload_ref_{id}",
+            Payload: new Dictionary<string, string> { ["title"] = $"title_{id}" },
             RedactionMetadata: new Dictionary<string, string> { ["status"] = "sanitized" },
             ValidationSnapshot: new Dictionary<string, string> { ["schema"] = "valid" });
     }
@@ -260,6 +261,7 @@ public class Phase79PendingActionStoreSkeletonTest
                 AuditEventRefs = request.AuditEventRefs,
                 SanitizedPreviewRef = request.SanitizedPreviewRef,
                 ServerOnlyPayloadRef = request.ServerOnlyPayloadRef,
+                Payload = request.Payload ?? new Dictionary<string, string>(),
                 RedactionMetadata = request.RedactionMetadata ?? new Dictionary<string, string>(),
                 ValidationSnapshot = request.ValidationSnapshot ?? new Dictionary<string, string>()
             };
@@ -481,6 +483,7 @@ public class Phase79PendingActionStoreSkeletonTest
                 AuditEventRefs = record.AuditEventRefs,
                 SanitizedPreviewRef = record.SanitizedPreviewRef,
                 ServerOnlyPayloadRef = record.ServerOnlyPayloadRef,
+                Payload = record.Payload,
                 RedactionMetadata = record.RedactionMetadata,
                 ValidationSnapshot = record.ValidationSnapshot,
                 BlockedReason = record.BlockedReason,

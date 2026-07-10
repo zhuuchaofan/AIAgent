@@ -61,9 +61,10 @@ public static class AgentEndpoints
         });
     }
 
-    public static IResult CreatePhase80PendingActionAsync(
+    public static async Task<IResult> CreatePhase80PendingActionAsync(
         HttpContext httpContext,
-        [FromBody] Phase80CreatePendingActionRequest? request)
+        [FromBody] Phase80CreatePendingActionRequest? request,
+        CancellationToken cancellationToken = default)
     {
         var userId = httpContext.Items["userId"] as string;
         if (string.IsNullOrEmpty(userId))
@@ -71,11 +72,13 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        var result = Phase80PendingActions.Create(userId, request);
+        var result = await Phase80PendingActions.CreateAsync(userId, request, cancellationToken);
         return Results.Ok(result);
     }
 
-    public static IResult ListPhase80PendingActionsAsync(HttpContext httpContext)
+    public static async Task<IResult> ListPhase80PendingActionsAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default)
     {
         var userId = httpContext.Items["userId"] as string;
         if (string.IsNullOrEmpty(userId))
@@ -86,11 +89,14 @@ public static class AgentEndpoints
         return Results.Ok(new
         {
             success = true,
-            data = Phase80PendingActions.List(userId)
+            data = await Phase80PendingActions.ListAsync(userId, cancellationToken)
         });
     }
 
-    public static IResult ConfirmPhase80PendingActionAsync(HttpContext httpContext, string actionId)
+    public static async Task<IResult> ConfirmPhase80PendingActionAsync(
+        HttpContext httpContext,
+        string actionId,
+        CancellationToken cancellationToken = default)
     {
         var userId = httpContext.Items["userId"] as string;
         if (string.IsNullOrEmpty(userId))
@@ -98,10 +104,13 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        return Results.Ok(Phase80PendingActions.Confirm(userId, actionId));
+        return Results.Ok(await Phase80PendingActions.ConfirmAsync(userId, actionId, cancellationToken));
     }
 
-    public static IResult CancelPhase80PendingActionAsync(HttpContext httpContext, string actionId)
+    public static async Task<IResult> CancelPhase80PendingActionAsync(
+        HttpContext httpContext,
+        string actionId,
+        CancellationToken cancellationToken = default)
     {
         var userId = httpContext.Items["userId"] as string;
         if (string.IsNullOrEmpty(userId))
@@ -109,7 +118,7 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        return Results.Ok(Phase80PendingActions.Cancel(userId, actionId));
+        return Results.Ok(await Phase80PendingActions.CancelAsync(userId, actionId, cancellationToken));
     }
 
     public static Task<IResult> ConfirmAgentActionAsync(
