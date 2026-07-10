@@ -16,13 +16,10 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
         PendingActionCreateRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.UserSubjectRef) ||
-            string.IsNullOrWhiteSpace(request.PendingActionId))
+        var validationError = PendingActionCreateRequestValidator.Validate(request);
+        if (validationError is not null)
         {
-            return Task.FromResult(PendingActionStoreResult.Failed(
-                "invalid_request",
-                "invalid_request",
-                "Pending action requires an authenticated owner and id."));
+            return Task.FromResult(validationError);
         }
 
         var existing = _records.Values.FirstOrDefault(record =>

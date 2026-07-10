@@ -19,13 +19,10 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
         PendingActionCreateRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.UserSubjectRef) ||
-            string.IsNullOrWhiteSpace(request.PendingActionId))
+        var validationError = PendingActionCreateRequestValidator.Validate(request);
+        if (validationError is not null)
         {
-            return PendingActionStoreResult.Failed(
-                "invalid_request",
-                "invalid_request",
-                "Pending action requires an authenticated owner and id.");
+            return validationError;
         }
 
         var existing = await CheckIdempotencyKeyHashAsync(

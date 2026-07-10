@@ -378,6 +378,34 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task StoreCreateRejectsMissingAuditMetadata()
+    {
+        var store = new InMemoryPendingActionStore();
+        var missingIdempotency = await store.CreateAsync(CreateStoreRequest(
+            "pa_missing_idempotency",
+            "user_a",
+            title: "missing idempotency",
+            summary: "must not be stored",
+            idempotencyKeyHash: string.Empty));
+        var missingAuditRef = await store.CreateAsync(CreateStoreRequest(
+            "pa_missing_audit",
+            "user_a",
+            title: "missing audit",
+            summary: "must not be stored",
+            idempotencyKeyHash: "idem_missing_audit",
+            auditEventRefs: Array.Empty<string>()));
+        var storedIdempotency = await store.GetByIdAsync("user_a", "pa_missing_idempotency");
+        var storedAudit = await store.GetByIdAsync("user_a", "pa_missing_audit");
+
+        Assert.False(missingIdempotency.Success);
+        Assert.Equal("invalid_audit_metadata", missingIdempotency.ErrorCode);
+        Assert.False(missingAuditRef.Success);
+        Assert.Equal("invalid_audit_metadata", missingAuditRef.ErrorCode);
+        Assert.Null(storedIdempotency);
+        Assert.Null(storedAudit);
+    }
+
+    [Fact]
     public async Task StoreKeysPendingActionIdsByOwner()
     {
         var store = new InMemoryPendingActionStore();
@@ -824,7 +852,8 @@ public class Phase9PendingActionPersistenceTest
         string userId,
         string title,
         string summary,
-        string idempotencyKeyHash)
+        string idempotencyKeyHash,
+        IReadOnlyList<string>? auditEventRefs = null)
     {
         return new PendingActionCreateRequest(
             PendingActionId: id,
@@ -842,7 +871,7 @@ public class Phase9PendingActionPersistenceTest
             PreviewHash: $"preview_hash_{id}_{idempotencyKeyHash}",
             PolicySnapshotRef: $"policy_{id}",
             TraceId: $"trace_{id}_{idempotencyKeyHash}",
-            AuditEventRefs: new[] { $"audit_{id}_{idempotencyKeyHash}" },
+            AuditEventRefs: auditEventRefs ?? new[] { $"audit_{id}_{idempotencyKeyHash}" },
             SanitizedPreviewRef: $"preview_ref_{id}",
             ServerOnlyPayloadRef: $"payload_ref_{id}",
             Payload: new Dictionary<string, string>

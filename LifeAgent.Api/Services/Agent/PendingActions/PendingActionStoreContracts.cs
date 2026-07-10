@@ -61,3 +61,50 @@ public sealed record PendingActionQuery(
     string? TraceId = null,
     string? IdempotencyKeyHash = null,
     bool ActiveOnly = false);
+
+internal static class PendingActionCreateRequestValidator
+{
+    public static PendingActionStoreResult? Validate(PendingActionCreateRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UserSubjectRef) ||
+            string.IsNullOrWhiteSpace(request.PendingActionId))
+        {
+            return PendingActionStoreResult.Failed(
+                "invalid_request",
+                "invalid_request",
+                "Pending action requires an authenticated owner and id.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PreviewId) ||
+            string.IsNullOrWhiteSpace(request.ToolId) ||
+            string.IsNullOrWhiteSpace(request.ToolVersion) ||
+            string.IsNullOrWhiteSpace(request.AdapterId) ||
+            string.IsNullOrWhiteSpace(request.ActionType) ||
+            string.IsNullOrWhiteSpace(request.SessionSubjectRef) ||
+            string.IsNullOrWhiteSpace(request.RiskLevel) ||
+            string.IsNullOrWhiteSpace(request.IdempotencyKeyHash) ||
+            string.IsNullOrWhiteSpace(request.InputHash) ||
+            string.IsNullOrWhiteSpace(request.PreviewHash) ||
+            string.IsNullOrWhiteSpace(request.PolicySnapshotRef) ||
+            string.IsNullOrWhiteSpace(request.TraceId) ||
+            string.IsNullOrWhiteSpace(request.SanitizedPreviewRef) ||
+            string.IsNullOrWhiteSpace(request.ServerOnlyPayloadRef))
+        {
+            return PendingActionStoreResult.Failed(
+                "invalid_request",
+                "invalid_audit_metadata",
+                "Pending action requires complete audit metadata before it can be stored.");
+        }
+
+        if (request.AuditEventRefs.Count == 0 ||
+            request.AuditEventRefs.Any(string.IsNullOrWhiteSpace))
+        {
+            return PendingActionStoreResult.Failed(
+                "invalid_request",
+                "invalid_audit_metadata",
+                "Pending action requires at least one audit event reference.");
+        }
+
+        return null;
+    }
+}
