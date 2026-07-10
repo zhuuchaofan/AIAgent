@@ -147,6 +147,21 @@ Run this only after explicit approval and deployment.
 3. User can log in with Firebase Auth.
 4. Agent Preview is visible.
 
+Scripted smoke command after approval:
+
+```bash
+API_BASE_URL="https://<life-agent-api-url>" \
+FIREBASE_ID_TOKEN="<user-a-token>" \
+FIREBASE_ID_TOKEN_B="<optional-user-b-token>" \
+RUN_PERSONAL_AGENT_V2_PERSISTENCE_SMOKE=true \
+EXPECT_PERSONAL_AGENT_FIRESTORE_PERSISTENCE=true \
+node scripts/smoke-personal-agent-v2-persistence.mjs
+```
+
+The script checks `/health` first. Without
+`RUN_PERSONAL_AGENT_V2_PERSISTENCE_SMOKE=true`, it skips pending action
+mutation checks. Without `FIREBASE_ID_TOKEN`, it skips authenticated checks.
+
 ### Persistence Metadata
 
 1. Load Personal Agent v2 pending action list.
