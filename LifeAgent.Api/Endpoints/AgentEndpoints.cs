@@ -8,8 +8,6 @@ namespace LifeAgent.Api.Endpoints;
 
 public static class AgentEndpoints
 {
-    private static readonly Phase80PendingActionRuntime Phase80PendingActions = new();
-
     public static void MapAgentEndpoints(this WebApplication app)
     {
         app.MapPost("/api/agent/run", RunAgentPreviewAsync)
@@ -72,7 +70,8 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        var result = await Phase80PendingActions.CreateAsync(userId, request, cancellationToken);
+        var runtime = httpContext.RequestServices.GetRequiredService<Phase80PendingActionRuntime>();
+        var result = await runtime.CreateAsync(userId, request, cancellationToken);
         return Results.Ok(result);
     }
 
@@ -89,7 +88,9 @@ public static class AgentEndpoints
         return Results.Ok(new
         {
             success = true,
-            data = await Phase80PendingActions.ListAsync(userId, cancellationToken)
+            data = await httpContext.RequestServices
+                .GetRequiredService<Phase80PendingActionRuntime>()
+                .ListAsync(userId, cancellationToken)
         });
     }
 
@@ -104,7 +105,9 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        return Results.Ok(await Phase80PendingActions.ConfirmAsync(userId, actionId, cancellationToken));
+        return Results.Ok(await httpContext.RequestServices
+            .GetRequiredService<Phase80PendingActionRuntime>()
+            .ConfirmAsync(userId, actionId, cancellationToken));
     }
 
     public static async Task<IResult> CancelPhase80PendingActionAsync(
@@ -118,7 +121,9 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        return Results.Ok(await Phase80PendingActions.CancelAsync(userId, actionId, cancellationToken));
+        return Results.Ok(await httpContext.RequestServices
+            .GetRequiredService<Phase80PendingActionRuntime>()
+            .CancelAsync(userId, actionId, cancellationToken));
     }
 
     public static Task<IResult> ConfirmAgentActionAsync(

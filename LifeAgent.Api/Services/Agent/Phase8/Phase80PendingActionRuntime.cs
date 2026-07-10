@@ -8,7 +8,7 @@ public sealed class Phase80PendingActionRuntime
     public const string Confirmed = "confirmed";
     public const string Cancelled = "cancelled";
     public const string Expired = "expired";
-    public const string SafetyMode = "phase8_fake_first_in_memory";
+    public const string SafetyMode = "personal_agent_v2_in_memory_preview_only";
     public const string GuardDecision = "deny_all_no_real_execution";
 
     private readonly IPendingActionStore _store;

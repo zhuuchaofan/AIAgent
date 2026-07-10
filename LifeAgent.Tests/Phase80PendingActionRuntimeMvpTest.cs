@@ -1,8 +1,10 @@
 using System.Text.Json;
 using LifeAgent.Api.Endpoints;
+using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 public class Phase80PendingActionRuntimeMvpTest
 {
@@ -21,7 +23,7 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(result.Data.WroteData);
         Assert.False(result.Data.ExecutionReady);
         Assert.Equal("deny_all_no_real_execution", result.Data.GuardDecision);
-        Assert.Equal("phase8_fake_first_in_memory", result.Data.SafetyMode);
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", result.Data.SafetyMode);
         Assert.False(result.Data.LegacyConfirmEndpointUsed);
         Assert.False(result.Data.RealWritePath);
     }
@@ -129,7 +131,7 @@ public class Phase80PendingActionRuntimeMvpTest
         var confirmed = runtime.Confirm("user_a", created.Data!.ActionId);
 
         Assert.True(confirmed.Success);
-        Assert.Equal("phase8_fake_first_in_memory", confirmed.Data!.SafetyMode);
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", confirmed.Data!.SafetyMode);
         Assert.False(confirmed.Data.LegacyConfirmEndpointUsed);
         Assert.False(confirmed.Data.RealWritePath);
         Assert.False(confirmed.Data.Executed);
@@ -158,7 +160,8 @@ public class Phase80PendingActionRuntimeMvpTest
     public async Task Phase8DemoEndpointConfirmKeepsConfirmedSeparateFromExecuted()
     {
         var userId = $"endpoint_user_{Guid.NewGuid():N}";
-        var context = AuthenticatedContext(userId);
+        var services = BuildServices();
+        var context = AuthenticatedContext(userId, services);
 
         var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
             context,
@@ -166,7 +169,7 @@ public class Phase80PendingActionRuntimeMvpTest
         var actionId = ReadString(createResult.Body, "data", "actionId");
 
         var confirmResult = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
-            AuthenticatedContext(userId),
+            AuthenticatedContext(userId, services),
             actionId));
 
         Assert.Equal(StatusCodes.Status200OK, confirmResult.StatusCode);
@@ -183,16 +186,17 @@ public class Phase80PendingActionRuntimeMvpTest
     public async Task Phase8DemoEndpointCancelBlocksLaterConfirmWithoutLegacyWritePath()
     {
         var userId = $"endpoint_user_{Guid.NewGuid():N}";
+        var services = BuildServices();
         var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
-            AuthenticatedContext(userId),
+            AuthenticatedContext(userId, services),
             new Phase80CreatePendingActionRequest("cancel demo", "no memories or life_events write")));
         var actionId = ReadString(createResult.Body, "data", "actionId");
 
         var cancelResult = await ExecuteResultAsync(AgentEndpoints.CancelPhase80PendingActionAsync(
-            AuthenticatedContext(userId),
+            AuthenticatedContext(userId, services),
             actionId));
         var confirmAfterCancel = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
-            AuthenticatedContext(userId),
+            AuthenticatedContext(userId, services),
             actionId));
 
         Assert.Equal("cancelled", ReadString(cancelResult.Body, "data", "status"));
@@ -206,10 +210,10 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(ReadBool(confirmAfterCancel.Body, "data", "wroteData"));
     }
 
-    private static DefaultHttpContext AuthenticatedContext(string userId)
+    private static DefaultHttpContext AuthenticatedContext(string userId, IServiceProvider? services = null)
     {
         var context = new DefaultHttpContext();
-        context.RequestServices = TestServices;
+        context.RequestServices = services ?? BuildServices();
         context.Items["userId"] = userId;
         return context;
     }
@@ -217,7 +221,7 @@ public class Phase80PendingActionRuntimeMvpTest
     private static async Task<(int StatusCode, string Body)> ExecuteResultAsync(IResult result)
     {
         var context = new DefaultHttpContext();
-        context.RequestServices = TestServices;
+        context.RequestServices = BuildServices();
         await using var body = new MemoryStream();
         context.Response.Body = body;
 
@@ -259,8 +263,23 @@ public class Phase80PendingActionRuntimeMvpTest
         return current;
     }
 
-    private static readonly IServiceProvider TestServices = new ServiceCollection()
-        .AddLogging()
-        .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(_ => { })
-        .BuildServiceProvider();
+    private static IServiceProvider BuildServices()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(_ => { });
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(Options.Create(new PendingActionPersistenceOptions()));
+        services.AddSingleton<IPendingActionStore>(sp =>
+            new InMemoryPendingActionStore(sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
+            return new Phase80PendingActionRuntime(
+                timeProvider: sp.GetRequiredService<TimeProvider>(),
+                store: sp.GetRequiredService<IPendingActionStore>(),
+                safetyMode: options.SafetyMode);
+        });
+        return services.BuildServiceProvider();
+    }
 }

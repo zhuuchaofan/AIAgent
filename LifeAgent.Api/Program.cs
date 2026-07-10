@@ -6,6 +6,8 @@ using LifeAgent.Api.Middleware;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
+using LifeAgent.Api.Services.Agent.PendingActions;
+using LifeAgent.Api.Services.Agent.Phase8;
 using LifeAgent.Api.Services.Agent.Tools;
 using LifeAgent.Api.Services.LifeEvents;
 using LifeAgent.Api.Services.Memories;
@@ -47,6 +49,26 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
     Options.Create(MemoryProposalRuntimeOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
 builder.Services.AddSingleton<IMemoryProposalGuard, MemoryProposalGuard>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(sp =>
+    Options.Create(PendingActionPersistenceOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
+builder.Services.AddSingleton<IPendingActionStore>(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
+    return options.UseFirestore
+        ? new FirestorePendingActionStore(
+            sp.GetRequiredService<FirestoreDb>(),
+            sp.GetRequiredService<TimeProvider>())
+        : new InMemoryPendingActionStore(sp.GetRequiredService<TimeProvider>());
+});
+builder.Services.AddSingleton(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
+    return new Phase80PendingActionRuntime(
+        timeProvider: sp.GetRequiredService<TimeProvider>(),
+        store: sp.GetRequiredService<IPendingActionStore>(),
+        safetyMode: options.SafetyMode);
+});
 builder.Services.AddScoped<IMemoryContextProvider>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<MemoryContextProviderOptions>>();

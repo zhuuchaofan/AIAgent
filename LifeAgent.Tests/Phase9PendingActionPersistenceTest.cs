@@ -3,6 +3,8 @@ using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeAgent.Tests;
@@ -87,19 +89,75 @@ public class Phase9PendingActionPersistenceTest
     [Fact]
     public async Task EndpointIgnoresBodyUserIdAndUsesAuthContext()
     {
+        var services = BuildServices();
         var request = new Phase80CreatePendingActionRequest(
             "body cannot set owner",
             "malicious userId=user_b should not be trusted");
-        var context = AuthenticatedContext("user_a");
+        var context = AuthenticatedContext("user_a", services);
 
         var create = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(context, request));
         var actionId = ReadString(create.Body, "data", "actionId");
-        var userAList = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(AuthenticatedContext("user_a")));
-        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(AuthenticatedContext("user_b"), actionId));
+        var userAList = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(AuthenticatedContext("user_a", services)));
+        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(AuthenticatedContext("user_b", services), actionId));
 
         Assert.Equal(StatusCodes.Status200OK, create.StatusCode);
         Assert.Contains(actionId, userAList.Body);
         Assert.Equal("not_found", ReadString(userBConfirm.Body, "status"));
+    }
+
+    [Fact]
+    public void PersistenceOptionsDefaultToInMemoryAndRequireExplicitFirestoreApproval()
+    {
+        var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AgentRuntime:PendingActionStore:Mode"] = "firestore"
+            })
+            .Build();
+
+        var options = PendingActionPersistenceOptions.FromConfiguration(configuration);
+
+        Assert.Equal(PendingActionPersistenceOptions.ModeFirestore, options.Mode);
+        Assert.False(options.AllowFirestore);
+        Assert.False(options.UseFirestore);
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", options.SafetyMode);
+    }
+
+    [Fact]
+    public async Task EndpointUsesInjectedPendingActionStoreForPersonalAgentV2()
+    {
+        var store = new InMemoryPendingActionStore();
+        var services = BuildServices(store);
+        var create = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            AuthenticatedContext("user_a", services),
+            new Phase80CreatePendingActionRequest("DI backed", "same store across endpoint calls")));
+        var actionId = ReadString(create.Body, "data", "actionId");
+
+        var fromStore = await store.GetByIdAsync("user_a", actionId);
+        var listed = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(AuthenticatedContext("user_a", services)));
+
+        Assert.NotNull(fromStore);
+        Assert.Contains("DI backed", listed.Body);
+        Assert.Equal("personal_agent_v2_in_memory_preview_only", ReadString(create.Body, "data", "safetyMode"));
+    }
+
+    [Fact]
+    public async Task ConfirmDoesNotModifyPayloadSnapshot()
+    {
+        var store = new InMemoryPendingActionStore();
+        var runtime = new Phase80PendingActionRuntime(store: store);
+        var created = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest("original", "snapshot"));
+
+        var before = await store.GetByIdAsync("user_a", created.Data!.ActionId);
+        var confirmed = await runtime.ConfirmAsync("user_a", created.Data.ActionId);
+        var after = await store.GetByIdAsync("user_a", created.Data.ActionId);
+
+        Assert.True(confirmed.Success);
+        Assert.Equal("confirmed", confirmed.Data!.Status);
+        Assert.Equal(before!.Payload["title"], after!.Payload["title"]);
+        Assert.Equal(before.Payload["summary"], after.Payload["summary"]);
+        Assert.False(after.Executed);
+        Assert.False(after.WroteData);
     }
 
     [Fact]
@@ -153,10 +211,10 @@ public class Phase9PendingActionPersistenceTest
         Assert.False((bool)document["wroteData"]!);
     }
 
-    private static DefaultHttpContext AuthenticatedContext(string userId)
+    private static DefaultHttpContext AuthenticatedContext(string userId, IServiceProvider? services = null)
     {
         var context = new DefaultHttpContext();
-        context.RequestServices = TestServices;
+        context.RequestServices = services ?? BuildServices();
         context.Items["userId"] = userId;
         return context;
     }
@@ -164,7 +222,7 @@ public class Phase9PendingActionPersistenceTest
     private static async Task<(int StatusCode, string Body)> ExecuteResultAsync(IResult result)
     {
         var context = new DefaultHttpContext();
-        context.RequestServices = TestServices;
+        context.RequestServices = BuildServices();
         await using var body = new MemoryStream();
         context.Response.Body = body;
 
@@ -193,8 +251,22 @@ public class Phase9PendingActionPersistenceTest
         return current.GetString() ?? string.Empty;
     }
 
-    private static readonly IServiceProvider TestServices = new ServiceCollection()
-        .AddLogging()
-        .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(_ => { })
-        .BuildServiceProvider();
+    private static IServiceProvider BuildServices(IPendingActionStore? store = null)
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(_ => { });
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(Options.Create(new PendingActionPersistenceOptions()));
+        services.AddSingleton<IPendingActionStore>(store ?? new InMemoryPendingActionStore());
+        services.AddSingleton(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
+            return new Phase80PendingActionRuntime(
+                timeProvider: sp.GetRequiredService<TimeProvider>(),
+                store: sp.GetRequiredService<IPendingActionStore>(),
+                safetyMode: options.SafetyMode);
+        });
+        return services.BuildServiceProvider();
+    }
 }
