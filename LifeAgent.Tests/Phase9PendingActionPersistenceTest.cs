@@ -251,6 +251,41 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public void TransitionPolicyRejectsUnsafeStatusChanges()
+    {
+        var pending = PendingActionRecordFixture("user_a", "policy_pending") with
+        {
+            Status = PendingActionStatus.ConfirmationRequired
+        };
+        var cancelled = pending with
+        {
+            Status = PendingActionStatus.Cancelled
+        };
+
+        var mismatch = PendingActionTransitionPolicy.ValidateStatusUpdate(
+            pending,
+            new PendingActionStatusUpdate(
+                PendingActionId: pending.PendingActionId,
+                UserSubjectRef: pending.UserSubjectRef,
+                ExpectedStatus: PendingActionStatus.Confirmed,
+                NewStatus: PendingActionStatus.Cancelled));
+        var execute = PendingActionTransitionPolicy.ValidateStatusUpdate(
+            pending,
+            new PendingActionStatusUpdate(
+                PendingActionId: pending.PendingActionId,
+                UserSubjectRef: pending.UserSubjectRef,
+                ExpectedStatus: PendingActionStatus.ConfirmationRequired,
+                NewStatus: PendingActionStatus.Executed));
+        var cancelledConfirm = PendingActionTransitionPolicy.ValidateTargetStatus(
+            cancelled,
+            PendingActionStatus.Confirmed);
+
+        Assert.Equal("status_mismatch", mismatch!.ErrorCode);
+        Assert.Equal("execution_not_enabled", execute!.ErrorCode);
+        Assert.Equal("cancelled_cannot_confirm", cancelledConfirm!.ErrorCode);
+    }
+
+    [Fact]
     public async Task ListReturnsHistoricalConfirmedAndCancelledActions()
     {
         var store = new InMemoryPendingActionStore();
@@ -438,5 +473,40 @@ public class Phase9PendingActionPersistenceTest
                 safetyMode: options.SafetyMode);
         });
         return services.BuildServiceProvider();
+    }
+
+    private static PendingActionRecord PendingActionRecordFixture(string userId, string id)
+    {
+        return new PendingActionRecord
+        {
+            PendingActionId = id,
+            PreviewId = $"preview_{id}",
+            ToolId = "phase8_preview_tool",
+            ToolVersion = "1.0",
+            AdapterId = "phase8_preview_adapter",
+            ActionType = "phase8_fake_pending_action",
+            UserSubjectRef = userId,
+            SessionSubjectRef = "agent_preview_default_session",
+            RiskLevel = "low_preview_only",
+            Status = PendingActionStatus.ConfirmationRequired,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            UpdatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            IdempotencyKeyHash = $"idem_{id}",
+            InputHash = $"input_{id}",
+            PreviewHash = $"preview_hash_{id}",
+            PolicySnapshotRef = $"policy_{id}",
+            TraceId = $"trace_{id}",
+            AuditEventRefs = new[] { $"audit_{id}" },
+            SanitizedPreviewRef = $"preview_ref_{id}",
+            ServerOnlyPayloadRef = $"payload_ref_{id}",
+            Payload = new Dictionary<string, string>
+            {
+                ["title"] = "fixture title",
+                ["summary"] = "fixture summary"
+            },
+            WroteData = false,
+            Executed = false
+        };
     }
 }

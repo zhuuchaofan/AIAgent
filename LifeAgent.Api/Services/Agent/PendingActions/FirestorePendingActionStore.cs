@@ -114,29 +114,10 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
         }
 
-        if (record.Status != update.ExpectedStatus)
+        var transitionError = PendingActionTransitionPolicy.ValidateStatusUpdate(record, update);
+        if (transitionError is not null)
         {
-            return PendingActionStoreResult.Failed(
-                record.Status,
-                "status_mismatch",
-                "Pending action status did not match expected status.");
-        }
-
-        if (update.NewStatus == PendingActionStatus.Executed)
-        {
-            return PendingActionStoreResult.Failed(
-                record.Status,
-                "execution_not_enabled",
-                "Pending action store cannot mark records as executed.");
-        }
-
-        if (record.Status == PendingActionStatus.Cancelled &&
-            update.NewStatus == PendingActionStatus.Confirmed)
-        {
-            return PendingActionStoreResult.Failed(
-                record.Status,
-                "cancelled_cannot_confirm",
-                "Cancelled pending action cannot be confirmed.");
+            return transitionError;
         }
 
         var updated = Copy(record, update.NewStatus) with
@@ -324,20 +305,10 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
         }
 
-        if (PendingActionStatus.IsTerminal(record.Status))
+        var transitionError = PendingActionTransitionPolicy.ValidateOwnedStatusChange(record, status);
+        if (transitionError is not null)
         {
-            return PendingActionStoreResult.Failed(
-                record.Status,
-                "terminal_status",
-                "Terminal pending action cannot change status.");
-        }
-
-        if (status == PendingActionStatus.Executed)
-        {
-            return PendingActionStoreResult.Failed(
-                record.Status,
-                "execution_not_enabled",
-                "Pending action store cannot mark records as executed.");
+            return transitionError;
         }
 
         var updated = Copy(record, status) with

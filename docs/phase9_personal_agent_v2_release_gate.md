@@ -113,6 +113,8 @@ store serializer, even if an input record accidentally contains true values.
   moved back into a mutable state.
 - Store implementations reject direct `executed` status transitions. Execution
   remains a separate future runtime and is not part of Personal Agent v2.
+- `PendingActionTransitionPolicy` centralizes shared status validation for both
+  in-memory and Firestore store implementations.
 - Confirmed is not executed. Real tool execution is still unavailable.
 
 ## IAM Requirements
@@ -183,6 +185,7 @@ Before release gate approval:
    - cancelled cannot confirm
    - confirmed is not executed
    - direct `executed` status transition is rejected
+   - shared transition policy rejects unsafe status changes
    - payload is not modified by confirm
    - historical confirmed and cancelled records remain listable
    - store factory defaults and rollback modes select in-memory
