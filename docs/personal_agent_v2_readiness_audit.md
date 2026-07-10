@@ -58,9 +58,11 @@ path.
 | Cancel persists status | `CancelStatusPersistsAndCannotConfirm` covers status persistence through shared store | Locally ready |
 | User can only access own data | `CrossUserAccessIsBlocked`; endpoint owner comes from auth context; cross-user endpoint confirmation returns 404 | Locally ready |
 | Status transitions are safe | `PendingActionTransitionPolicy`; `TransitionPolicyRejectsUnsafeStatusChanges`; direct `executed` transition rejected; finalized records reject late metadata, guard, and status mutations | Locally ready |
+| Duplicate create does not overwrite payload | Store create rejects duplicate `pendingActionId` writes with a different idempotency key; original payload snapshot remains authoritative | Locally ready |
 | Agent does not auto execute | `executed=false`, `wroteData=false`, `executionReady=false`; store serializers force false; tests cover no execution | Locally ready |
 | Firestore persistence enabled | Requires Cloud Run env change and deployment approval | Blocked by release gate |
 | Production smoke proves refresh restore | Requires deployed Firestore persistence and authenticated browser/API smoke | Blocked by release gate |
+| Release smoke tooling | `scripts/smoke-personal-agent-v2-persistence.mjs` and the Phase 9.2 runbook are prepared for approved preview enablement | Prepared; not run against Firestore |
 
 ## Local Implementation Evidence
 
@@ -71,8 +73,15 @@ Backend:
 - `FirestorePendingActionStore` is the durable candidate.
 - `PendingActionStoreFactory` owns mode selection.
 - `PendingActionPersistenceOptions` requires explicit Firestore approval and
-  `PreviewOnly=true`.
+  `PreviewOnly=true`; it parses Cloud Run env-style keys and invalid values
+  fail safe to in-memory.
 - `PendingActionTransitionPolicy` centralizes status transition checks.
+- `InMemoryPendingActionStore` uses owner-scoped keys
+  `(userSubjectRef, pendingActionId)`, matching the intended Firestore access
+  boundary and preventing cross-user collisions for the same action id.
+- Store create rejects duplicate `pendingActionId` writes with a different
+  idempotency key, preserving the original payload snapshot instead of
+  overwriting it.
 - `AgentEndpoints` exposes `/api/agent/pending-actions` as the v2 path.
 - v2 endpoint failures use release-smoke-friendly HTTP status codes:
   - missing or cross-user action: 404
@@ -95,6 +104,13 @@ Docs:
 
 - `docs/phase9_personal_agent_v2_release_gate.md` contains schema, security
   model, DI switch plan, rollback plan, and release gate steps.
+- `docs/phase9_2_firestore_persistence_preview_enablement_runbook.md` contains
+  the approved-preview execution sequence, env checklist, rollback steps, and
+  smoke command template.
+- `scripts/smoke-personal-agent-v2-persistence.mjs` is available for the
+  approved release gate. It does not run mutating authenticated checks unless
+  `RUN_PERSONAL_AGENT_V2_PERSISTENCE_SMOKE=true` and a Firebase ID token are
+  provided.
 
 ## Firestore Persistence Candidate Status
 
@@ -110,9 +126,12 @@ Candidate behavior:
 - Record readback checks `userSubjectRef`.
 - Payload snapshot is stored and preserved.
 - Audit refs, validation snapshot, redaction metadata, timestamps, and status
-  fields are serialized.
+  fields are serialized. Top-level time fields and `audit.updatedAt` are
+  serialized as Firestore `Timestamp` values.
 - `executed=false` and `wroteData=false` are forced by serialization and
   readback.
+- Duplicate document creation with a different idempotency key is rejected
+  instead of replacing an existing pending action.
 - Direct `executed` transition is rejected before write.
 - Owner-checked status and metadata mutations run inside Firestore transactions
   in the durable candidate, avoiding stale read-then-set overwrites during
@@ -122,6 +141,9 @@ Candidate behavior:
   metadata, or guard-decision mutations.
 - The pending action Firestore resolver is lazy. Default in-memory and rollback
   modes do not resolve `FirestoreDb` for the Personal Agent v2 store.
+- The in-memory fallback uses owner-scoped keys, so local and rollback behavior
+  follows the same ownership model as
+  `users/{userId}/pendingActions/{pendingActionId}`.
 
 Not enabled:
 
@@ -141,6 +163,8 @@ The following cannot be completed without explicit approval:
    changes.
 5. Confirm `firestorePersistenceEnabled=true` in UI/API.
 6. Confirm no `life_events`, `memories`, or real tool execution occurs.
+7. Run the Personal Agent v2 persistence smoke script with approved Firebase
+   ID tokens and record the result.
 
 ## Risk Review
 
@@ -149,6 +173,9 @@ Low risk locally:
 - The default mode remains in-memory.
 - Rollback modes select in-memory, including
   `AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=false`.
+- Invalid env-style persistence values fail safe to in-memory.
+- The pending action store does not resolve `FirestoreDb` unless all persistence
+  gates select the Firestore candidate.
 - The v2 route is separate from legacy `/api/agent/confirm`.
 - No real write flags are enabled by code changes.
 - Firestore persistence requires all three gates:
