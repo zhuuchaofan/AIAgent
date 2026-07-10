@@ -122,6 +122,12 @@ store serializer, even if an input record accidentally contains true values.
   remains a separate future runtime and is not part of Personal Agent v2.
 - `PendingActionTransitionPolicy` centralizes shared status validation for both
   in-memory and Firestore store implementations.
+- `FirestorePendingActionStore` performs owner-checked status and metadata
+  mutations inside Firestore transactions so future concurrent confirm/cancel
+  requests cannot overwrite each other with stale read-then-set writes.
+- Terminal records cannot receive late confirmation metadata or guard-decision
+  mutations; this keeps confirmed/cancelled/expired history immutable for the
+  Personal Agent v2 state memory path.
 - Confirmed is not executed. Real tool execution is still unavailable.
 
 ## IAM Requirements
@@ -192,6 +198,7 @@ Before release gate approval:
    - cancelled cannot confirm
    - confirmed is not executed
    - direct `executed` status transition is rejected
+   - terminal records reject late metadata and guard mutations
    - shared transition policy rejects unsafe status changes
    - payload is not modified by confirm
    - historical confirmed and cancelled records remain listable

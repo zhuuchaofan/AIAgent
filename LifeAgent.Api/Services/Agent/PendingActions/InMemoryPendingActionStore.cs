@@ -159,6 +159,12 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
                 "Pending action was not found."));
         }
 
+        var transitionError = PendingActionTransitionPolicy.ValidateMutableMetadataUpdate(record);
+        if (transitionError is not null)
+        {
+            return Task.FromResult(transitionError);
+        }
+
         var updated = Copy(record, record.Status) with
         {
             ConfirmationId = confirmationId,
@@ -184,6 +190,12 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
                 "not_found",
                 "not_found",
                 "Pending action was not found."));
+        }
+
+        var transitionError = PendingActionTransitionPolicy.ValidateOwnedStatusChange(record, status);
+        if (transitionError is not null)
+        {
+            return Task.FromResult(transitionError);
         }
 
         var updated = Copy(record, status) with

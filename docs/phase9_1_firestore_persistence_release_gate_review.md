@@ -136,6 +136,9 @@ Current local code provides:
 - `PendingActionStoreFactory` for mode selection
 - `PendingActionPersistenceOptions` for explicit Firestore enablement
 - `PendingActionTransitionPolicy` for shared transition safety
+- Firestore transaction-backed status and metadata mutations in the candidate
+  store, preserving owner checks and preventing concurrent confirm/cancel stale
+  writes from replacing the latest state
 - `/api/agent/pending-actions` as the Personal Agent v2 route
 - persistence metadata in the list response
 - UI display of current persistence state

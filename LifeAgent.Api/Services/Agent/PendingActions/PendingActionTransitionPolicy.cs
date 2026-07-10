@@ -14,7 +14,7 @@ public static class PendingActionTransitionPolicy
                 "Pending action status did not match expected status.");
         }
 
-        return ValidateTargetStatus(record, update.NewStatus);
+        return ValidateOwnedStatusChange(record, update.NewStatus);
     }
 
     public static PendingActionStoreResult? ValidateTargetStatus(
@@ -45,14 +45,32 @@ public static class PendingActionTransitionPolicy
         PendingActionRecord record,
         string newStatus)
     {
-        if (PendingActionStatus.IsTerminal(record.Status))
+        if (IsLocked(record.Status))
         {
             return PendingActionStoreResult.Failed(
                 record.Status,
                 "terminal_status",
-                "Terminal pending action cannot change status.");
+                "Finalized pending action cannot change status.");
         }
 
         return ValidateTargetStatus(record, newStatus);
+    }
+
+    public static PendingActionStoreResult? ValidateMutableMetadataUpdate(PendingActionRecord record)
+    {
+        if (IsLocked(record.Status))
+        {
+            return PendingActionStoreResult.Failed(
+                record.Status,
+                "terminal_status",
+                "Finalized pending action cannot change metadata.");
+        }
+
+        return null;
+    }
+
+    private static bool IsLocked(string status)
+    {
+        return status == PendingActionStatus.Confirmed || PendingActionStatus.IsTerminal(status);
     }
 }

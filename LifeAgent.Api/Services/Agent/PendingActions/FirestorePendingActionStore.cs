@@ -108,28 +108,18 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
         PendingActionStatusUpdate update,
         CancellationToken cancellationToken = default)
     {
-        var record = await GetByIdAsync(update.UserSubjectRef, update.PendingActionId, cancellationToken);
-        if (record is null)
-        {
-            return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
-        }
-
-        var transitionError = PendingActionTransitionPolicy.ValidateStatusUpdate(record, update);
-        if (transitionError is not null)
-        {
-            return transitionError;
-        }
-
-        var updated = Copy(record, update.NewStatus) with
-        {
-            ConfirmationId = update.ConfirmationId ?? record.ConfirmationId,
-            BlockedReason = update.BlockedReason,
-            CancellationReason = update.CancellationReason,
-            AuditEventRefs = AppendAudit(record, update.AuditEventRef)
-        };
-        await Document(update.UserSubjectRef, update.PendingActionId)
-            .SetAsync(ToDocument(updated), cancellationToken: cancellationToken);
-        return PendingActionStoreResult.Succeeded(updated);
+        return await MutateOwnedRecordInTransactionAsync(
+            update.UserSubjectRef,
+            update.PendingActionId,
+            record => PendingActionTransitionPolicy.ValidateStatusUpdate(record, update),
+            record => Copy(record, update.NewStatus) with
+            {
+                ConfirmationId = update.ConfirmationId ?? record.ConfirmationId,
+                BlockedReason = update.BlockedReason,
+                CancellationReason = update.CancellationReason,
+                AuditEventRefs = AppendAudit(record, update.AuditEventRef)
+            },
+            cancellationToken);
     }
 
     public Task<PendingActionStoreResult> MarkExpiredAsync(
@@ -170,20 +160,17 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
         string? auditEventRef = null,
         CancellationToken cancellationToken = default)
     {
-        var record = await GetByIdAsync(userSubjectRef, pendingActionId, cancellationToken);
-        if (record is null)
-        {
-            return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
-        }
-
-        var updated = Copy(record, record.Status) with
-        {
-            ConfirmationId = confirmationId,
-            ValidationSnapshot = Merge(record.ValidationSnapshot, "confirmationRequestHash", confirmationRequestHash),
-            AuditEventRefs = AppendAudit(record, auditEventRef)
-        };
-        await Document(userSubjectRef, pendingActionId).SetAsync(ToDocument(updated), cancellationToken: cancellationToken);
-        return PendingActionStoreResult.Succeeded(updated);
+        return await MutateOwnedRecordInTransactionAsync(
+            userSubjectRef,
+            pendingActionId,
+            record => PendingActionTransitionPolicy.ValidateMutableMetadataUpdate(record),
+            record => Copy(record, record.Status) with
+            {
+                ConfirmationId = confirmationId,
+                ValidationSnapshot = Merge(record.ValidationSnapshot, "confirmationRequestHash", confirmationRequestHash),
+                AuditEventRefs = AppendAudit(record, auditEventRef)
+            },
+            cancellationToken);
     }
 
     public async Task<PendingActionStoreResult> RecordGuardDecisionReferenceAsync(
@@ -195,20 +182,17 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
         string? auditEventRef = null,
         CancellationToken cancellationToken = default)
     {
-        var record = await GetByIdAsync(userSubjectRef, pendingActionId, cancellationToken);
-        if (record is null)
-        {
-            return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
-        }
-
-        var updated = Copy(record, status) with
-        {
-            ValidationSnapshot = Merge(record.ValidationSnapshot, "guardDecisionRef", guardDecisionRef),
-            BlockedReason = blockedReason,
-            AuditEventRefs = AppendAudit(record, auditEventRef)
-        };
-        await Document(userSubjectRef, pendingActionId).SetAsync(ToDocument(updated), cancellationToken: cancellationToken);
-        return PendingActionStoreResult.Succeeded(updated);
+        return await MutateOwnedRecordInTransactionAsync(
+            userSubjectRef,
+            pendingActionId,
+            record => PendingActionTransitionPolicy.ValidateOwnedStatusChange(record, status),
+            record => Copy(record, status) with
+            {
+                ValidationSnapshot = Merge(record.ValidationSnapshot, "guardDecisionRef", guardDecisionRef),
+                BlockedReason = blockedReason,
+                AuditEventRefs = AppendAudit(record, auditEventRef)
+            },
+            cancellationToken);
     }
 
     public async Task<PendingActionStoreResult> CheckIdempotencyKeyHashAsync(
@@ -299,41 +283,91 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
         string? auditEventRef = null,
         CancellationToken cancellationToken = default)
     {
-        var record = await GetByIdAsync(userSubjectRef, pendingActionId, cancellationToken);
-        if (record is null)
-        {
-            return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
-        }
-
-        var transitionError = PendingActionTransitionPolicy.ValidateOwnedStatusChange(record, status);
-        if (transitionError is not null)
-        {
-            return transitionError;
-        }
-
-        var updated = Copy(record, status) with
-        {
-            CancellationReason = cancellationReason,
-            AuditEventRefs = AppendAudit(record, auditEventRef)
-        };
-        await Document(userSubjectRef, pendingActionId).SetAsync(ToDocument(updated), cancellationToken: cancellationToken);
-        return PendingActionStoreResult.Succeeded(updated);
+        return await MutateOwnedRecordInTransactionAsync(
+            userSubjectRef,
+            pendingActionId,
+            record => PendingActionTransitionPolicy.ValidateOwnedStatusChange(record, status),
+            record => Copy(record, status) with
+            {
+                CancellationReason = cancellationReason,
+                AuditEventRefs = AppendAudit(record, auditEventRef)
+            },
+            cancellationToken);
     }
 
     private async Task<PendingActionRecord> ExpireIfNeededAsync(
         PendingActionRecord record,
         CancellationToken cancellationToken)
     {
+        var (current, shouldPersist) = ExpireIfNeeded(record);
+        if (!shouldPersist)
+        {
+            return current;
+        }
+
+        await MutateOwnedRecordInTransactionAsync(
+            current.UserSubjectRef,
+            current.PendingActionId,
+            _ => null,
+            storedRecord => ExpireIfNeeded(storedRecord).Record,
+            cancellationToken);
+        return current;
+    }
+
+    private async Task<PendingActionStoreResult> MutateOwnedRecordInTransactionAsync(
+        string userSubjectRef,
+        string pendingActionId,
+        Func<PendingActionRecord, PendingActionStoreResult?> validate,
+        Func<PendingActionRecord, PendingActionRecord> mutate,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userSubjectRef) || string.IsNullOrWhiteSpace(pendingActionId))
+        {
+            return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
+        }
+
+        var document = Document(userSubjectRef, pendingActionId);
+        return await _db.RunTransactionAsync(async transaction =>
+        {
+            var snapshot = await transaction.GetSnapshotAsync(document, cancellationToken);
+            if (!snapshot.Exists)
+            {
+                return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
+            }
+
+            var storedRecord = FromDocument(snapshot);
+            if (!string.Equals(storedRecord.UserSubjectRef, userSubjectRef, StringComparison.Ordinal))
+            {
+                return PendingActionStoreResult.Failed("not_found", "not_found", "Pending action was not found.");
+            }
+
+            var (record, expiredDuringTransaction) = ExpireIfNeeded(storedRecord);
+            if (expiredDuringTransaction)
+            {
+                transaction.Set(document, ToDocument(record));
+            }
+
+            var transitionError = validate(record);
+            if (transitionError is not null)
+            {
+                return transitionError;
+            }
+
+            var updated = mutate(record);
+            transaction.Set(document, ToDocument(updated));
+            return PendingActionStoreResult.Succeeded(updated);
+        }, cancellationToken: cancellationToken);
+    }
+
+    private (PendingActionRecord Record, bool ShouldPersist) ExpireIfNeeded(PendingActionRecord record)
+    {
         if (!PendingActionStatus.IsActive(record.Status) ||
             record.ExpiresAt > _timeProvider.GetUtcNow())
         {
-            return record;
+            return (record, false);
         }
 
-        var expired = Copy(record, PendingActionStatus.Expired);
-        await Document(record.UserSubjectRef, record.PendingActionId)
-            .SetAsync(ToDocument(expired), cancellationToken: cancellationToken);
-        return expired;
+        return (Copy(record, PendingActionStatus.Expired), true);
     }
 
     private CollectionReference UserCollection(string userSubjectRef)

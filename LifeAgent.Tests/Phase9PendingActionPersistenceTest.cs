@@ -266,6 +266,43 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task StoreRejectsTerminalMetadataAndGuardMutation()
+    {
+        var store = new InMemoryPendingActionStore();
+        var runtime = new Phase80PendingActionRuntime(store: store);
+        var created = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest("terminal", "immutable"));
+
+        await runtime.ConfirmAsync("user_a", created.Data!.ActionId);
+        var metadataUpdate = await store.RecordConfirmationReferenceAsync(
+            "user_a",
+            created.Data.ActionId,
+            confirmationId: "late_confirmation",
+            confirmationRequestHash: "late_hash");
+        var statusUpdate = await store.UpdateStatusAsync(new PendingActionStatusUpdate(
+            PendingActionId: created.Data.ActionId,
+            UserSubjectRef: "user_a",
+            ExpectedStatus: PendingActionStatus.Confirmed,
+            NewStatus: PendingActionStatus.Cancelled));
+        var guardUpdate = await store.RecordGuardDecisionReferenceAsync(
+            "user_a",
+            created.Data.ActionId,
+            guardDecisionRef: "late_guard",
+            status: PendingActionStatus.ExecutionBlocked,
+            blockedReason: "late_block");
+        var after = await store.GetByIdAsync("user_a", created.Data.ActionId);
+
+        Assert.False(metadataUpdate.Success);
+        Assert.Equal("terminal_status", metadataUpdate.ErrorCode);
+        Assert.False(statusUpdate.Success);
+        Assert.Equal("terminal_status", statusUpdate.ErrorCode);
+        Assert.False(guardUpdate.Success);
+        Assert.Equal("terminal_status", guardUpdate.ErrorCode);
+        Assert.Equal(PendingActionStatus.Confirmed, after!.Status);
+        Assert.False(after.Executed);
+        Assert.False(after.WroteData);
+    }
+
+    [Fact]
     public void TransitionPolicyRejectsUnsafeStatusChanges()
     {
         var pending = PendingActionRecordFixture("user_a", "policy_pending") with
