@@ -141,7 +141,12 @@ export function AgentPreview() {
     try {
       const res = await listPhase80PendingActions() as Phase80ListResponse;
       if (!res.success) {
-        setPhase80Message(res.message || "无法恢复待确认动作。");
+        if (res.message?.includes("401")) {
+          setPhase80Actions([]);
+          return;
+        }
+
+        setPhase80Message(res.message || "无法读取待确认事项。");
         return;
       }
 
@@ -152,7 +157,9 @@ export function AgentPreview() {
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      setPhase80Message(errMsg || "无法恢复待确认动作。");
+      if (!errMsg.includes("401")) {
+        setPhase80Message(errMsg || "无法读取待确认事项。");
+      }
     } finally {
       setPhase80Refreshing(false);
     }
@@ -188,7 +195,7 @@ export function AgentPreview() {
         `用户输入：${message}。确认后仍不会执行真实操作。`
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
-        setPhase80Message(res.message || "生成待确认动作失败");
+        setPhase80Message(res.message?.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (res.message || "提交失败，请稍后再试。"));
         return;
       }
 
@@ -198,7 +205,7 @@ export function AgentPreview() {
       setPhase80Message(res.message || "已根据输入生成待确认动作");
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      setPhase80Message(errMsg || "生成待确认动作失败");
+      setPhase80Message(errMsg.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (errMsg || "提交失败，请稍后再试。"));
     } finally {
       setLoading(false);
     }

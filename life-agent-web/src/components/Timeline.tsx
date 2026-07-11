@@ -45,8 +45,9 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
         }
         setNextCursor(data.nextCursor);
       }
-    } catch (err) {
-      console.error("Fetch events error:", err);
+    } catch {
+      setEvents([]);
+      setNextCursor(null);
     }
   }, []);
 

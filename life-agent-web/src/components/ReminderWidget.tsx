@@ -38,8 +38,8 @@ export function ReminderWidget({
       if (data.success) {
         setReminders(data.data || []);
       }
-    } catch (err) {
-      console.error("Failed to fetch reminders:", err);
+    } catch {
+      setReminders([]);
     }
   }, []);
 

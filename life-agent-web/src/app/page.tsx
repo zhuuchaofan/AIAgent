@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { ReminderWidget } from "@/components/ReminderWidget";
@@ -9,31 +9,11 @@ import { Loader2 } from "lucide-react";
 import { KnowledgeBase } from "@/components/KnowledgeBase";
 import { RagChat } from "@/components/RagChat";
 import { AgentPreview } from "@/components/AgentPreview";
-import { getFeatureFlags } from "@/app/actions/config";
 
 export default function Home() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<"assistant" | "knowledge" | "chat">("assistant");
-  const [showAgentPreview, setShowAgentPreview] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getFeatureFlags()
-      .then(flags => {
-        if (!cancelled) {
-          setShowAgentPreview(flags.agentPreviewEnabled);
-        }
-      })
-      .catch(error => {
-        console.error("Failed to load feature flags:", error);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const handleLogin = async () => {
     try {
@@ -100,11 +80,10 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Tab 导航 — 桌面端可见 */}
-            <div className="hidden lg:flex border-b border-zinc-800/40 pb-px mb-8 gap-6 text-sm font-semibold select-none">
+            <div className="flex border-b border-zinc-800/40 pb-px mb-6 lg:mb-8 gap-2 lg:gap-6 text-sm font-semibold select-none">
               <button
                 onClick={() => setActiveTab("assistant")}
-                className={`pb-4 transition-all duration-300 relative ${
+                className={`flex-1 lg:flex-none pb-3 lg:pb-4 text-center lg:text-left transition-all duration-300 relative ${
                   activeTab === "assistant"
                     ? "text-white"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -117,7 +96,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setActiveTab("knowledge")}
-                className={`pb-4 transition-all duration-300 relative ${
+                className={`flex-1 lg:flex-none pb-3 lg:pb-4 text-center lg:text-left transition-all duration-300 relative ${
                   activeTab === "knowledge"
                     ? "text-white"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -130,96 +109,30 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setActiveTab("chat")}
-                className={`pb-4 transition-all duration-300 relative ${
+                className={`flex-1 lg:flex-none pb-3 lg:pb-4 text-center lg:text-left transition-all duration-300 relative ${
                   activeTab === "chat"
                     ? "text-white"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                知识库问答 (RAG)
+                知识库问答
                 {activeTab === "chat" && (
                   <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
                 )}
               </button>
             </div>
 
-            {/* 桌面端：Tab 切换内容区 */}
-            <div className="hidden lg:contents">
+            <div>
               {activeTab === "assistant" && (
-                <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                   <div className="lg:col-span-2 space-y-6">
-                    {showAgentPreview && <AgentPreview />}
+                    <AgentPreview />
                     <Timeline refreshTrigger={refreshTrigger} />
                   </div>
                   <div className="lg:col-span-1 space-y-6">
                     <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
                     <DailySummaryCard refreshTrigger={refreshTrigger} />
                   </div>
-                </div>
-              )}
-
-              {activeTab === "knowledge" && (
-                <KnowledgeBase />
-              )}
-
-              {activeTab === "chat" && (
-                <div className="space-y-6">
-                  <RagChat />
-                </div>
-              )}
-            </div>
-
-            {/* 窄屏端：Tab 导航 — 仅在 lg:hidden 下可见 */}
-            <div className="lg:hidden flex border-b border-zinc-800/40 pb-px mb-6 gap-2 text-sm font-semibold select-none">
-              <button
-                onClick={() => setActiveTab("assistant")}
-                className={`flex-1 pb-3 text-center transition-all duration-300 relative ${
-                  activeTab === "assistant"
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                个人助手
-                {activeTab === "assistant" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("knowledge")}
-                className={`flex-1 pb-3 text-center transition-all duration-300 relative ${
-                  activeTab === "knowledge"
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                知识库
-                {activeTab === "knowledge" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("chat")}
-                className={`flex-1 pb-3 text-center transition-all duration-300 relative ${
-                  activeTab === "chat"
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                问答
-                {activeTab === "chat" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
-                )}
-              </button>
-            </div>
-
-            {/* 窄屏端：Tab 切换内容区 */}
-            <div className="lg:hidden">
-              {activeTab === "assistant" && (
-                <div className="space-y-6 animate-in fade-in duration-500">
-                  {showAgentPreview && <AgentPreview />}
-                  <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
-                  <DailySummaryCard refreshTrigger={refreshTrigger} />
-                  <Timeline refreshTrigger={refreshTrigger} />
                 </div>
               )}
 

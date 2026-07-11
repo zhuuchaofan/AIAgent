@@ -10,7 +10,7 @@ import {
   signInWithPopup,
   signOut
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, isFirebaseConfigured } from "@/lib/firebase";
 import { login, logout, getToken } from "@/app/actions/auth";
 
 interface MockUser {
@@ -38,9 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let unsubscribe: (() => void) | undefined;
 
     const initializeAuth = async () => {
-      const isFirebaseConfigured = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-
       if (isFirebaseConfigured) {
+        if (!auth) {
+          setLoading(false);
+          return;
+        }
+
         try {
           // Explicitly configure Firebase Auth local persistence
           await setPersistence(auth, browserLocalPersistence);
@@ -110,9 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithGoogle = async () => {
-    const isFirebaseConfigured = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-
     if (isFirebaseConfigured) {
+      if (!auth) throw new Error("Firebase is not configured.");
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } else {
@@ -132,9 +134,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logoutUser = async () => {
-    const isFirebaseConfigured = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-
     if (isFirebaseConfigured) {
+      if (!auth) throw new Error("Firebase is not configured.");
       await signOut(auth);
     } else {
       await logout();
