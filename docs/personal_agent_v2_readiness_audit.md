@@ -1,30 +1,19 @@
 # Personal Agent v2 Readiness Audit
 
-Date: 2026-07-10
+Date: 2026-07-11
 
 ## Executive Summary
 
-Personal Agent v2 is locally ready for a Firestore persistence release gate, but
-it is not complete in production until Firestore-backed pending action
-persistence is explicitly enabled, deployed, and authenticated-smoke verified.
+Personal Agent v2 is deployed with Firestore-backed pending action state memory
+enabled for preview-only Agent Preview actions.
 
-Current decision: **CONDITIONAL GO for release gate review; NO-GO for claiming
-Personal Agent v2 complete in production.**
+Current decision: **GO for Personal Agent v2 closeout on the main user-visible
+path; deployed cross-user smoke remains a recommended follow-up when a second
+test account is available.**
 
 ## Current Runtime Map
 
-Current default runtime:
-
-```text
-AgentPreview.tsx
-  -> /api/agent/pending-actions
-  -> Phase80PendingActionRuntime
-  -> IPendingActionStore
-  -> PendingActionStoreFactory
-  -> InMemoryPendingActionStore
-```
-
-Approved future persistence route:
+Production runtime after Firestore persistence enablement:
 
 ```text
 AgentPreview.tsx
@@ -34,6 +23,17 @@ AgentPreview.tsx
   -> PendingActionStoreFactory
   -> FirestorePendingActionStore
   -> users/{userId}/pendingActions/{pendingActionId}
+```
+
+Safe rollback route:
+
+```text
+AgentPreview.tsx
+  -> /api/agent/pending-actions
+  -> Phase80PendingActionRuntime
+  -> IPendingActionStore
+  -> PendingActionStoreFactory
+  -> InMemoryPendingActionStore
 ```
 
 Legacy route:
@@ -51,26 +51,27 @@ path.
 
 | Requirement | Current evidence | Status |
 | --- | --- | --- |
-| Create pending action | `Phase80PendingActionRuntime.CreateAsync`; `/api/agent/pending-actions`; tests in `Phase80PendingActionRuntimeMvpTest` and `Phase9PendingActionPersistenceTest` | Locally ready |
-| Refresh restores state | Works when the same store is shared; `StoreCreateCanBeReadAfterRuntimeRefresh` covers runtime refresh. Cross-instance restore requires Firestore enablement | Partial |
-| View historical pending actions | `ListAsync` returns all user-scoped records, including confirmed and cancelled; `ListReturnsHistoricalConfirmedAndCancelledActions` covers this | Locally ready |
-| Confirm persists status | `ConfirmStatusPersistsAndDoesNotExecute` covers status persistence through shared store | Locally ready |
-| Cancel persists status | `CancelStatusPersistsAndCannotConfirm` covers status persistence through shared store | Locally ready |
-| User can only access own data | `CrossUserAccessIsBlocked`; endpoint owner comes from auth context; cross-user endpoint confirmation returns 404 | Locally ready |
-| Status transitions are safe | `PendingActionTransitionPolicy`; `TransitionPolicyRejectsUnsafeStatusChanges`; direct `executed` transition rejected; finalized records reject late metadata, guard, and status mutations | Locally ready |
-| Duplicate create does not overwrite payload | Store create rejects duplicate `pendingActionId` writes with a different idempotency key; original payload snapshot remains authoritative | Locally ready |
-| Agent does not auto execute | `executed=false`, `wroteData=false`, `executionReady=false`; store serializers force false; tests cover no execution | Locally ready |
-| Firestore persistence enabled | Requires Cloud Run env change and deployment approval | Blocked by release gate |
-| Production smoke proves refresh restore | Requires deployed Firestore persistence and authenticated browser/API smoke | Blocked by release gate |
-| Release smoke tooling | `scripts/smoke-personal-agent-v2-persistence.mjs` and the Phase 9.2 runbook are prepared for approved preview enablement | Prepared; not run against Firestore |
+| Create pending action | `Phase80PendingActionRuntime.CreateAsync`; `/api/agent/pending-actions`; tests in `Phase80PendingActionRuntimeMvpTest` and `Phase9PendingActionPersistenceTest`; user browser smoke created persisted actions | Complete |
+| Refresh restores state | User-provided browser evidence shows confirmed and cancelled actions remained visible after refresh with Firestore preview mode | Complete on main user path |
+| View historical pending actions | `ListAsync` returns all user-scoped records, including confirmed and cancelled; `ListReturnsHistoricalConfirmedAndCancelledActions` covers this; user smoke showed history after refresh | Complete |
+| Confirm persists status | `ConfirmStatusPersistsAndDoesNotExecute` covers status persistence; user smoke showed confirmed action persisted after refresh | Complete |
+| Cancel persists status | `CancelStatusPersistsAndCannotConfirm` covers status persistence; user smoke showed cancelled action persisted after refresh | Complete |
+| User can only access own data | `CrossUserAccessIsBlocked`; endpoint owner comes from auth context; cross-user endpoint confirmation returns 404; endpoint same-id owner scope test covers collision safety | Locally proven; deployed second-account smoke pending |
+| Status transitions are safe | `PendingActionTransitionPolicy`; `TransitionPolicyRejectsUnsafeStatusChanges`; direct `executed` transition rejected; finalized records reject late metadata, guard, and status mutations | Complete |
+| Duplicate create does not overwrite payload | Store create rejects duplicate `pendingActionId` writes with a different idempotency key; original payload snapshot remains authoritative | Complete |
+| Audit metadata is required | Shared create validator rejects missing idempotency, trace, preview, payload, policy, and audit refs before store write | Complete |
+| Agent does not auto execute | `executed=false`, `wroteData=false`, `executionReady=false`; store serializers force false; user smoke showed false safety flags after refresh | Complete |
+| Firestore persistence enabled | API Cloud Run env selects Firestore preview-only persistence; `life-agent-api-00042-zhr` serves 100% traffic | Complete |
+| Production smoke proves refresh restore | User browser smoke verified refresh restore and persisted confirmed/cancelled history | Complete on main user path |
+| Release smoke tooling | `scripts/smoke-personal-agent-v2-persistence.mjs` health smoke passed; scripted authenticated flow remains pending without Firebase ID token | Partially complete |
 
 ## Local Implementation Evidence
 
 Backend:
 
 - `IPendingActionStore` is the mainline store contract.
-- `InMemoryPendingActionStore` is the default safe store.
-- `FirestorePendingActionStore` is the durable candidate.
+- `InMemoryPendingActionStore` remains the safe rollback store.
+- `FirestorePendingActionStore` is the deployed preview-only durable store.
 - `PendingActionStoreFactory` owns mode selection.
 - `PendingActionPersistenceOptions` requires explicit Firestore approval and
   `PreviewOnly=true`; it parses Cloud Run env-style keys and invalid values
@@ -107,20 +108,23 @@ Docs:
 - `docs/phase9_2_firestore_persistence_preview_enablement_runbook.md` contains
   the approved-preview execution sequence, env checklist, rollback steps, and
   smoke command template.
+- `docs/personal_agent_v2_firestore_persistence_enablement_result.md` records
+  the deployed API revision, env changes, service smoke, and user-verified
+  authenticated persistence smoke.
 - `scripts/smoke-personal-agent-v2-persistence.mjs` is available for the
   approved release gate. It does not run mutating authenticated checks unless
   `RUN_PERSONAL_AGENT_V2_PERSISTENCE_SMOKE=true` and a Firebase ID token are
   provided.
 
-## Firestore Persistence Candidate Status
+## Firestore Persistence Status
 
-Candidate path:
+Enabled path:
 
 ```text
 users/{userId}/pendingActions/{pendingActionId}
 ```
 
-Candidate behavior:
+Behavior:
 
 - Reads and writes are scoped under the authenticated user path.
 - Record readback checks `userSubjectRef`.
@@ -145,26 +149,35 @@ Candidate behavior:
   follows the same ownership model as
   `users/{userId}/pendingActions/{pendingActionId}`.
 
+Enabled:
+
+- API env selects Firestore persistence:
+  - `AGENT_PENDING_ACTION_STORE_MODE=firestore`
+  - `AGENT_PENDING_ACTION_STORE_ALLOW_FIRESTORE=true`
+  - `AGENT_PENDING_ACTION_STORE_PREVIEW_ONLY=true`
+- API revision `life-agent-api-00042-zhr` serves 100% traffic.
+- Firestore pending action writes are limited to preview-only state memory under
+  `users/{userId}/pendingActions/{pendingActionId}`.
+- User browser smoke verified refresh restore of confirmed and cancelled
+  pending action history.
+
 Not enabled:
 
-- No Cloud Run env changed.
-- No Firestore collection created.
-- No production write performed.
-- No deployment performed.
+- `life_events`
+- `memories`
+- real tool execution
+- external provider execution
+- frontend direct Firestore access
 
-## Release Gate Blockers
+## Remaining Follow-up
 
-The following cannot be completed without explicit approval:
+No blocker remains for the main Personal Agent v2 user-visible state-memory
+path. The remaining follow-up is:
 
-1. Modify Cloud Run env to select Firestore persistence.
-2. Deploy the API revision that uses Firestore persistence.
-3. Run authenticated smoke against the deployed service.
-4. Verify refresh restores state across browser reload and Cloud Run instance
-   changes.
-5. Confirm `firestorePersistenceEnabled=true` in UI/API.
-6. Confirm no `life_events`, `memories`, or real tool execution occurs.
-7. Run the Personal Agent v2 persistence smoke script with approved Firebase
-   ID tokens and record the result.
+1. Run deployed cross-user owner-isolation smoke with a second Firebase test
+   account or second Firebase ID token.
+2. Optionally run the scripted authenticated smoke once a Firebase ID token is
+   available to supplement the user-provided browser evidence.
 
 ## Risk Review
 
@@ -187,13 +200,14 @@ Remaining production risks:
 
 - Cloud Run env could accidentally combine persistence enablement with legacy
   write flags if not checked before deployment.
-- Service account/IAM scope must be verified before Firestore persistence.
-- Authenticated smoke is required to prove owner isolation and refresh restore
-  in the deployed environment.
+- Service account/IAM scope remains broad and should be narrowed in a separate
+  IAM hardening task.
+- Deployed cross-user smoke still needs a second test user.
 
 ## Do Not Change Without Approval
 
-- Cloud Run env
+- Cloud Run env, except for an explicitly approved rollback of the three
+  pending-action persistence vars
 - IAM
 - `firestore.rules`
 - `firebase.json`
@@ -208,10 +222,9 @@ Remaining production risks:
 Proceed to:
 
 ```text
-Phase 9.2 Firestore Persistence Preview Enablement
+Personal Agent v2 closeout, then Phase 6 Memory Engine planning
 ```
 
-The read-only gate review is complete. The next step requires explicit approval
-before any Cloud Run env change, deployment, or real Firestore persistence
-smoke. Until that approval is granted, Personal Agent v2 remains locally ready
-but not production complete.
+The main Personal Agent v2 state-memory path is now deployed and user-verified.
+Before starting Memory Engine writes, keep real tool execution and business data
+writes behind their existing release gates.
