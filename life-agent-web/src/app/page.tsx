@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
-import { IngestForm } from "@/components/IngestForm";
 import { Timeline } from "@/components/Timeline";
 import { ReminderWidget } from "@/components/ReminderWidget";
 import { DailySummaryCard } from "@/components/DailySummaryCard";
@@ -70,7 +69,7 @@ export default function Home() {
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
               LifeOS Personal Home
             </h1>
-            <p className="text-zinc-500 text-sm mt-1">个人助手、生活记录、提醒、每日总结与知识库</p>
+            <p className="text-zinc-500 text-sm mt-1">记录今天需要处理的事，确认下一步行动。</p>
           </div>
           
           {isLoggedIn ? (
@@ -150,7 +149,6 @@ export default function Home() {
                 <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-6">
                     {showAgentPreview && <AgentPreview />}
-                    <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
                     <Timeline refreshTrigger={refreshTrigger} />
                   </div>
                   <div className="lg:col-span-1 space-y-6">
@@ -219,7 +217,6 @@ export default function Home() {
               {activeTab === "assistant" && (
                 <div className="space-y-6 animate-in fade-in duration-500">
                   {showAgentPreview && <AgentPreview />}
-                  <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
                   <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
                   <DailySummaryCard refreshTrigger={refreshTrigger} />
                   <Timeline refreshTrigger={refreshTrigger} />

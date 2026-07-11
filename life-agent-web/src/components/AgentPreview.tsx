@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, Loader2, Send, ShieldAlert, Wrench, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Loader2, Send, ShieldAlert, ShieldCheck, Wrench, X } from "lucide-react";
 import {
   archivePhase80PendingAction,
   cancelPhase80PendingAction,
@@ -110,7 +110,6 @@ interface Phase80PersistenceMetadata {
 }
 
 export function AgentPreview() {
-  const [expanded, setExpanded] = useState(true);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState<"confirm" | "cancel" | null>(null);
@@ -118,12 +117,12 @@ export function AgentPreview() {
   const [result, setResult] = useState<AgentRunData | null>(null);
   const [confirmationResult, setConfirmationResult] = useState<AgentConfirmationResponse | null>(null);
   const [phase80Actions, setPhase80Actions] = useState<Phase80PendingAction[]>([]);
-  const [phase80Loading, setPhase80Loading] = useState(false);
   const [phase80Refreshing, setPhase80Refreshing] = useState(false);
   const [phase80Updating, setPhase80Updating] = useState<string | null>(null);
   const [phase80Message, setPhase80Message] = useState<string | null>(null);
   const [phase80Persistence, setPhase80Persistence] = useState<Phase80PersistenceMetadata | null>(null);
   const [showCompletedHistory, setShowCompletedHistory] = useState(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const toolCalls = useMemo(() => result?.toolCalls ?? [], [result]);
@@ -131,16 +130,9 @@ export function AgentPreview() {
   const actionExpired = result?.proposedAction ? new Date(result.proposedAction.expiresAt).getTime() <= nowMs : false;
   const actionResolved = !!confirmationResult || actionExpired;
   const showPendingAction = !!result?.requiresConfirmation && !!result.proposedAction && !actionResolved;
-  const visiblePhase80Actions = useMemo(() => {
-    const active = phase80Actions.filter(action => action.status === "pending");
-    const completed = phase80Actions
-      .filter(action => action.status !== "pending")
-      .slice(0, showCompletedHistory ? 12 : 3);
-
-    return [...active, ...completed].filter((action, index, actions) =>
-      actions.findIndex(item => item.actionId === action.actionId) === index);
-  }, [phase80Actions, showCompletedHistory]);
-  const hiddenCompletedCount = Math.max(0, phase80Actions.filter(action => action.status !== "pending").length - 3);
+  const pendingActions = useMemo(() => phase80Actions.filter(action => action.status === "pending"), [phase80Actions]);
+  const latestPendingAction = pendingActions[0] ?? null;
+  const historyActions = useMemo(() => phase80Actions.filter(action => action.status !== "pending").slice(0, 12), [phase80Actions]);
 
   const loadPhase80Actions = useCallback(async () => {
     setPhase80Refreshing(true);
@@ -174,13 +166,11 @@ export function AgentPreview() {
   }, [result?.proposedAction, confirmationResult]);
 
   useEffect(() => {
-    if (!expanded) return;
-
     const timer = window.setTimeout(() => {
       void loadPhase80Actions();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [expanded, loadPhase80Actions]);
+  }, [loadPhase80Actions]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -195,7 +185,7 @@ export function AgentPreview() {
     try {
       const res = await createPhase80PendingAction(
         `待确认：${message}`,
-        `用户输入：${message}。该动作已进入 LifeOS Personal Home pending action 主线；确认后仍不会写入 memories / life_events，也不会执行真实 tool action。`
+        `用户输入：${message}。确认后仍不会执行真实操作。`
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
         setPhase80Message(res.message || "生成待确认动作失败");
@@ -232,30 +222,6 @@ export function AgentPreview() {
       setError(errMsg || "Agent 确认请求失败");
     } finally {
       setConfirming(null);
-    }
-  };
-
-  const handleCreatePhase80Action = async () => {
-    if (phase80Loading) return;
-
-    setPhase80Loading(true);
-    setPhase80Message(null);
-    setError(null);
-
-    try {
-      const res = await createPhase80PendingAction() as Phase80ActionResponse;
-      if (!res.success || !res.data) {
-        setPhase80Message(res.message || "生成待确认动作失败");
-        return;
-      }
-
-      setPhase80Actions(prev => [res.data!, ...prev.filter(action => action.actionId !== res.data!.actionId)]);
-      setPhase80Message(res.message || "已生成待确认动作");
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      setPhase80Message(errMsg || "生成待确认动作失败");
-    } finally {
-      setPhase80Loading(false);
     }
   };
 
@@ -324,31 +290,11 @@ export function AgentPreview() {
 
   return (
     <section className="border border-zinc-800/50 bg-zinc-900/10 rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded(prev => !prev)}
-        className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-zinc-900/30 transition-colors"
-      >
-          <span className="flex items-center gap-2 min-w-0">
-          <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className="text-sm font-semibold text-white">LifeOS 个人助手</span>
-          <span className="text-[10px] text-cyan-300 border border-cyan-500/30 bg-cyan-500/10 rounded px-2 py-0.5">Personal Home v1</span>
-        </span>
-        {expanded ? (
-          <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
-        )}
-      </button>
-
-      {expanded && (
-        <div className="border-t border-zinc-800/50 p-5 space-y-5">
+        <div className="p-5 space-y-5">
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs space-y-3">
             <div>
-              <div className="text-zinc-100 font-semibold">想让 LifeOS 记住什么？</div>
-              <div className="text-zinc-500 mt-1">
-                先生成待确认动作，确认后仍只保存确认状态；不会写入 memories / life_events，也不会执行真实工具。
-              </div>
+              <div className="text-zinc-100 font-semibold">记录一件事，或创建一个提醒...</div>
+              <div className="text-zinc-500 mt-1">当前不会执行真实操作。</div>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
@@ -357,7 +303,7 @@ export function AgentPreview() {
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
                 disabled={loading}
-                placeholder="例如：提醒我七月十五号去取身份证"
+                placeholder="记录一件事，或创建一个提醒..."
                 className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
               />
               <button
@@ -366,7 +312,7 @@ export function AgentPreview() {
                 className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                生成待确认动作
+                提交到 LifeOS
               </button>
             </form>
 
@@ -381,8 +327,8 @@ export function AgentPreview() {
           <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4 text-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <div className="text-zinc-200 font-semibold">待确认动作与历史</div>
-                <div className="text-zinc-500 mt-1">默认显示待处理和近期历史；旧测试记录可隐藏，不会硬删除</div>
+                <div className="text-zinc-200 font-semibold">待确认事项</div>
+                <div className="text-zinc-500 mt-1">当前待确认数量：{pendingActions.length}</div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
@@ -392,43 +338,33 @@ export function AgentPreview() {
                   className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
                 >
                   {phase80Refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  刷新状态
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCompletedHistory(prev => !prev)}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 shrink-0"
-                >
-                  {showCompletedHistory ? "仅显示近期历史" : "显示更多历史"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreatePhase80Action}
-                  disabled={phase80Loading}
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
-                >
-                  {phase80Loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-                  创建待确认动作
+                  刷新
                 </button>
               </div>
             </div>
 
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-100 leading-relaxed">
-              历史已持久化，刷新后会保留。当前仍是安全预览：不写 memories / life_events，不执行真实工具。
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-100 leading-relaxed flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>当前不会执行真实操作。</span>
             </div>
 
-            <details className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-zinc-400">
-              <summary className="cursor-pointer select-none text-zinc-300 font-medium">安全详情</summary>
+            <details
+              open={showTechnicalDetails}
+              onToggle={(event) => setShowTechnicalDetails(event.currentTarget.open)}
+              className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-zinc-400"
+            >
+              <summary className="cursor-pointer select-none text-zinc-300 font-medium">技术与安全详情</summary>
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                <div>Pending actions persisted</div>
-                <div>Memories write disabled</div>
-                <div>Life events write disabled</div>
-                <div>Real tool execution disabled</div>
-                <div>Legacy confirm path not used</div>
+                <div>executed: <span className="font-mono">false</span></div>
+                <div>wroteData: <span className="font-mono">false</span></div>
+                <div>legacyConfirm: <span className="font-mono">false</span></div>
+                <div>realWritePath: <span className="font-mono">false</span></div>
+                <div>guard: <span className="font-mono">preview_only</span></div>
                 {phase80Persistence && (
                   <>
                     <div>storeMode: <span className="font-mono">{phase80Persistence.storeMode}</span></div>
                     <div>previewOnly: <span className="font-mono">{String(phase80Persistence.previewOnly)}</span></div>
+                    <div>safetyMode: <span className="font-mono">{phase80Persistence.safetyMode}</span></div>
                   </>
                 )}
               </div>
@@ -440,15 +376,9 @@ export function AgentPreview() {
               </div>
             )}
 
-            {!showCompletedHistory && hiddenCompletedCount > 0 && (
-              <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 text-zinc-400">
-                已默认折叠 {hiddenCompletedCount} 条较早的已完成/已取消/已过期记录，避免测试历史铺满首页。
-              </div>
-            )}
-
-            {visiblePhase80Actions.length > 0 ? (
+            {latestPendingAction ? (
               <div className="space-y-2">
-                {visiblePhase80Actions.map(action => {
+                {[latestPendingAction].map(action => {
                   const pending = action.status === "pending";
                   const confirmKey = `confirm:${action.actionId}`;
                   const cancelKey = `cancel:${action.actionId}`;
@@ -460,28 +390,10 @@ export function AgentPreview() {
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
                           {phase80StatusLabel(action.status)}
                         </span>
-                        <span className="text-zinc-200 font-medium">{action.title}</span>
+                        <span className="text-zinc-200 font-medium">最近一条待确认事项</span>
                       </div>
+                      <div className="text-zinc-100 font-medium">{action.title}</div>
                       <div className="text-zinc-400 leading-relaxed">{action.summary}</div>
-                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
-                        {action.status === "confirmed"
-                          ? "已确认，尚未执行。"
-                          : action.status === "cancelled"
-                            ? "已取消。"
-                            : action.status === "expired"
-                              ? "已过期。"
-                              : "等待你确认或取消。"}
-                      </div>
-                      <details className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-[10px] text-zinc-400">
-                        <summary className="cursor-pointer select-none text-zinc-300">安全字段</summary>
-                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div>executed: <span className="font-mono">{String(action.executed)}</span></div>
-                          <div>wroteData: <span className="font-mono">{String(action.wroteData)}</span></div>
-                          <div>legacyConfirm: <span className="font-mono">{String(action.legacyConfirmEndpointUsed)}</span></div>
-                          <div>realWritePath: <span className="font-mono">{String(action.realWritePath)}</span></div>
-                          <div className="sm:col-span-2">guard: <span className="font-mono break-all">{action.guardDecision}</span></div>
-                        </div>
-                      </details>
                       {pending ? (
                         <div className="flex flex-col sm:flex-row gap-2">
                           <button
@@ -491,7 +403,7 @@ export function AgentPreview() {
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                           >
                             {phase80Updating === confirmKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                            确认但不执行
+                            Confirm
                           </button>
                           <button
                             type="button"
@@ -500,7 +412,7 @@ export function AgentPreview() {
                             className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                           >
                             {phase80Updating === cancelKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                            取消
+                            Cancel
                           </button>
                         </div>
                       ) : (
@@ -528,15 +440,49 @@ export function AgentPreview() {
                 })}
               </div>
             ) : (
-              <div className="text-zinc-500">还没有待确认动作。生成后可确认或取消，确认后仍不会执行。</div>
+              <div className="text-zinc-500">暂无待确认事项。</div>
             )}
+
+            <details
+              open={showCompletedHistory}
+              onToggle={(event) => setShowCompletedHistory(event.currentTarget.open)}
+              className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-zinc-400"
+            >
+              <summary className="cursor-pointer select-none text-zinc-300 font-medium">查看历史</summary>
+              {historyActions.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {historyActions.map(action => (
+                    <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
+                          {phase80StatusLabel(action.status)}
+                        </span>
+                        <span className="text-zinc-200 font-medium">{action.title}</span>
+                      </div>
+                      <div className="text-zinc-500">{action.summary}</div>
+                      <button
+                        type="button"
+                        onClick={() => handleArchivePhase80Action(action.actionId)}
+                        disabled={!!phase80Updating}
+                        className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800/80 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                      >
+                        {phase80Updating === `archive:${action.actionId}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                        隐藏
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 text-zinc-500">暂无历史。</div>
+              )}
+            </details>
           </div>
 
           {result && (
             <div className="space-y-4">
               <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 p-4 text-xs text-zinc-400">
-                <div className="text-zinc-200 font-semibold mb-1">技术说明：Agent Preview</div>
-                <div>下面是旧的只读 Agent / RAG 技术预览结果，用于观察工具调用和引用来源。Personal Home v1 的日常入口是上方的待确认动作与历史。</div>
+                <div className="text-zinc-200 font-semibold mb-1">技术说明</div>
+                <div>下面是旧的只读诊断结果，用于观察工具调用和引用来源。日常入口是上方的待确认事项。</div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
@@ -583,7 +529,7 @@ export function AgentPreview() {
                       生命周期：<span className="font-mono text-amber-200">{result.proposedAction.lifecycleStatus || "pending"}</span>
                     </div>
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
-                    这是旧 Agent Preview 确认路径，不属于上方 Personal Home v1 的持久化 pending action 主线。默认不会写入真实业务数据；部署前必须确认真实写入 flag 未开启。
+                    这是旧确认路径，不属于上方待确认事项主线。默认不会写入真实业务数据；部署前必须确认真实写入开关未开启。
                   </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -690,7 +636,6 @@ export function AgentPreview() {
             </div>
           )}
         </div>
-      )}
     </section>
   );
 }

@@ -23,6 +23,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [showAllRecords, setShowAllRecords] = useState(false);
 
   // 编辑态状态
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -143,22 +144,25 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
     allTags.push(selectedTag);
   }
 
+  const visibleEvents = showAllRecords ? events : events.slice(0, 3);
+  const hasMoreLocalRecords = events.length > 3 && !showAllRecords;
+
   return (
     <div className="w-full max-w-2xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
           <Calendar className="w-5 h-5 text-indigo-400" />
-          生活记录
+          最近生活记录
         </h2>
       </div>
 
       {/* 标签过滤栏 */}
-      <div className="mb-6 bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl">
-        <div className="text-xs text-zinc-500 mb-2 font-medium flex items-center gap-1">
+      <details className="mb-6 bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl">
+        <summary className="cursor-pointer select-none text-xs text-zinc-400 font-medium flex items-center gap-1">
           <Tag className="w-3.5 h-3.5 text-zinc-400" />
-          按标签筛选
-        </div>
-        <div className="flex flex-wrap gap-2">
+          标签筛选
+        </summary>
+        <div className="flex flex-wrap gap-2 mt-3">
           <button
             onClick={() => setSelectedTag(null)}
             className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
@@ -183,7 +187,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
             </button>
           ))}
         </div>
-      </div>
+      </details>
 
       {isLoading ? (
         <div className="flex justify-center py-12">
@@ -195,7 +199,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {events.map((evt) => (
+          {visibleEvents.map((evt) => (
             <div
               key={evt.id}
               className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl hover:border-zinc-700 transition-colors relative group"
@@ -344,7 +348,19 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
             </div>
           ))}
 
-          {nextCursor && (
+          {hasMoreLocalRecords && (
+            <div className="pt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAllRecords(true)}
+                className="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm font-medium rounded-xl text-zinc-300 transition-colors border border-zinc-700"
+              >
+                查看全部生活记录
+              </button>
+            </div>
+          )}
+
+          {showAllRecords && nextCursor && (
             <div className="pt-6 flex justify-center">
               <button
                 onClick={async () => {

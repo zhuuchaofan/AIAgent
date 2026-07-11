@@ -85,8 +85,8 @@ export function ReminderWidget({
           <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
         </div>
       ) : reminders.length === 0 ? (
-        <div className="text-center py-8 text-zinc-500 border border-dashed border-zinc-800 rounded-xl text-sm">
-          暂无待处理提醒事项。
+        <div className="text-zinc-500 text-sm">
+          暂无提醒
         </div>
       ) : (
         <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">

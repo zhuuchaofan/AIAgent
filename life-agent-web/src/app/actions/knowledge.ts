@@ -182,13 +182,13 @@ export async function runAgentPreview(message: string, clientTimeZone?: string) 
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.message || `Agent Preview 调用失败 (${res.status})` };
+      return { success: false, message: data.message || `助手调用失败 (${res.status})` };
     }
 
     return data;
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    return { success: false, message: errMsg || "连接 Agent Preview 服务异常" };
+    return { success: false, message: errMsg || "连接助手服务异常" };
   }
 }
 

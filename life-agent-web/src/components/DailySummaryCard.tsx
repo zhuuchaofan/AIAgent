@@ -204,14 +204,12 @@ export function DailySummaryCard({ refreshTrigger }: Props) {
         </div>
       ) : (
         /* ── 尚未生成 ── */
-        <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed border-zinc-800 rounded-xl">
-          <Sparkles className="w-8 h-8 text-indigo-400/50 mb-3" />
-          <p className="text-sm text-zinc-500 mb-4">今日总结尚未生成</p>
+        <div>
           <button
             onClick={() => handleGenerate(false)}
             disabled={isGenerating}
             id="btn-generate-summary"
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
           >
             {isGenerating ? (
               <>
