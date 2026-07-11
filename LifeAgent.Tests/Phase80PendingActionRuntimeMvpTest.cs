@@ -98,6 +98,22 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void PersonalHomeIntentRouterKeepsUnknownExplicitActionsHighRisk()
+    {
+        var toolAction = Phase80PersonalHomeIntentRouter.Route(
+            "帮我发一封邮件",
+            "用户输入：发邮件给客户",
+            "send_email_tool");
+
+        Assert.Equal("send_email_tool", toolAction.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ToolActionIntent, toolAction.Intent);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, toolAction.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, toolAction.RiskLevel);
+        Assert.True(toolAction.RequiresPendingAction);
+        Assert.Equal("requested_action_type", toolAction.Reason);
+    }
+
+    [Fact]
     public void PersonalHomeRoutingPolicyModelsFutureDirectSaveButDefaultsOff()
     {
         var previewOnly = Phase80PersonalHomeRoutingPolicy.DefaultPreviewOnly();
@@ -120,6 +136,27 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, highRisk.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, highRisk.RiskLevel);
         Assert.True(highRisk.RequiresPendingAction);
+    }
+
+    [Fact]
+    public void RuntimeKeepsUnknownExplicitActionsHighRiskAndPreviewOnly()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+
+        var created = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest("发送邮件", "用户输入：给客户发邮件", "send_email_tool"));
+
+        Assert.True(created.Success);
+        Assert.Equal("send_email_tool", created.Data!.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ToolActionIntent, created.Data.Intent);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, created.Data.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, created.Data.RiskLevel);
+        Assert.True(created.Data.RequiresPendingAction);
+        Assert.False(created.Data.ConfirmWriteEnabled);
+        Assert.False(created.Data.Executed);
+        Assert.False(created.Data.WroteData);
+        Assert.False(created.Data.RealWritePath);
     }
 
     [Fact]

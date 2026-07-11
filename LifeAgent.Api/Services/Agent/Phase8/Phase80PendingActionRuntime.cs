@@ -532,6 +532,7 @@ internal static class Phase80PersonalHomeIntentRouter
 {
     public const string LifeRecordIntent = "life_record";
     public const string ReminderIntent = "reminder";
+    public const string ToolActionIntent = "tool_action";
     public const string PendingConfirmationDisposition = "pending_confirmation";
     public const string DirectSaveDisposition = "direct_save";
     public const string RequiredConfirmationDisposition = "required_confirmation";
@@ -543,7 +544,7 @@ internal static class Phase80PersonalHomeIntentRouter
     {
         var source = $"{title} {summary}";
         var actionType = NormalizeActionType(requestedActionType, source);
-        var intent = actionType == Phase80PendingActionRuntime.ReminderPreview ? ReminderIntent : LifeRecordIntent;
+        var intent = ResolveIntent(actionType);
         var policy = Phase80PersonalHomeRoutingPolicy.DefaultPreviewOnly().Resolve(intent);
         return new Phase80PersonalHomeIntentRoute(
             Intent: intent,
@@ -558,6 +559,13 @@ internal static class Phase80PersonalHomeIntentRouter
 
     private static string NormalizeActionType(string? actionType, string source)
     {
+        if (string.IsNullOrWhiteSpace(actionType))
+        {
+            return LooksLikeReminder(source)
+                ? Phase80PendingActionRuntime.ReminderPreview
+                : Phase80PendingActionRuntime.LifeRecordPreview;
+        }
+
         if (string.Equals(actionType, Phase80PendingActionRuntime.LifeRecordPreview, StringComparison.OrdinalIgnoreCase))
         {
             return Phase80PendingActionRuntime.LifeRecordPreview;
@@ -568,9 +576,17 @@ internal static class Phase80PersonalHomeIntentRouter
             return Phase80PendingActionRuntime.ReminderPreview;
         }
 
-        return LooksLikeReminder(source)
-            ? Phase80PendingActionRuntime.ReminderPreview
-            : Phase80PendingActionRuntime.LifeRecordPreview;
+        return actionType.Trim();
+    }
+
+    private static string ResolveIntent(string actionType)
+    {
+        return actionType switch
+        {
+            Phase80PendingActionRuntime.LifeRecordPreview => LifeRecordIntent,
+            Phase80PendingActionRuntime.ReminderPreview => ReminderIntent,
+            _ => ToolActionIntent
+        };
     }
 
     private static bool LooksLikeReminder(string value)
