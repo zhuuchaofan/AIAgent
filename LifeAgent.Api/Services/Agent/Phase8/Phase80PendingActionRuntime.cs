@@ -532,6 +532,7 @@ internal static class Phase80PersonalHomeIntentRouter
 {
     public const string LifeRecordIntent = "life_record";
     public const string ReminderIntent = "reminder";
+    public const string PlanIntent = "plan";
     public const string ToolActionIntent = "tool_action";
     public const string PendingConfirmationDisposition = "pending_confirmation";
     public const string DirectSaveDisposition = "direct_save";
@@ -619,6 +620,10 @@ internal sealed record Phase80PersonalHomeRoutingPolicy(bool AllowLowRiskDirectS
                 RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk,
                 RequiresPendingAction: true),
             Phase80PersonalHomeIntentRouter.ReminderIntent => new Phase80PersonalHomeRoutingDecision(
+                Disposition: Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition,
+                RiskLevel: Phase80PersonalHomeIntentRouter.MediumRisk,
+                RequiresPendingAction: true),
+            Phase80PersonalHomeIntentRouter.PlanIntent => new Phase80PersonalHomeRoutingDecision(
                 Disposition: Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition,
                 RiskLevel: Phase80PersonalHomeIntentRouter.MediumRisk,
                 RequiresPendingAction: true),

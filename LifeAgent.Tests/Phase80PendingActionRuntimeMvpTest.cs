@@ -122,6 +122,7 @@ public class Phase80PendingActionRuntimeMvpTest
         var currentLifeRecord = previewOnly.Resolve(Phase80PersonalHomeIntentRouter.LifeRecordIntent);
         var betaLifeRecord = betaDirectSave.Resolve(Phase80PersonalHomeIntentRouter.LifeRecordIntent);
         var reminder = betaDirectSave.Resolve(Phase80PersonalHomeIntentRouter.ReminderIntent);
+        var plan = betaDirectSave.Resolve(Phase80PersonalHomeIntentRouter.PlanIntent);
         var highRisk = betaDirectSave.Resolve("external_tool_call");
 
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, currentLifeRecord.Disposition);
@@ -133,9 +134,23 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, reminder.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, reminder.RiskLevel);
         Assert.True(reminder.RequiresPendingAction);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, plan.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, plan.RiskLevel);
+        Assert.True(plan.RequiresPendingAction);
         Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, highRisk.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, highRisk.RiskLevel);
         Assert.True(highRisk.RequiresPendingAction);
+    }
+
+    [Fact]
+    public void PersonalHomeRouterDoesNotInferPlanAsAThirdHomeInputTypeYet()
+    {
+        var routed = Phase80PersonalHomeIntentRouter.Route("计划一下周末", "用户输入：周末去哪里", null);
+
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LifeRecordIntent, routed.Intent);
+        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, routed.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, routed.Disposition);
+        Assert.True(routed.RequiresPendingAction);
     }
 
     [Fact]
