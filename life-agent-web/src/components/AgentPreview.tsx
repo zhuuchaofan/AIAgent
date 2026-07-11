@@ -115,7 +115,7 @@ interface Phase80PersistenceMetadata {
 }
 
 export function AgentPreview() {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState<"confirm" | "cancel" | null>(null);
@@ -150,7 +150,7 @@ export function AgentPreview() {
       setPhase80Actions(res.data ?? []);
       setPhase80Persistence(res.persistence ?? null);
       if ((res.data ?? []).length > 0) {
-        setPhase80Message("已恢复当前待确认动作；启用 Firestore persistence 后可跨刷新和实例保留。");
+        setPhase80Message("已从 Firestore 恢复待确认动作历史；刷新后状态会保留。");
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -189,7 +189,7 @@ export function AgentPreview() {
       const res = await runAgentPreview(message, "Asia/Shanghai") as AgentRunResponse;
       if (!res.success || !res.data) {
         setResult(null);
-        setError(res.message || "Agent Preview 返回异常");
+        setError(res.message || "个人助手返回异常");
         return;
       }
 
@@ -198,7 +198,7 @@ export function AgentPreview() {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setResult(null);
-      setError(errMsg || "Agent Preview 请求失败");
+      setError(errMsg || "个人助手请求失败");
     } finally {
       setLoading(false);
     }
@@ -298,8 +298,8 @@ export function AgentPreview() {
       >
           <span className="flex items-center gap-2 min-w-0">
           <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className="text-sm font-semibold text-white">Agent Preview</span>
-          <span className="text-[10px] text-zinc-500 border border-zinc-800 rounded px-2 py-0.5">实验入口</span>
+          <span className="text-sm font-semibold text-white">LifeOS 个人助手</span>
+          <span className="text-[10px] text-cyan-300 border border-cyan-500/30 bg-cyan-500/10 rounded px-2 py-0.5">Personal Home v1</span>
         </span>
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -316,7 +316,7 @@ export function AgentPreview() {
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               disabled={loading}
-              placeholder="例如：列出我的文档"
+              placeholder="例如：生成一条待确认动作"
               className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
             />
             <button
@@ -339,8 +339,8 @@ export function AgentPreview() {
           <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4 text-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <div className="text-zinc-200 font-semibold">Personal Agent v2 待确认动作</div>
-                <div className="text-zinc-500 mt-1">状态记忆预览：确认只改变 pending action 状态，不写入业务数据，不执行工具</div>
+                <div className="text-zinc-200 font-semibold">待确认动作与历史</div>
+                <div className="text-zinc-500 mt-1">创建、确认或取消 pending action；状态已持久化，确认仍不会执行真实工具</div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
@@ -359,13 +359,31 @@ export function AgentPreview() {
                   className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
                 >
                   {phase80Loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-                  生成待确认动作
+                  创建待确认动作
                 </button>
               </div>
             </div>
 
             <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-cyan-100 leading-relaxed">
-              当前为 Personal Agent v2 preview-only 模式：后端已通过 IPendingActionStore 收敛，默认仍使用 in-memory store；Firestore persistence 需要单独 Release Gate 批准后才会启用。
+              当前 LifeOS Personal Home v1 已启用 Pending Action 持久化：刷新后可恢复历史状态。确认只代表“用户已确认”，不会写入 memories / life_events，也不会执行真实 tool action。
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-[10px]">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-100">
+                Pending actions persisted
+              </div>
+              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
+                Memories write disabled
+              </div>
+              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
+                Life events write disabled
+              </div>
+              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
+                Real tool execution disabled
+              </div>
+              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
+                Legacy confirm path not used
+              </div>
             </div>
 
             {phase80Persistence && (
@@ -453,7 +471,7 @@ export function AgentPreview() {
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                           >
                             {phase80Updating === confirmKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                            确认
+                            确认但不执行
                           </button>
                           <button
                             type="button"
@@ -485,6 +503,11 @@ export function AgentPreview() {
 
           {result && (
             <div className="space-y-4">
+              <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 p-4 text-xs text-zinc-400">
+                <div className="text-zinc-200 font-semibold mb-1">技术说明：Agent Preview</div>
+                <div>下面是旧的只读 Agent / RAG 技术预览结果，用于观察工具调用和引用来源。Personal Home v1 的日常入口是上方的待确认动作与历史。</div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                 <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-3">
                   <div className="text-zinc-500 mb-1">mode</div>
@@ -529,7 +552,7 @@ export function AgentPreview() {
                       生命周期：<span className="font-mono text-amber-200">{result.proposedAction.lifecycleStatus || "pending"}</span>
                     </div>
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
-                    这是旧 Agent Preview 确认路径，不属于上方 Phase 8 demo。默认不会写入；部署前必须确认真实写入 flag 未开启。
+                    这是旧 Agent Preview 确认路径，不属于上方 Personal Home v1 的持久化 pending action 主线。默认不会写入真实业务数据；部署前必须确认真实写入 flag 未开启。
                   </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -540,7 +563,7 @@ export function AgentPreview() {
                       className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                     >
                       {confirming === "confirm" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      确认
+                      确认旧预览
                     </button>
                     <button
                       type="button"

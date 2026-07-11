@@ -68,9 +68,9 @@ export default function Home() {
         <header className="flex justify-between items-center mb-8 border-b border-zinc-800/50 pb-6">
           <div>
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
-              小猪的快乐生活
+              LifeOS Personal Home
             </h1>
-            <p className="text-zinc-500 text-sm mt-1">记录生活、管理提醒、生成每日总结与个人知识库 RAG</p>
+            <p className="text-zinc-500 text-sm mt-1">个人助手、生活记录、提醒、每日总结与知识库</p>
           </div>
           
           {isLoggedIn ? (
@@ -111,7 +111,7 @@ export default function Home() {
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                生活助理
+                个人助手
                 {activeTab === "assistant" && (
                   <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
                 )}
@@ -149,6 +149,7 @@ export default function Home() {
               {activeTab === "assistant" && (
                 <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-6">
+                    {showAgentPreview && <AgentPreview />}
                     <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
                     <Timeline refreshTrigger={refreshTrigger} />
                   </div>
@@ -166,8 +167,6 @@ export default function Home() {
               {activeTab === "chat" && (
                 <div className="space-y-6">
                   <RagChat />
-                  {/* Agent Preview is an experimental, removable entry gated by NEXT_PUBLIC_ENABLE_AGENT_PREVIEW. Removing this mount and AgentPreview.tsx should not affect the existing RAG flow. */}
-                  {showAgentPreview && <AgentPreview />}
                 </div>
               )}
             </div>
@@ -182,7 +181,7 @@ export default function Home() {
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                生活助理
+                个人助手
                 {activeTab === "assistant" && (
                   <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
                 )}
@@ -219,6 +218,7 @@ export default function Home() {
             <div className="lg:hidden">
               {activeTab === "assistant" && (
                 <div className="space-y-6 animate-in fade-in duration-500">
+                  {showAgentPreview && <AgentPreview />}
                   <IngestForm onIngested={() => setRefreshTrigger(t => t + 1)} />
                   <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
                   <DailySummaryCard refreshTrigger={refreshTrigger} />
@@ -235,8 +235,6 @@ export default function Home() {
               {activeTab === "chat" && (
                 <div className="animate-in fade-in duration-500 space-y-6">
                   <RagChat />
-                  {/* Agent Preview is an experimental, removable entry gated by NEXT_PUBLIC_ENABLE_AGENT_PREVIEW. Removing this mount and AgentPreview.tsx should not affect the existing RAG flow. */}
-                  {showAgentPreview && <AgentPreview />}
                 </div>
               )}
             </div>
