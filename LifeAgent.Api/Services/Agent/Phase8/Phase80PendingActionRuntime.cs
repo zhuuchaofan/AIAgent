@@ -417,16 +417,23 @@ internal static class Phase80PersonalHomeIntentRouter
     public const string LifeRecordIntent = "life_record";
     public const string ReminderIntent = "reminder";
     public const string PendingConfirmationDisposition = "pending_confirmation";
+    public const string DirectSaveDisposition = "direct_save";
+    public const string RequiredConfirmationDisposition = "required_confirmation";
+    public const string LowRisk = "low_record";
+    public const string MediumRisk = "medium_user_state_change";
+    public const string HighRisk = "high_external_or_irreversible";
 
     public static Phase80PersonalHomeIntentRoute Route(string title, string summary, string? requestedActionType)
     {
         var source = $"{title} {summary}";
         var actionType = NormalizeActionType(requestedActionType, source);
+        var intent = actionType == Phase80PendingActionRuntime.ReminderPreview ? ReminderIntent : LifeRecordIntent;
+        var policy = Phase80PersonalHomeRoutingPolicy.DefaultPreviewOnly().Resolve(intent);
         return new Phase80PersonalHomeIntentRoute(
-            Intent: actionType == Phase80PendingActionRuntime.ReminderPreview ? ReminderIntent : LifeRecordIntent,
+            Intent: intent,
             ActionType: actionType,
-            Disposition: PendingConfirmationDisposition,
-            RiskLevel: "low_preview_only",
+            Disposition: policy.Disposition,
+            RiskLevel: policy.RiskLevel,
             Reason: string.IsNullOrWhiteSpace(requestedActionType)
                 ? "inferred_from_home_input"
                 : "requested_action_type");
@@ -458,6 +465,35 @@ internal static class Phase80PersonalHomeIntentRouter
                value.Contains("后天", StringComparison.OrdinalIgnoreCase);
     }
 }
+
+internal sealed record Phase80PersonalHomeRoutingPolicy(bool AllowLowRiskDirectSave)
+{
+    public static Phase80PersonalHomeRoutingPolicy DefaultPreviewOnly()
+    {
+        return new Phase80PersonalHomeRoutingPolicy(AllowLowRiskDirectSave: false);
+    }
+
+    public Phase80PersonalHomeRoutingDecision Resolve(string intent)
+    {
+        return intent switch
+        {
+            Phase80PersonalHomeIntentRouter.LifeRecordIntent when AllowLowRiskDirectSave => new Phase80PersonalHomeRoutingDecision(
+                Disposition: Phase80PersonalHomeIntentRouter.DirectSaveDisposition,
+                RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk),
+            Phase80PersonalHomeIntentRouter.LifeRecordIntent => new Phase80PersonalHomeRoutingDecision(
+                Disposition: Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition,
+                RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk),
+            Phase80PersonalHomeIntentRouter.ReminderIntent => new Phase80PersonalHomeRoutingDecision(
+                Disposition: Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition,
+                RiskLevel: Phase80PersonalHomeIntentRouter.MediumRisk),
+            _ => new Phase80PersonalHomeRoutingDecision(
+                Disposition: Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition,
+                RiskLevel: Phase80PersonalHomeIntentRouter.HighRisk)
+        };
+    }
+}
+
+internal sealed record Phase80PersonalHomeRoutingDecision(string Disposition, string RiskLevel);
 
 internal sealed record Phase80PersonalHomeIntentRoute(
     string Intent,

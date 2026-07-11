@@ -83,8 +83,29 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, explicitLifeRecord.ActionType);
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, lifeRecord.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, reminder.Disposition);
-        Assert.Equal("low_preview_only", lifeRecord.RiskLevel);
-        Assert.Equal("low_preview_only", reminder.RiskLevel);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, lifeRecord.RiskLevel);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, reminder.RiskLevel);
+    }
+
+    [Fact]
+    public void PersonalHomeRoutingPolicyModelsFutureDirectSaveButDefaultsOff()
+    {
+        var previewOnly = Phase80PersonalHomeRoutingPolicy.DefaultPreviewOnly();
+        var betaDirectSave = new Phase80PersonalHomeRoutingPolicy(AllowLowRiskDirectSave: true);
+
+        var currentLifeRecord = previewOnly.Resolve(Phase80PersonalHomeIntentRouter.LifeRecordIntent);
+        var betaLifeRecord = betaDirectSave.Resolve(Phase80PersonalHomeIntentRouter.LifeRecordIntent);
+        var reminder = betaDirectSave.Resolve(Phase80PersonalHomeIntentRouter.ReminderIntent);
+        var highRisk = betaDirectSave.Resolve("external_tool_call");
+
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, currentLifeRecord.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, currentLifeRecord.RiskLevel);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.DirectSaveDisposition, betaLifeRecord.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, betaLifeRecord.RiskLevel);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, reminder.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, reminder.RiskLevel);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, highRisk.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, highRisk.RiskLevel);
     }
 
     [Fact]
