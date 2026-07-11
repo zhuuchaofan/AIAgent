@@ -488,6 +488,30 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task Phase8DemoEndpointKeepsUnknownExplicitActionHighRiskPreviewOnly()
+    {
+        var userId = $"endpoint_user_{Guid.NewGuid():N}";
+        var services = BuildServices();
+
+        var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            new Phase80CreatePendingActionRequest("发送邮件", "用户输入：给客户发邮件", "send_email_tool")));
+
+        Assert.Equal(StatusCodes.Status200OK, createResult.StatusCode);
+        Assert.Equal("send_email_tool", ReadString(createResult.Body, "data", "actionType"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ToolActionIntent, ReadString(createResult.Body, "data", "intent"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, ReadString(createResult.Body, "data", "disposition"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, ReadString(createResult.Body, "data", "riskLevel"));
+        Assert.True(ReadBool(createResult.Body, "data", "requiresPendingAction"));
+        Assert.Equal("requested_action_type", ReadString(createResult.Body, "data", "routeReason"));
+        Assert.False(ReadBool(createResult.Body, "data", "executed"));
+        Assert.False(ReadBool(createResult.Body, "data", "wroteData"));
+        Assert.False(ReadBool(createResult.Body, "data", "realWritePath"));
+        Assert.False(ReadBool(createResult.Body, "data", "confirmWriteEnabled"));
+        Assert.False(ReadBool(createResult.Body, "data", "memoryWriteEnabled"));
+    }
+
+    [Fact]
     public async Task Phase8DemoEndpointCancelBlocksLaterConfirmWithoutLegacyWritePath()
     {
         var userId = $"endpoint_user_{Guid.NewGuid():N}";
