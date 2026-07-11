@@ -512,6 +512,30 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task Phase8DemoEndpointInfersReminderFromUnifiedHomeInputPreviewOnly()
+    {
+        var userId = $"endpoint_user_{Guid.NewGuid():N}";
+        var services = BuildServices();
+
+        var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            new Phase80CreatePendingActionRequest("提醒我", "明天上午九点提醒我交材料")));
+
+        Assert.Equal(StatusCodes.Status200OK, createResult.StatusCode);
+        Assert.Equal(Phase80PendingActionRuntime.ReminderPreview, ReadString(createResult.Body, "data", "actionType"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ReminderIntent, ReadString(createResult.Body, "data", "intent"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, ReadString(createResult.Body, "data", "disposition"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, ReadString(createResult.Body, "data", "riskLevel"));
+        Assert.True(ReadBool(createResult.Body, "data", "requiresPendingAction"));
+        Assert.Equal("inferred_from_home_input", ReadString(createResult.Body, "data", "routeReason"));
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, ReadString(createResult.Body, "data", "confirmTarget"));
+        Assert.False(ReadBool(createResult.Body, "data", "confirmWriteEnabled"));
+        Assert.False(ReadBool(createResult.Body, "data", "executed"));
+        Assert.False(ReadBool(createResult.Body, "data", "wroteData"));
+        Assert.False(ReadBool(createResult.Body, "data", "realWritePath"));
+    }
+
+    [Fact]
     public async Task Phase8DemoEndpointCancelBlocksLaterConfirmWithoutLegacyWritePath()
     {
         var userId = $"endpoint_user_{Guid.NewGuid():N}";
