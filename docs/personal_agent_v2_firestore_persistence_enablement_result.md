@@ -7,7 +7,8 @@ Date: 2026-07-11
 Personal Agent v2 Firestore pending action persistence was enabled for the API
 Cloud Run service and deployed as a preview-only rollout.
 
-Current conclusion: **deployed with authenticated smoke pending**.
+Current conclusion: **deployed successfully with user-verified authenticated
+persistence smoke; deployed cross-user smoke remains pending**.
 
 The rollout enabled only the Personal Agent v2 pending action state-memory
 store. It did not enable memories, life events, real tool execution, external
@@ -22,8 +23,9 @@ The user approved:
 - Cloud Run deployment
 - authenticated smoke
 
-Authenticated smoke could not be completed because no usable Firebase ID token
-was available.
+Scripted authenticated smoke could not be completed because no usable Firebase
+ID token was available. The user completed browser-based authenticated smoke
+manually and provided screenshot evidence.
 
 ## Scope
 
@@ -140,14 +142,27 @@ Unauthenticated / service smoke:
 
 Authenticated smoke:
 
-- status: pending
-- reason: `FIREBASE_ID_TOKEN` was not present in the shell
+- status: user-verified for Personal Agent v2 persistence restore
+- scripted status: pending because `FIREBASE_ID_TOKEN` was not present in the
+  shell
 - `FIREBASE_ID_TOKEN_B`: not present
-- authenticated create/list/confirm/cancel/refresh checks were not run
+- authenticated create/list/confirm/cancel/refresh checks were not run by
+  script
 - browser login attempt: the in-app browser Google login flow did not provide a
   stable logged-in session for token extraction
 - Firebase Auth email/password token attempt: returned
   `INVALID_LOGIN_CREDENTIALS` for the supplied test account credentials
+- user browser smoke evidence:
+  - user logged in at `https://life.zhuchaofan.com/`
+  - user refreshed the Agent Preview page
+  - confirmed and cancelled pending actions remained visible after refresh
+  - UI showed `mode: personal_agent_v2_firestore_persistence_preview_only`
+  - UI showed `executed: false`
+  - UI showed `wroteData: false`
+  - UI showed `legacyConfirm: false`
+  - UI showed `realWritePath: false`
+  - UI copy showed confirmed actions are confirmed but not executed
+  - UI copy showed cancelled actions cannot be confirmed
 
 Script output summary:
 
@@ -162,6 +177,14 @@ Confirmed after deployment:
 
 - API latest ready revision is serving 100% traffic.
 - API pending action persistence env is set to Firestore preview-only mode.
+- user-verified authenticated browser refresh restored pending action history.
+- user-verified confirmed state remained visible after refresh.
+- user-verified cancelled state remained visible after refresh.
+- user-verified UI safety flags remained false after refresh:
+  - `executed`
+  - `wroteData`
+  - `legacyConfirm`
+  - `realWritePath`
 - `USE_MOCK_AUTH` is false.
 - `USE_MOCK_LLM` is false.
 - dangerous agent write flags are not set.
@@ -173,11 +196,10 @@ Confirmed after deployment:
 
 Not directly verified yet:
 
-- authenticated Firestore-backed create/read/confirm/cancel persistence
-- browser refresh restore with authenticated user
 - cross-user deployed owner-isolation smoke
+- script-based authenticated smoke with Firebase ID token
 
-These require a real Firebase ID token or authenticated browser session.
+These require a real Firebase ID token for one or two test users.
 
 ## Data / Execution Impact
 
@@ -206,18 +228,23 @@ Any rollback must keep dangerous write flags unset or false.
 ## Final Conclusion
 
 Personal Agent v2 Firestore persistence preview has been deployed at the API
-layer, but Personal Agent v2 is not fully complete until authenticated smoke
-proves:
+layer, and the main authenticated browser persistence path has been
+user-verified. The remaining deployed smoke gap is cross-user owner-isolation
+verification with a second Firebase ID token.
 
-- create persists in Firestore
-- refresh restores the pending action
-- confirm persists
-- cancel persists
+Verified by user-provided browser evidence:
+
+- refresh restores pending action history
+- confirmed action persists after refresh
+- cancelled action persists after refresh
 - historical actions remain visible
-- owner isolation works in deployed environment
 - `executed=false`
 - `wroteData=false`
-- no legacy confirm path
-- no `life_events`
-- no `memories`
-- no real tool execution
+- `legacyConfirm=false`
+- `realWritePath=false`
+- confirmed does not mean executed
+- cancelled actions cannot be confirmed
+
+Still pending for a future smoke:
+
+- deployed cross-user owner isolation with a second test account
