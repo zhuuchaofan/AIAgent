@@ -12,10 +12,15 @@ public static class AgentEndpoints
 {
     public static void MapAgentEndpoints(this WebApplication app)
     {
+        // Legacy technical Agent/RAG preview route. LifeOS Personal Home uses
+        // /api/agent/pending-actions as its only pending action mainline.
         app.MapPost("/api/agent/run", RunAgentPreviewAsync)
             .WithTags("agent")
             .RequireRateLimiting("high-cost");
 
+        // Legacy confirmation route for PendingAgentAction. It is retained for
+        // old Agent Preview tests and remains guarded by the real-write flags.
+        // LifeOS Personal Home must not call this endpoint.
         app.MapPost("/api/agent/confirm", ConfirmAgentActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("high-cost");

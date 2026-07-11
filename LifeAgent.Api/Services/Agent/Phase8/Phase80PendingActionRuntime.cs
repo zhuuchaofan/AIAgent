@@ -2,6 +2,8 @@ using LifeAgent.Api.Services.Agent.PendingActions;
 
 namespace LifeAgent.Api.Services.Agent.Phase8;
 
+// Name retained for compatibility with Phase 8/9 tests and docs. This is now
+// the LifeOS Personal Home pending action runtime mainline.
 public sealed class Phase80PendingActionRuntime
 {
     public const string Pending = "pending";

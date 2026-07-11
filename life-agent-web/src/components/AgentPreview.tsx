@@ -310,32 +310,6 @@ export function AgentPreview() {
 
       {expanded && (
         <div className="border-t border-zinc-800/50 p-5 space-y-5">
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(event) => setInputValue(event.target.value)}
-              disabled={loading}
-              placeholder="例如：生成一条待确认动作"
-              className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
-            />
-            <button
-              type="submit"
-              disabled={loading || !inputValue.trim()}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              发送
-            </button>
-          </form>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-3 text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span className="break-words [overflow-wrap:anywhere]">{error}</span>
-            </div>
-          )}
-
           <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4 text-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
@@ -498,6 +472,41 @@ export function AgentPreview() {
               </div>
             ) : (
               <div className="text-zinc-500">还没有待确认动作。生成后可确认或取消，确认后仍不会执行。</div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/40 p-4 text-xs space-y-3">
+            <div>
+              <div className="text-zinc-200 font-semibold">技术诊断：只读 Agent / RAG Preview</div>
+              <div className="text-zinc-500 mt-1">
+                该区域保留用于观察旧 Agent Preview 工具调用和引用来源，不是 Personal Home 的 pending action 主线；主线不会调用旧 /api/agent/confirm。
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(event) => setInputValue(event.target.value)}
+                disabled={loading}
+                placeholder="技术诊断：列出我的文档"
+                className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={loading || !inputValue.trim()}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                运行技术预览
+              </button>
+            </form>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-3 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span className="break-words [overflow-wrap:anywhere]">{error}</span>
+              </div>
             )}
           </div>
 

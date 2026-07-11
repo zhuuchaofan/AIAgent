@@ -1,5 +1,7 @@
 namespace LifeAgent.Api.Models.Agent;
 
+// Legacy Agent Preview confirmation model. The current LifeOS Personal Home
+// mainline uses PendingActionRecord through IPendingActionStore instead.
 public class PendingAgentAction
 {
     public string UserId { get; set; } = string.Empty;
