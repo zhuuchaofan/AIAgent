@@ -308,3 +308,28 @@ async function updatePhase80PendingAction(actionId: string, decision: "confirm" 
     return { success: false, message: errMsg || "连接待确认动作服务异常" };
   }
 }
+
+export async function archivePhase80PendingAction(actionId: string) {
+  try {
+    const token = await getToken();
+    if (!token) return { success: false, message: "未授权，请重新登录" };
+
+    const res = await fetch(`${API_BASE}${PERSONAL_AGENT_PENDING_ACTIONS_PATH}/${actionId}/archive`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { ...data, success: false, message: data.message || `隐藏待确认动作失败 (${res.status})` };
+    }
+
+    return data;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: errMsg || "连接待确认动作隐藏服务异常" };
+  }
+}

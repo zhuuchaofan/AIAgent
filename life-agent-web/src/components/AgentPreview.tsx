@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, Loader2, Send, ShieldAlert, Wrench, X } from "lucide-react";
 import {
+  archivePhase80PendingAction,
   cancelPhase80PendingAction,
   confirmAgentAction,
   confirmPhase80PendingAction,
@@ -83,6 +84,7 @@ interface Phase80PendingAction {
   safetyMode: string;
   legacyConfirmEndpointUsed: boolean;
   realWritePath: boolean;
+  isArchived?: boolean;
   message: string;
 }
 
@@ -121,6 +123,7 @@ export function AgentPreview() {
   const [phase80Updating, setPhase80Updating] = useState<string | null>(null);
   const [phase80Message, setPhase80Message] = useState<string | null>(null);
   const [phase80Persistence, setPhase80Persistence] = useState<Phase80PersistenceMetadata | null>(null);
+  const [showCompletedHistory, setShowCompletedHistory] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const toolCalls = useMemo(() => result?.toolCalls ?? [], [result]);
@@ -128,6 +131,16 @@ export function AgentPreview() {
   const actionExpired = result?.proposedAction ? new Date(result.proposedAction.expiresAt).getTime() <= nowMs : false;
   const actionResolved = !!confirmationResult || actionExpired;
   const showPendingAction = !!result?.requiresConfirmation && !!result.proposedAction && !actionResolved;
+  const visiblePhase80Actions = useMemo(() => {
+    const active = phase80Actions.filter(action => action.status === "pending");
+    const completed = phase80Actions
+      .filter(action => action.status !== "pending")
+      .slice(0, showCompletedHistory ? 12 : 3);
+
+    return [...active, ...completed].filter((action, index, actions) =>
+      actions.findIndex(item => item.actionId === action.actionId) === index);
+  }, [phase80Actions, showCompletedHistory]);
+  const hiddenCompletedCount = Math.max(0, phase80Actions.filter(action => action.status !== "pending").length - 3);
 
   const loadPhase80Actions = useCallback(async () => {
     setPhase80Refreshing(true);
@@ -272,6 +285,29 @@ export function AgentPreview() {
     }
   };
 
+  const handleArchivePhase80Action = async (actionId: string) => {
+    if (phase80Updating) return;
+
+    setPhase80Updating(`archive:${actionId}`);
+    setPhase80Message(null);
+
+    try {
+      const res = await archivePhase80PendingAction(actionId) as Phase80ActionResponse;
+      if (!res.success) {
+        setPhase80Message(res.message || "隐藏历史记录失败");
+        return;
+      }
+
+      setPhase80Actions(prev => prev.filter(action => action.actionId !== actionId));
+      setPhase80Message(res.message || "已隐藏该历史记录");
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setPhase80Message(errMsg || "隐藏历史记录失败");
+    } finally {
+      setPhase80Updating(null);
+    }
+  };
+
   const phase80StatusClass = (status: string) => {
     if (status === "confirmed") return "border-emerald-500/30 text-emerald-300 bg-emerald-500/10";
     if (status === "cancelled") return "border-zinc-600/60 text-zinc-300 bg-zinc-800/50";
@@ -322,6 +358,13 @@ export function AgentPreview() {
                 >
                   {phase80Refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   刷新状态
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCompletedHistory(prev => !prev)}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 shrink-0"
+                >
+                  {showCompletedHistory ? "仅显示近期历史" : "显示更多历史"}
                 </button>
                 <button
                   type="button"
@@ -384,12 +427,19 @@ export function AgentPreview() {
               </div>
             )}
 
-            {phase80Actions.length > 0 ? (
+            {!showCompletedHistory && hiddenCompletedCount > 0 && (
+              <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 text-zinc-400">
+                已默认折叠 {hiddenCompletedCount} 条较早的已完成/已取消/已过期记录，避免测试历史铺满首页。
+              </div>
+            )}
+
+            {visiblePhase80Actions.length > 0 ? (
               <div className="space-y-2">
-                {phase80Actions.map(action => {
+                {visiblePhase80Actions.map(action => {
                   const pending = action.status === "pending";
                   const confirmKey = `confirm:${action.actionId}`;
                   const cancelKey = `cancel:${action.actionId}`;
+                  const archiveKey = `archive:${action.actionId}`;
 
                   return (
                     <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-3">
@@ -455,12 +505,23 @@ export function AgentPreview() {
                           </button>
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 text-zinc-400">
-                          {action.status === "confirmed"
-                            ? "该动作已确认，不能再次确认或取消；它仍未执行。"
-                            : action.status === "cancelled"
-                              ? "该动作已取消，不能再确认。"
-                              : "该动作不再可操作。"}
+                        <div className="space-y-2">
+                          <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 text-zinc-400">
+                            {action.status === "confirmed"
+                              ? "该动作已确认，不能再次确认或取消；它仍未执行。"
+                              : action.status === "cancelled"
+                                ? "该动作已取消，不能再确认。"
+                                : "该动作不再可操作。"}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleArchivePhase80Action(action.actionId)}
+                            disabled={!!phase80Updating}
+                            className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800/80 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                          >
+                            {phase80Updating === archiveKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                            隐藏这条历史
+                          </button>
                         </div>
                       )}
                     </div>

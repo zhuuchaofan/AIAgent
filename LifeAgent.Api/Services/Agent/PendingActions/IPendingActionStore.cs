@@ -32,6 +32,18 @@ public interface IPendingActionStore
         string? auditEventRef = null,
         CancellationToken cancellationToken = default);
 
+    Task<PendingActionStoreResult> ArchiveAsync(
+        string userSubjectRef,
+        string pendingActionId,
+        string? auditEventRef = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(PendingActionStoreResult.Failed(
+            "not_found",
+            "not_found",
+            "Pending action archive is not supported by this store."));
+    }
+
     Task<PendingActionStoreResult> RecordConfirmationReferenceAsync(
         string userSubjectRef,
         string pendingActionId,

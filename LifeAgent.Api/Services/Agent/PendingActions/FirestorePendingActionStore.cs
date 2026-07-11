@@ -65,7 +65,8 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             RedactionMetadata = request.RedactionMetadata ?? new Dictionary<string, string>(),
             ValidationSnapshot = request.ValidationSnapshot ?? new Dictionary<string, string>(),
             WroteData = false,
-            Executed = false
+            Executed = false,
+            IsArchived = false
         };
 
         var document = Document(request.UserSubjectRef, request.PendingActionId);
@@ -268,7 +269,6 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
         {
             firestoreQuery = firestoreQuery.WhereEqualTo("idempotencyKeyHash", query.IdempotencyKeyHash);
         }
-
         var snapshot = await firestoreQuery.GetSnapshotAsync(cancellationToken);
         var records = new List<PendingActionRecord>();
         foreach (var document in snapshot.Documents)
@@ -284,11 +284,35 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             {
                 continue;
             }
+            if (!query.IncludeArchived && record.IsArchived)
+            {
+                continue;
+            }
 
             records.Add(record);
         }
 
         return records.OrderByDescending(record => record.CreatedAt).ToArray();
+    }
+
+    public async Task<PendingActionStoreResult> ArchiveAsync(
+        string userSubjectRef,
+        string pendingActionId,
+        string? auditEventRef = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await MutateOwnedRecordInTransactionAsync(
+            userSubjectRef,
+            pendingActionId,
+            _ => null,
+            record => Copy(record, record.Status) with
+            {
+                IsArchived = true,
+                ArchivedAt = _timeProvider.GetUtcNow(),
+                ArchivedByUserId = userSubjectRef,
+                AuditEventRefs = AppendAudit(record, auditEventRef)
+            },
+            cancellationToken);
     }
 
     private async Task<PendingActionStoreResult> UpdateOwnedStatusAsync(
@@ -440,7 +464,10 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             ["cancellationReason"] = record.CancellationReason,
             ["schemaVersion"] = record.SchemaVersion,
             ["wroteData"] = false,
-            ["executed"] = false
+            ["executed"] = false,
+            ["isArchived"] = record.IsArchived,
+            ["archivedAt"] = record.ArchivedAt is null ? null : ToTimestamp(record.ArchivedAt.Value),
+            ["archivedByUserId"] = record.ArchivedByUserId
         };
     }
 
@@ -488,7 +515,10 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             CancellationReason = ReadNullableString(data, "cancellationReason"),
             SchemaVersion = ReadString(data, "schemaVersion"),
             WroteData = false,
-            Executed = false
+            Executed = false,
+            IsArchived = ReadBool(data, "isArchived"),
+            ArchivedAt = ReadNullableDateTimeOffset(data, "archivedAt"),
+            ArchivedByUserId = ReadNullableString(data, "archivedByUserId")
         };
     }
 
@@ -525,7 +555,10 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             CancellationReason = record.CancellationReason,
             SchemaVersion = record.SchemaVersion,
             WroteData = false,
-            Executed = false
+            Executed = false,
+            IsArchived = record.IsArchived,
+            ArchivedAt = record.ArchivedAt,
+            ArchivedByUserId = record.ArchivedByUserId
         };
     }
 
@@ -556,6 +589,30 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
     private static string? ReadNullableString(IDictionary<string, object> data, string key)
     {
         return data.TryGetValue(key, out var value) ? value?.ToString() : null;
+    }
+
+    private static bool ReadBool(IDictionary<string, object> data, string key)
+    {
+        if (!data.TryGetValue(key, out var value) || value is null)
+        {
+            return false;
+        }
+
+        return value switch
+        {
+            bool boolValue => boolValue,
+            _ => bool.TryParse(value.ToString(), out var parsed) && parsed
+        };
+    }
+
+    private static DateTimeOffset? ReadNullableDateTimeOffset(IDictionary<string, object> data, string key)
+    {
+        if (!data.TryGetValue(key, out var value) || value is null)
+        {
+            return null;
+        }
+
+        return ReadDateTimeOffset(data, key);
     }
 
     private static DateTimeOffset ReadDateTimeOffset(IDictionary<string, object> data, string key)

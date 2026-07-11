@@ -61,7 +61,8 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             RedactionMetadata = request.RedactionMetadata ?? new Dictionary<string, string>(),
             ValidationSnapshot = request.ValidationSnapshot ?? new Dictionary<string, string>(),
             WroteData = false,
-            Executed = false
+            Executed = false,
+            IsArchived = false
         };
 
         if (!_records.TryAdd(StoreKey(record.UserSubjectRef, record.PendingActionId), record))
@@ -255,6 +256,10 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
         {
             records = records.Where(record => PendingActionStatus.IsActive(record.Status));
         }
+        if (!query.IncludeArchived)
+        {
+            records = records.Where(record => !record.IsArchived);
+        }
         if (!string.IsNullOrWhiteSpace(query.Status))
         {
             records = records.Where(record => record.Status == query.Status);
@@ -278,6 +283,32 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
 
         return Task.FromResult<IReadOnlyList<PendingActionRecord>>(
             records.OrderByDescending(record => record.CreatedAt).ToList());
+    }
+
+    public Task<PendingActionStoreResult> ArchiveAsync(
+        string userSubjectRef,
+        string pendingActionId,
+        string? auditEventRef = null,
+        CancellationToken cancellationToken = default)
+    {
+        ExpireDueRecords();
+        if (!TryGetOwned(userSubjectRef, pendingActionId, out var record))
+        {
+            return Task.FromResult(PendingActionStoreResult.Failed(
+                "not_found",
+                "not_found",
+                "Pending action was not found."));
+        }
+
+        var updated = Copy(record, record.Status) with
+        {
+            IsArchived = true,
+            ArchivedAt = _timeProvider.GetUtcNow(),
+            ArchivedByUserId = userSubjectRef,
+            AuditEventRefs = AppendAudit(record, auditEventRef)
+        };
+        _records[StoreKey(updated.UserSubjectRef, updated.PendingActionId)] = updated;
+        return Task.FromResult(PendingActionStoreResult.Succeeded(updated));
     }
 
     private Task<PendingActionStoreResult> UpdateOwnedStatus(
@@ -373,7 +404,10 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             CancellationReason = record.CancellationReason,
             SchemaVersion = record.SchemaVersion,
             WroteData = false,
-            Executed = false
+            Executed = false,
+            IsArchived = record.IsArchived,
+            ArchivedAt = record.ArchivedAt,
+            ArchivedByUserId = record.ArchivedByUserId
         };
     }
 

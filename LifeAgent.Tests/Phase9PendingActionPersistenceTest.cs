@@ -87,6 +87,44 @@ public class Phase9PendingActionPersistenceTest
     }
 
     [Fact]
+    public async Task ArchiveHidesOwnedHistoryWithoutDeletingOrExecuting()
+    {
+        var store = new InMemoryPendingActionStore();
+        var runtime = new Phase80PendingActionRuntime(store: store);
+        var created = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest("旧测试记录", "隐藏而不是硬删除"));
+        var confirmed = await runtime.ConfirmAsync("user_a", created.Data!.ActionId);
+
+        var archived = await runtime.ArchiveAsync("user_a", confirmed.Data!.ActionId);
+        var hiddenList = await runtime.ListAsync("user_a");
+        var stored = await store.GetByIdAsync("user_a", confirmed.Data.ActionId);
+
+        Assert.True(archived.Success);
+        Assert.True(archived.Data!.IsArchived);
+        Assert.Empty(hiddenList);
+        Assert.NotNull(stored);
+        Assert.True(stored!.IsArchived);
+        Assert.Equal("user_a", stored.ArchivedByUserId);
+        Assert.False(stored.Executed);
+        Assert.False(stored.WroteData);
+    }
+
+    [Fact]
+    public async Task ArchiveIsOwnerScoped()
+    {
+        var store = new InMemoryPendingActionStore();
+        var runtime = new Phase80PendingActionRuntime(store: store);
+        var created = await runtime.CreateAsync("user_a", new Phase80CreatePendingActionRequest(null, null));
+
+        var otherUserArchive = await runtime.ArchiveAsync("user_b", created.Data!.ActionId);
+        var stillVisible = await runtime.ListAsync("user_a");
+
+        Assert.False(otherUserArchive.Success);
+        Assert.Equal("not_found", otherUserArchive.Status);
+        Assert.Single(stillVisible);
+        Assert.False(stillVisible[0].IsArchived);
+    }
+
+    [Fact]
     public async Task EndpointIgnoresBodyUserIdAndUsesAuthContext()
     {
         var services = BuildServices();

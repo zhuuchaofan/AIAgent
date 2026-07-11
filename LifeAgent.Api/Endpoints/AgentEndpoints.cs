@@ -45,6 +45,10 @@ public static class AgentEndpoints
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
 
+        app.MapPost("/api/agent/pending-actions/{actionId}/archive", ArchivePhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
         // Compatibility aliases for the Phase 8 preview deployment.
         // These routes hit the same Personal Agent v2 runtime and store.
         // They remain separate from the
@@ -63,6 +67,10 @@ public static class AgentEndpoints
             .RequireRateLimiting("auth-user");
 
         app.MapPost("/api/agent/pending-actions/demo/{actionId}/cancel", CancelPhase80PendingActionAsync)
+            .WithTags("agent")
+            .RequireRateLimiting("auth-user");
+
+        app.MapPost("/api/agent/pending-actions/demo/{actionId}/archive", ArchivePhase80PendingActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
     }
@@ -163,6 +171,22 @@ public static class AgentEndpoints
         return ToPhase80HttpResult(await httpContext.RequestServices
             .GetRequiredService<Phase80PendingActionRuntime>()
             .CancelAsync(userId, actionId, cancellationToken));
+    }
+
+    public static async Task<IResult> ArchivePhase80PendingActionAsync(
+        HttpContext httpContext,
+        string actionId,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = httpContext.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
+        }
+
+        return ToPhase80HttpResult(await httpContext.RequestServices
+            .GetRequiredService<Phase80PendingActionRuntime>()
+            .ArchiveAsync(userId, actionId, cancellationToken));
     }
 
     private static IResult ToPhase80HttpResult(Phase80PendingActionResult result)

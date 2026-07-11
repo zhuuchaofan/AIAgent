@@ -119,6 +119,35 @@ public sealed class Phase80PendingActionRuntime
         return records.Select(ToView).ToArray();
     }
 
+    public async Task<Phase80PendingActionResult> ArchiveAsync(
+        string userId,
+        string actionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Phase80PendingActionResult.Fail("unauthorized", "User ID is missing from security context.");
+        }
+
+        var archived = await _store.ArchiveAsync(
+            userId,
+            actionId,
+            auditEventRef: $"phase8_audit_{actionId}_archived",
+            cancellationToken);
+
+        if (!archived.Success || archived.Record is null)
+        {
+            return Phase80PendingActionResult.Fail(
+                archived.Status,
+                archived.Message ?? "Pending action could not be hidden.");
+        }
+
+        return Phase80PendingActionResult.Ok(
+            archived.Record.Status,
+            "已隐藏该历史记录；没有删除 Firestore 文档。",
+            ToView(archived.Record));
+    }
+
     public Phase80PendingActionResult Confirm(string userId, string actionId)
     {
         return ConfirmAsync(userId, actionId).GetAwaiter().GetResult();
@@ -295,6 +324,7 @@ public sealed class Phase80PendingActionRuntime
             SafetyMode: _safetyMode,
             LegacyConfirmEndpointUsed: false,
             RealWritePath: false,
+            IsArchived: record.IsArchived,
             Message: status switch
             {
                 Confirmed => "已确认，但未执行",
@@ -371,6 +401,7 @@ public sealed record Phase80PendingActionView(
     string SafetyMode,
     bool LegacyConfirmEndpointUsed,
     bool RealWritePath,
+    bool IsArchived,
     string Message);
 
 public sealed record Phase80PendingActionResult(

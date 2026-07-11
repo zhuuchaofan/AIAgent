@@ -60,7 +60,8 @@ public sealed record PendingActionQuery(
     string? ConfirmationId = null,
     string? TraceId = null,
     string? IdempotencyKeyHash = null,
-    bool ActiveOnly = false);
+    bool ActiveOnly = false,
+    bool IncludeArchived = false);
 
 internal static class PendingActionCreateRequestValidator
 {

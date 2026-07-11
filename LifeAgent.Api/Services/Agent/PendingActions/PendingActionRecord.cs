@@ -32,6 +32,9 @@ public sealed record PendingActionRecord
     public string SchemaVersion { get; init; } = "phase7.9.pending_action.v1";
     public bool WroteData { get; init; }
     public bool Executed { get; init; }
+    public bool IsArchived { get; init; }
+    public DateTimeOffset? ArchivedAt { get; init; }
+    public string? ArchivedByUserId { get; init; }
 
     public PendingActionClientView ToClientView()
     {
@@ -46,7 +49,8 @@ public sealed record PendingActionRecord
             BlockedReason,
             TraceId,
             WroteData,
-            Executed);
+            Executed,
+            IsArchived);
     }
 }
 
@@ -61,4 +65,5 @@ public sealed record PendingActionClientView(
     string? BlockedReason,
     string TraceId,
     bool WroteData,
-    bool Executed);
+    bool Executed,
+    bool IsArchived);
