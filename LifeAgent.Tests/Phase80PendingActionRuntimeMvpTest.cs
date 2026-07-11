@@ -62,6 +62,32 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void ConfirmUsesTypeSpecificPreviewMessagesWithoutWrites()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+        var lifeRecord = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest("生活记录：今天跑步三公里", "用户输入：今天跑步三公里", Phase80PendingActionRuntime.LifeRecordPreview));
+        var reminder = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest("提醒：明天九点交材料", "用户输入：明天九点提醒我交材料", Phase80PendingActionRuntime.ReminderPreview));
+
+        var confirmedLifeRecord = runtime.Confirm("user_a", lifeRecord.Data!.ActionId);
+        var confirmedReminder = runtime.Confirm("user_a", reminder.Data!.ActionId);
+
+        Assert.Contains("生活记录", confirmedLifeRecord.Message);
+        Assert.Contains("life_events", confirmedLifeRecord.Message);
+        Assert.Contains("提醒", confirmedReminder.Message);
+        Assert.Contains("reminders", confirmedReminder.Message);
+        Assert.False(confirmedLifeRecord.Data!.Executed);
+        Assert.False(confirmedLifeRecord.Data.WroteData);
+        Assert.False(confirmedLifeRecord.Data.RealWritePath);
+        Assert.False(confirmedReminder.Data!.Executed);
+        Assert.False(confirmedReminder.Data.WroteData);
+        Assert.False(confirmedReminder.Data.RealWritePath);
+    }
+
+    [Fact]
     public void ConfirmChangesStatusButDoesNotExecute()
     {
         var runtime = new Phase80PendingActionRuntime();

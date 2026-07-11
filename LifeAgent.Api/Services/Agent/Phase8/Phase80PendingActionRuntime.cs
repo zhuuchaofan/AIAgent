@@ -206,7 +206,7 @@ public sealed class Phase80PendingActionRuntime
 
         return Phase80PendingActionResult.Ok(
             Confirmed,
-            "已确认，但未执行；没有写入 Firestore，也没有执行真实 tool。",
+            ConfirmedPreviewMessage(updated.Record.ActionType),
             ToView(updated.Record));
     }
 
@@ -331,7 +331,7 @@ public sealed class Phase80PendingActionRuntime
             IsArchived: record.IsArchived,
             Message: status switch
             {
-                Confirmed => "已确认，但未执行",
+                Confirmed => ConfirmedPreviewMessage(record.ActionType),
                 Cancelled => "已取消",
                 Expired => "已过期，不能确认",
                 _ => "待确认"
@@ -367,6 +367,16 @@ public sealed class Phase80PendingActionRuntime
                value.Contains("到点", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("明天", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("后天", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ConfirmedPreviewMessage(string actionType)
+    {
+        return actionType switch
+        {
+            LifeRecordPreview => "已确认生活记录；当前仍未写入 life_events，也未执行真实操作。",
+            ReminderPreview => "已确认提醒；当前仍未写入 reminders，也未执行真实操作。",
+            _ => "已确认，但未执行；没有写入数据，也没有执行真实操作。"
+        };
     }
 
     private static string ToPhase80Status(string status)
