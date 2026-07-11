@@ -343,11 +343,46 @@ export function AgentPreview() {
 
       {expanded && (
         <div className="border-t border-zinc-800/50 p-5 space-y-5">
+          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs space-y-3">
+            <div>
+              <div className="text-zinc-100 font-semibold">想让 LifeOS 记住什么？</div>
+              <div className="text-zinc-500 mt-1">
+                先生成待确认动作，确认后仍只保存确认状态；不会写入 memories / life_events，也不会执行真实工具。
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(event) => setInputValue(event.target.value)}
+                disabled={loading}
+                placeholder="例如：提醒我七月十五号去取身份证"
+                className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={loading || !inputValue.trim()}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                生成待确认动作
+              </button>
+            </form>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-3 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span className="break-words [overflow-wrap:anywhere]">{error}</span>
+              </div>
+            )}
+          </div>
+
           <div className="bg-zinc-950/50 border border-zinc-800/60 rounded-2xl p-4 text-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="text-zinc-200 font-semibold">待确认动作与历史</div>
-                <div className="text-zinc-500 mt-1">创建、确认或取消 pending action；状态已持久化，确认仍不会执行真实工具</div>
+                <div className="text-zinc-500 mt-1">默认显示待处理和近期历史；旧测试记录可隐藏，不会硬删除</div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
@@ -378,48 +413,26 @@ export function AgentPreview() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-cyan-100 leading-relaxed">
-              当前 LifeOS Personal Home v1 已启用 Pending Action 持久化：刷新后可恢复历史状态。确认只代表“用户已确认”，不会写入 memories / life_events，也不会执行真实 tool action。
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-100 leading-relaxed">
+              历史已持久化，刷新后会保留。当前仍是安全预览：不写 memories / life_events，不执行真实工具。
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-[10px]">
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-100">
-                Pending actions persisted
+            <details className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-zinc-400">
+              <summary className="cursor-pointer select-none text-zinc-300 font-medium">安全详情</summary>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                <div>Pending actions persisted</div>
+                <div>Memories write disabled</div>
+                <div>Life events write disabled</div>
+                <div>Real tool execution disabled</div>
+                <div>Legacy confirm path not used</div>
+                {phase80Persistence && (
+                  <>
+                    <div>storeMode: <span className="font-mono">{phase80Persistence.storeMode}</span></div>
+                    <div>previewOnly: <span className="font-mono">{String(phase80Persistence.previewOnly)}</span></div>
+                  </>
+                )}
               </div>
-              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
-                Memories write disabled
-              </div>
-              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
-                Life events write disabled
-              </div>
-              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
-                Real tool execution disabled
-              </div>
-              <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2 text-zinc-300">
-                Legacy confirm path not used
-              </div>
-            </div>
-
-            {phase80Persistence && (
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[10px]">
-                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                  <span className="text-zinc-500">storeMode: </span>
-                  <span className="font-mono text-zinc-300">{phase80Persistence.storeMode}</span>
-                </div>
-                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                  <span className="text-zinc-500">firestorePersistence: </span>
-                  <span className="font-mono text-zinc-300">{String(phase80Persistence.firestorePersistenceEnabled)}</span>
-                </div>
-                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                  <span className="text-zinc-500">previewOnly: </span>
-                  <span className="font-mono text-zinc-300">{String(phase80Persistence.previewOnly)}</span>
-                </div>
-                <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                  <span className="text-zinc-500">safetyMode: </span>
-                  <span className="font-mono text-zinc-300 break-all">{phase80Persistence.safetyMode}</span>
-                </div>
-              </div>
-            )}
+            </details>
 
             {phase80Message && (
               <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3 text-zinc-300">
@@ -450,39 +463,25 @@ export function AgentPreview() {
                         <span className="text-zinc-200 font-medium">{action.title}</span>
                       </div>
                       <div className="text-zinc-400 leading-relaxed">{action.summary}</div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
-                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                          <span className="text-zinc-500">executed: </span>
-                          <span className="font-mono text-zinc-300">{String(action.executed)}</span>
-                        </div>
-                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                          <span className="text-zinc-500">wroteData: </span>
-                          <span className="font-mono text-zinc-300">{String(action.wroteData)}</span>
-                        </div>
-                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                          <span className="text-zinc-500">guard: </span>
-                          <span className="font-mono text-zinc-300 break-all">{action.guardDecision}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
-                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                          <span className="text-zinc-500">mode: </span>
-                          <span className="font-mono text-zinc-300 break-all">{action.safetyMode}</span>
-                        </div>
-                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                          <span className="text-zinc-500">legacyConfirm: </span>
-                          <span className="font-mono text-zinc-300">{String(action.legacyConfirmEndpointUsed)}</span>
-                        </div>
-                        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-2">
-                          <span className="text-zinc-500">realWritePath: </span>
-                          <span className="font-mono text-zinc-300">{String(action.realWritePath)}</span>
-                        </div>
-                      </div>
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 leading-relaxed">
-                        {action.message}
-                        {action.status === "confirmed" ? "；已确认，尚未执行。" : ""}
-                        <span className="block mt-1">confirmed != executed；当前为 preview-only 模式，不会写入 memories / life_events。</span>
+                        {action.status === "confirmed"
+                          ? "已确认，尚未执行。"
+                          : action.status === "cancelled"
+                            ? "已取消。"
+                            : action.status === "expired"
+                              ? "已过期。"
+                              : "等待你确认或取消。"}
                       </div>
+                      <details className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-[10px] text-zinc-400">
+                        <summary className="cursor-pointer select-none text-zinc-300">安全字段</summary>
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>executed: <span className="font-mono">{String(action.executed)}</span></div>
+                          <div>wroteData: <span className="font-mono">{String(action.wroteData)}</span></div>
+                          <div>legacyConfirm: <span className="font-mono">{String(action.legacyConfirmEndpointUsed)}</span></div>
+                          <div>realWritePath: <span className="font-mono">{String(action.realWritePath)}</span></div>
+                          <div className="sm:col-span-2">guard: <span className="font-mono break-all">{action.guardDecision}</span></div>
+                        </div>
+                      </details>
                       {pending ? (
                         <div className="flex flex-col sm:flex-row gap-2">
                           <button
@@ -530,41 +529,6 @@ export function AgentPreview() {
               </div>
             ) : (
               <div className="text-zinc-500">还没有待确认动作。生成后可确认或取消，确认后仍不会执行。</div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/40 p-4 text-xs space-y-3">
-            <div>
-              <div className="text-zinc-200 font-semibold">从一句话创建待确认动作</div>
-              <div className="text-zinc-500 mt-1">
-                这里接入当前 Personal Home 主线：/api/agent/pending-actions。发送后会生成 pending action，不调用旧 /api/agent/confirm。
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(event) => setInputValue(event.target.value)}
-                disabled={loading}
-                placeholder="例如：提醒我七月十五号去取身份证"
-                className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={loading || !inputValue.trim()}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                生成待确认动作
-              </button>
-            </form>
-
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-3 text-xs flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span className="break-words [overflow-wrap:anywhere]">{error}</span>
-              </div>
             )}
           </div>
 
