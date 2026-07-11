@@ -63,6 +63,8 @@ public sealed class Phase80PendingActionRuntime
             : request.Summary.Trim();
         var route = Phase80PersonalHomeIntentRouter.Route(title, summary, request?.ActionType);
         var actionType = route.ActionType;
+        var confirmPlan = ResolveConfirmExecutionPlan(actionType, _confirmWritePolicy);
+        var memoryPlan = ResolveMemoryPlan(actionType);
 
         var actionId = $"phase8_action_{Guid.NewGuid():N}";
         var created = await _store.CreateAsync(new PendingActionCreateRequest(
@@ -91,7 +93,16 @@ public sealed class Phase80PendingActionRuntime
                 ["actionType"] = actionType,
                 ["intent"] = route.Intent,
                 ["disposition"] = route.Disposition,
-                ["requiresPendingAction"] = route.RequiresPendingAction.ToString()
+                ["requiresPendingAction"] = route.RequiresPendingAction.ToString(),
+                ["confirmTarget"] = confirmPlan.Target,
+                ["confirmWriteEnabled"] = confirmPlan.WriteEnabled.ToString(),
+                ["memoryCandidateOnly"] = confirmPlan.MemoryCandidateOnly.ToString(),
+                ["confirmPlanReason"] = confirmPlan.Reason,
+                ["memoryTarget"] = memoryPlan.Target,
+                ["memoryWriteEnabled"] = memoryPlan.WriteEnabled.ToString(),
+                ["memoryRequiresDedupe"] = memoryPlan.RequiresDedupe.ToString(),
+                ["memoryRequiresMerge"] = memoryPlan.RequiresMerge.ToString(),
+                ["memoryRequiresConfirmation"] = memoryPlan.RequiresConfirmation.ToString()
             },
             RedactionMetadata: new Dictionary<string, string>
             {
@@ -322,8 +333,8 @@ public sealed class Phase80PendingActionRuntime
     private Phase80PendingActionView ToView(PendingActionRecord record)
     {
         var status = ToPhase80Status(record.Status);
-        var confirmPlan = ResolveConfirmExecutionPlan(record.ActionType, _confirmWritePolicy);
-        var memoryPlan = ResolveMemoryPlan(record.ActionType);
+        var confirmPlan = ResolveStoredConfirmPlan(record);
+        var memoryPlan = ResolveStoredMemoryPlan(record);
         var route = ResolveStoredRoute(record);
         return new Phase80PendingActionView(
             ActionId: record.PendingActionId,
@@ -396,6 +407,31 @@ public sealed class Phase80PendingActionRuntime
         return record.RedactionMetadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : fallback;
+    }
+
+    private Phase80ConfirmExecutionPlan ResolveStoredConfirmPlan(PendingActionRecord record)
+    {
+        var fallback = ResolveConfirmExecutionPlan(record.ActionType, _confirmWritePolicy);
+        return fallback with
+        {
+            Target = ReadPayload(record, "confirmTarget", fallback.Target),
+            WriteEnabled = ReadBoolPayload(record, "confirmWriteEnabled", fallback.WriteEnabled),
+            MemoryCandidateOnly = ReadBoolPayload(record, "memoryCandidateOnly", fallback.MemoryCandidateOnly),
+            Reason = ReadPayload(record, "confirmPlanReason", fallback.Reason)
+        };
+    }
+
+    private static Phase80MemoryPlan ResolveStoredMemoryPlan(PendingActionRecord record)
+    {
+        var fallback = ResolveMemoryPlan(record.ActionType);
+        return fallback with
+        {
+            Target = ReadPayload(record, "memoryTarget", fallback.Target),
+            WriteEnabled = ReadBoolPayload(record, "memoryWriteEnabled", fallback.WriteEnabled),
+            RequiresDedupe = ReadBoolPayload(record, "memoryRequiresDedupe", fallback.RequiresDedupe),
+            RequiresMerge = ReadBoolPayload(record, "memoryRequiresMerge", fallback.RequiresMerge),
+            RequiresConfirmation = ReadBoolPayload(record, "memoryRequiresConfirmation", fallback.RequiresConfirmation)
+        };
     }
 
     private static bool ReadBoolPayload(PendingActionRecord record, string key, bool fallback)

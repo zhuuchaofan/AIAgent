@@ -230,6 +230,37 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task ConfirmAndMemoryPlansAreStoredAsCreationSnapshots()
+    {
+        var store = new InMemoryPendingActionStore();
+        var betaRuntime = new Phase80PendingActionRuntime(
+            store: store,
+            confirmWritePolicy: new Phase80ConfirmWritePolicy(
+                AllowLifeEventWrites: true,
+                AllowReminderWrites: false));
+        var created = await betaRuntime.CreateAsync(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "生活记录：今天写了计划",
+                "用户输入：今天写了计划",
+                Phase80PendingActionRuntime.LifeRecordPreview));
+        var defaultRuntime = new Phase80PendingActionRuntime(store: store);
+
+        var restored = await defaultRuntime.ListAsync("user_a");
+
+        Assert.Single(restored);
+        Assert.Equal(created.Data!.ActionId, restored[0].ActionId);
+        Assert.True(restored[0].ConfirmWriteEnabled);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, restored[0].ConfirmTarget);
+        Assert.Contains("allowed_by_policy", restored[0].ConfirmPlanReason);
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, restored[0].MemoryTarget);
+        Assert.False(restored[0].MemoryWriteEnabled);
+        Assert.True(restored[0].MemoryRequiresDedupe);
+        Assert.True(restored[0].MemoryRequiresMerge);
+        Assert.True(restored[0].MemoryRequiresConfirmation);
+    }
+
+    [Fact]
     public void ResolveMemoryPlanCreatesCandidateOnlyWithoutMemoryWrites()
     {
         var lifeRecordMemory = Phase80PendingActionRuntime.ResolveMemoryPlan(Phase80PendingActionRuntime.LifeRecordPreview);
