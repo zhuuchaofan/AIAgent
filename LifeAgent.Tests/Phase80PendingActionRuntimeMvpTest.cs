@@ -66,6 +66,28 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void PersonalHomeIntentRouterKeepsSingleInputPendingConfirmationFlow()
+    {
+        var lifeRecord = Phase80PersonalHomeIntentRouter.Route("今天跑步三公里", "感觉还不错", null);
+        var reminder = Phase80PersonalHomeIntentRouter.Route("提醒我", "明天上午九点交材料", null);
+        var explicitLifeRecord = Phase80PersonalHomeIntentRouter.Route(
+            "提醒我也可以是一条记录",
+            "用户明确选择生活记录",
+            Phase80PendingActionRuntime.LifeRecordPreview);
+
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LifeRecordIntent, lifeRecord.Intent);
+        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, lifeRecord.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ReminderIntent, reminder.Intent);
+        Assert.Equal(Phase80PendingActionRuntime.ReminderPreview, reminder.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LifeRecordIntent, explicitLifeRecord.Intent);
+        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, explicitLifeRecord.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, lifeRecord.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, reminder.Disposition);
+        Assert.Equal("low_preview_only", lifeRecord.RiskLevel);
+        Assert.Equal("low_preview_only", reminder.RiskLevel);
+    }
+
+    [Fact]
     public void ConfirmUsesTypeSpecificPreviewMessagesWithoutWrites()
     {
         var runtime = new Phase80PendingActionRuntime();
