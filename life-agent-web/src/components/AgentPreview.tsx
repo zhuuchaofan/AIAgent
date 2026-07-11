@@ -85,6 +85,10 @@ interface Phase80PendingAction {
   legacyConfirmEndpointUsed: boolean;
   realWritePath: boolean;
   isArchived?: boolean;
+  confirmTarget?: string;
+  confirmWriteEnabled?: boolean;
+  memoryCandidateOnly?: boolean;
+  confirmPlanReason?: string;
   message: string;
 }
 
@@ -391,6 +395,10 @@ export function AgentPreview() {
                 <div>legacyConfirm: <span className="font-mono">false</span></div>
                 <div>realWritePath: <span className="font-mono">false</span></div>
                 <div>guard: <span className="font-mono">preview_only</span></div>
+                <div>confirmTarget: <span className="font-mono">{latestPendingAction?.confirmTarget ?? "none"}</span></div>
+                <div>confirmWriteEnabled: <span className="font-mono">{String(latestPendingAction?.confirmWriteEnabled ?? false)}</span></div>
+                <div>memoryCandidateOnly: <span className="font-mono">{String(latestPendingAction?.memoryCandidateOnly ?? true)}</span></div>
+                <div className="sm:col-span-2 break-words">confirmPlan: <span className="font-mono">{latestPendingAction?.confirmPlanReason ?? "preview_only"}</span></div>
                 {phase80Persistence && (
                   <>
                     <div>storeMode: <span className="font-mono">{phase80Persistence.storeMode}</span></div>

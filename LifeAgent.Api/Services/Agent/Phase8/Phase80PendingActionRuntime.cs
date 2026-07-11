@@ -14,6 +14,9 @@ public sealed class Phase80PendingActionRuntime
     public const string ReminderPreview = "reminder_preview";
     public const string SafetyMode = "personal_agent_v2_in_memory_preview_only";
     public const string GuardDecision = "deny_all_no_real_execution";
+    public const string ConfirmTargetLifeEvents = "life_events";
+    public const string ConfirmTargetReminders = "reminders";
+    public const string ConfirmTargetNone = "none";
 
     private readonly IPendingActionStore _store;
     private readonly TimeProvider _timeProvider;
@@ -310,6 +313,7 @@ public sealed class Phase80PendingActionRuntime
     private Phase80PendingActionView ToView(PendingActionRecord record)
     {
         var status = ToPhase80Status(record.Status);
+        var confirmPlan = ResolveConfirmExecutionPlan(record.ActionType);
         return new Phase80PendingActionView(
             ActionId: record.PendingActionId,
             Status: status,
@@ -329,6 +333,10 @@ public sealed class Phase80PendingActionRuntime
             LegacyConfirmEndpointUsed: false,
             RealWritePath: false,
             IsArchived: record.IsArchived,
+            ConfirmTarget: confirmPlan.Target,
+            ConfirmWriteEnabled: confirmPlan.WriteEnabled,
+            MemoryCandidateOnly: confirmPlan.MemoryCandidateOnly,
+            ConfirmPlanReason: confirmPlan.Reason,
             Message: status switch
             {
                 Confirmed => ConfirmedPreviewMessage(record.ActionType),
@@ -376,6 +384,28 @@ public sealed class Phase80PendingActionRuntime
             LifeRecordPreview => "已确认生活记录；当前仍未写入 life_events，也未执行真实操作。",
             ReminderPreview => "已确认提醒；当前仍未写入 reminders，也未执行真实操作。",
             _ => "已确认，但未执行；没有写入数据，也没有执行真实操作。"
+        };
+    }
+
+    internal static Phase80ConfirmExecutionPlan ResolveConfirmExecutionPlan(string actionType)
+    {
+        return actionType switch
+        {
+            LifeRecordPreview => new Phase80ConfirmExecutionPlan(
+                Target: ConfirmTargetLifeEvents,
+                WriteEnabled: false,
+                MemoryCandidateOnly: true,
+                Reason: "life_record_confirm_write_disabled_until_beta_gate"),
+            ReminderPreview => new Phase80ConfirmExecutionPlan(
+                Target: ConfirmTargetReminders,
+                WriteEnabled: false,
+                MemoryCandidateOnly: true,
+                Reason: "reminder_confirm_write_disabled_until_beta_gate"),
+            _ => new Phase80ConfirmExecutionPlan(
+                Target: ConfirmTargetNone,
+                WriteEnabled: false,
+                MemoryCandidateOnly: true,
+                Reason: "unknown_action_type_preview_only")
         };
     }
 
@@ -440,7 +470,17 @@ public sealed record Phase80PendingActionView(
     bool LegacyConfirmEndpointUsed,
     bool RealWritePath,
     bool IsArchived,
+    string ConfirmTarget,
+    bool ConfirmWriteEnabled,
+    bool MemoryCandidateOnly,
+    string ConfirmPlanReason,
     string Message);
+
+public sealed record Phase80ConfirmExecutionPlan(
+    string Target,
+    bool WriteEnabled,
+    bool MemoryCandidateOnly,
+    string Reason);
 
 public sealed record Phase80PendingActionResult(
     bool Success,

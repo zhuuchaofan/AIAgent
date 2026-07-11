@@ -43,6 +43,10 @@ public class Phase80PendingActionRuntimeMvpTest
 
         Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, lifeRecord.Data.ActionType);
         Assert.Equal(Phase80PendingActionRuntime.ReminderPreview, reminder.Data!.ActionType);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecord.Data.ConfirmTarget);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminder.Data.ConfirmTarget);
+        Assert.False(lifeRecord.Data.ConfirmWriteEnabled);
+        Assert.False(reminder.Data.ConfirmWriteEnabled);
         Assert.False(confirmed.Data!.Executed);
         Assert.False(confirmed.Data.WroteData);
         Assert.False(confirmed.Data.RealWritePath);
@@ -79,12 +83,34 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Contains("life_events", confirmedLifeRecord.Message);
         Assert.Contains("提醒", confirmedReminder.Message);
         Assert.Contains("reminders", confirmedReminder.Message);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, confirmedLifeRecord.Data!.ConfirmTarget);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, confirmedReminder.Data!.ConfirmTarget);
+        Assert.False(confirmedLifeRecord.Data.ConfirmWriteEnabled);
+        Assert.False(confirmedReminder.Data.ConfirmWriteEnabled);
+        Assert.True(confirmedLifeRecord.Data.MemoryCandidateOnly);
+        Assert.True(confirmedReminder.Data.MemoryCandidateOnly);
         Assert.False(confirmedLifeRecord.Data!.Executed);
         Assert.False(confirmedLifeRecord.Data.WroteData);
         Assert.False(confirmedLifeRecord.Data.RealWritePath);
-        Assert.False(confirmedReminder.Data!.Executed);
+        Assert.False(confirmedReminder.Data.Executed);
         Assert.False(confirmedReminder.Data.WroteData);
         Assert.False(confirmedReminder.Data.RealWritePath);
+    }
+
+    [Fact]
+    public void ResolveConfirmExecutionPlanKeepsBetaWriteTargetsDefaultOff()
+    {
+        var lifeRecordPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.LifeRecordPreview);
+        var reminderPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.ReminderPreview);
+
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecordPlan.Target);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminderPlan.Target);
+        Assert.False(lifeRecordPlan.WriteEnabled);
+        Assert.False(reminderPlan.WriteEnabled);
+        Assert.True(lifeRecordPlan.MemoryCandidateOnly);
+        Assert.True(reminderPlan.MemoryCandidateOnly);
+        Assert.Contains("beta_gate", lifeRecordPlan.Reason);
+        Assert.Contains("beta_gate", reminderPlan.Reason);
     }
 
     [Fact]
