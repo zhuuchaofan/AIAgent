@@ -8,7 +8,6 @@ import {
   confirmPhase80PendingAction,
   createPhase80PendingAction,
   listPhase80PendingActions,
-  runAgentPreview,
 } from "@/app/actions/knowledge";
 import { Markdown } from "./Markdown";
 
@@ -42,12 +41,6 @@ interface AgentRunData {
   toolCalls?: AgentToolCall[];
   citations?: CitationNode[];
   citationIntegrity?: string | null;
-}
-
-interface AgentRunResponse {
-  success: boolean;
-  message?: string;
-  data?: AgentRunData;
 }
 
 interface AgentProposedAction {
@@ -184,21 +177,25 @@ export function AgentPreview() {
     setLoading(true);
     setError(null);
     setConfirmationResult(null);
+    setPhase80Message(null);
 
     try {
-      const res = await runAgentPreview(message, "Asia/Shanghai") as AgentRunResponse;
+      const res = await createPhase80PendingAction(
+        `待确认：${message}`,
+        `用户输入：${message}。该动作已进入 LifeOS Personal Home pending action 主线；确认后仍不会写入 memories / life_events，也不会执行真实 tool action。`
+      ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
-        setResult(null);
-        setError(res.message || "个人助手返回异常");
+        setPhase80Message(res.message || "生成待确认动作失败");
         return;
       }
 
-      setNowMs(Date.now());
-      setResult(res.data);
+      setResult(null);
+      setInputValue("");
+      setPhase80Actions(prev => [res.data!, ...prev.filter(action => action.actionId !== res.data!.actionId)]);
+      setPhase80Message(res.message || "已根据输入生成待确认动作");
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      setResult(null);
-      setError(errMsg || "个人助手请求失败");
+      setPhase80Message(errMsg || "生成待确认动作失败");
     } finally {
       setLoading(false);
     }
@@ -477,9 +474,9 @@ export function AgentPreview() {
 
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/40 p-4 text-xs space-y-3">
             <div>
-              <div className="text-zinc-200 font-semibold">技术诊断：只读 Agent / RAG Preview</div>
+              <div className="text-zinc-200 font-semibold">从一句话创建待确认动作</div>
               <div className="text-zinc-500 mt-1">
-                该区域保留用于观察旧 Agent Preview 工具调用和引用来源，不是 Personal Home 的 pending action 主线；主线不会调用旧 /api/agent/confirm。
+                这里接入当前 Personal Home 主线：/api/agent/pending-actions。发送后会生成 pending action，不调用旧 /api/agent/confirm。
               </div>
             </div>
 
@@ -489,7 +486,7 @@ export function AgentPreview() {
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
                 disabled={loading}
-                placeholder="技术诊断：列出我的文档"
+                placeholder="例如：提醒我七月十五号去取身份证"
                 className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
               />
               <button
@@ -498,7 +495,7 @@ export function AgentPreview() {
                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                运行技术预览
+                生成待确认动作
               </button>
             </form>
 

@@ -34,6 +34,9 @@ confirmation, cancellation, and refresh persistence.
   labelled it as technical diagnostics.
 - Clarified in the UI that the diagnostics area is not the Personal Home
   pending action mainline.
+- Reconnected the free-text Personal Home input to the current
+  `/api/agent/pending-actions` creation path so it no longer calls the legacy
+  Agent Preview run endpoint or leaves a click-with-no-feedback entry.
 - Added backend comments marking the legacy `/api/agent/run`,
   `/api/agent/confirm`, `PendingAgentAction`, and `IPendingAgentActionStore`
   surface as legacy Agent Preview support.
@@ -84,6 +87,11 @@ The visible product surface remains:
 
 `Agent Preview` now appears only as a technical diagnostics concept for the old
 RAG/tool-call preview area.
+
+The free-text input now creates a Personal Home pending action through
+`/api/agent/pending-actions`. Example input such as
+`提醒我七月十五号去取身份证` becomes a pending action card that can be confirmed
+or cancelled. It does not call `/api/agent/run` or `/api/agent/confirm`.
 
 ## Documentation Positioning
 
@@ -139,6 +147,20 @@ Recommended next step:
    - Cloud Run env
    - authenticated smoke
    - rollback plan
+
+## Follow-up: Test Record Cleanup
+
+Firestore pending action history is intentionally persistent, so old preview
+and test actions may remain visible after refresh. This is expected behavior for
+the current release.
+
+Recommended follow-up before broader daily use:
+
+- add an archive or hide action for old pending action records
+- keep archive/delete owner-scoped under
+  `users/{userId}/pendingActions/{pendingActionId}`
+- keep destructive cleanup out of the initial Memory Engine v1 path
+- require a separate authenticated smoke before enabling any bulk cleanup
 
 ## Validation
 
