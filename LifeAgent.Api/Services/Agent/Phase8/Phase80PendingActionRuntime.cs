@@ -90,7 +90,8 @@ public sealed class Phase80PendingActionRuntime
                 ["summary"] = summary,
                 ["actionType"] = actionType,
                 ["intent"] = route.Intent,
-                ["disposition"] = route.Disposition
+                ["disposition"] = route.Disposition,
+                ["requiresPendingAction"] = route.RequiresPendingAction.ToString()
             },
             RedactionMetadata: new Dictionary<string, string>
             {
@@ -333,6 +334,7 @@ public sealed class Phase80PendingActionRuntime
             Intent: route.Intent,
             Disposition: route.Disposition,
             RiskLevel: route.RiskLevel,
+            RequiresPendingAction: route.RequiresPendingAction,
             CreatedAt: record.CreatedAt,
             UpdatedAt: record.UpdatedAt,
             ExpiresAt: record.ExpiresAt,
@@ -382,8 +384,16 @@ public sealed class Phase80PendingActionRuntime
         {
             Intent = ReadPayload(record, "intent", fallback.Intent),
             Disposition = ReadPayload(record, "disposition", fallback.Disposition),
-            RiskLevel = string.IsNullOrWhiteSpace(record.RiskLevel) ? fallback.RiskLevel : record.RiskLevel
+            RiskLevel = string.IsNullOrWhiteSpace(record.RiskLevel) ? fallback.RiskLevel : record.RiskLevel,
+            RequiresPendingAction = ReadBoolPayload(record, "requiresPendingAction", fallback.RequiresPendingAction)
         };
+    }
+
+    private static bool ReadBoolPayload(PendingActionRecord record, string key, bool fallback)
+    {
+        return record.Payload.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
+            ? parsed
+            : fallback;
     }
 
     private static string ConfirmedPreviewMessage(string actionType)
@@ -495,6 +505,7 @@ internal static class Phase80PersonalHomeIntentRouter
             ActionType: actionType,
             Disposition: policy.Disposition,
             RiskLevel: policy.RiskLevel,
+            RequiresPendingAction: policy.RequiresPendingAction,
             Reason: string.IsNullOrWhiteSpace(requestedActionType)
                 ? "inferred_from_home_input"
                 : "requested_action_type");
@@ -540,27 +551,35 @@ internal sealed record Phase80PersonalHomeRoutingPolicy(bool AllowLowRiskDirectS
         {
             Phase80PersonalHomeIntentRouter.LifeRecordIntent when AllowLowRiskDirectSave => new Phase80PersonalHomeRoutingDecision(
                 Disposition: Phase80PersonalHomeIntentRouter.DirectSaveDisposition,
-                RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk),
+                RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk,
+                RequiresPendingAction: false),
             Phase80PersonalHomeIntentRouter.LifeRecordIntent => new Phase80PersonalHomeRoutingDecision(
                 Disposition: Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition,
-                RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk),
+                RiskLevel: Phase80PersonalHomeIntentRouter.LowRisk,
+                RequiresPendingAction: true),
             Phase80PersonalHomeIntentRouter.ReminderIntent => new Phase80PersonalHomeRoutingDecision(
                 Disposition: Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition,
-                RiskLevel: Phase80PersonalHomeIntentRouter.MediumRisk),
+                RiskLevel: Phase80PersonalHomeIntentRouter.MediumRisk,
+                RequiresPendingAction: true),
             _ => new Phase80PersonalHomeRoutingDecision(
                 Disposition: Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition,
-                RiskLevel: Phase80PersonalHomeIntentRouter.HighRisk)
+                RiskLevel: Phase80PersonalHomeIntentRouter.HighRisk,
+                RequiresPendingAction: true)
         };
     }
 }
 
-internal sealed record Phase80PersonalHomeRoutingDecision(string Disposition, string RiskLevel);
+internal sealed record Phase80PersonalHomeRoutingDecision(
+    string Disposition,
+    string RiskLevel,
+    bool RequiresPendingAction);
 
 internal sealed record Phase80PersonalHomeIntentRoute(
     string Intent,
     string ActionType,
     string Disposition,
     string RiskLevel,
+    bool RequiresPendingAction,
     string Reason);
 
 public sealed record Phase80CreatePendingActionRequest(string? Title, string? Summary, string? ActionType = null);
@@ -591,6 +610,7 @@ public sealed record Phase80PendingActionView(
     string Intent,
     string Disposition,
     string RiskLevel,
+    bool RequiresPendingAction,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset ExpiresAt,

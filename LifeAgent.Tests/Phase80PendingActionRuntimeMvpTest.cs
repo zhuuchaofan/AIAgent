@@ -49,6 +49,8 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, reminder.Data.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, lifeRecord.Data.RiskLevel);
         Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, reminder.Data.RiskLevel);
+        Assert.True(lifeRecord.Data.RequiresPendingAction);
+        Assert.True(reminder.Data.RequiresPendingAction);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecord.Data.ConfirmTarget);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminder.Data.ConfirmTarget);
         Assert.False(lifeRecord.Data.ConfirmWriteEnabled);
@@ -106,12 +108,16 @@ public class Phase80PendingActionRuntimeMvpTest
 
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, currentLifeRecord.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, currentLifeRecord.RiskLevel);
+        Assert.True(currentLifeRecord.RequiresPendingAction);
         Assert.Equal(Phase80PersonalHomeIntentRouter.DirectSaveDisposition, betaLifeRecord.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, betaLifeRecord.RiskLevel);
+        Assert.False(betaLifeRecord.RequiresPendingAction);
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, reminder.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, reminder.RiskLevel);
+        Assert.True(reminder.RequiresPendingAction);
         Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, highRisk.Disposition);
         Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, highRisk.RiskLevel);
+        Assert.True(highRisk.RequiresPendingAction);
     }
 
     [Fact]
@@ -386,6 +392,7 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.LifeRecordIntent, ReadString(confirmResult.Body, "data", "intent"));
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, ReadString(confirmResult.Body, "data", "disposition"));
         Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, ReadString(confirmResult.Body, "data", "riskLevel"));
+        Assert.True(ReadBool(confirmResult.Body, "data", "requiresPendingAction"));
         Assert.False(ReadBool(confirmResult.Body, "data", "executed"));
         Assert.False(ReadBool(confirmResult.Body, "data", "wroteData"));
         Assert.False(ReadBool(confirmResult.Body, "data", "executionReady"));

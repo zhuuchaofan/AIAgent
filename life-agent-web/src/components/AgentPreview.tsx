@@ -76,6 +76,7 @@ interface Phase80PendingAction {
   intent?: string;
   disposition?: string;
   riskLevel?: string;
+  requiresPendingAction?: boolean;
   createdAt: string;
   expiresAt: string;
   confirmedAt?: string | null;
@@ -406,6 +407,7 @@ export function AgentPreview() {
                 <div>intent: <span className="font-mono">{latestPendingAction?.intent ?? "life_record"}</span></div>
                 <div>disposition: <span className="font-mono">{latestPendingAction?.disposition ?? "pending_confirmation"}</span></div>
                 <div>riskLevel: <span className="font-mono">{latestPendingAction?.riskLevel ?? "low_record"}</span></div>
+                <div>requiresPendingAction: <span className="font-mono">{String(latestPendingAction?.requiresPendingAction ?? true)}</span></div>
                 <div>confirmTarget: <span className="font-mono">{latestPendingAction?.confirmTarget ?? "none"}</span></div>
                 <div>confirmWriteEnabled: <span className="font-mono">{String(latestPendingAction?.confirmWriteEnabled ?? false)}</span></div>
                 <div>memoryCandidateOnly: <span className="font-mono">{String(latestPendingAction?.memoryCandidateOnly ?? true)}</span></div>
