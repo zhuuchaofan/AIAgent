@@ -10,6 +10,8 @@ public sealed class Phase80PendingActionRuntime
     public const string Confirmed = "confirmed";
     public const string Cancelled = "cancelled";
     public const string Expired = "expired";
+    public const string LifeRecordPreview = "life_record_preview";
+    public const string ReminderPreview = "reminder_preview";
     public const string SafetyMode = "personal_agent_v2_in_memory_preview_only";
     public const string GuardDecision = "deny_all_no_real_execution";
 
@@ -52,6 +54,7 @@ public sealed class Phase80PendingActionRuntime
         var summary = string.IsNullOrWhiteSpace(request?.Summary)
             ? "Phase 8.0 fake-first 待确认动作：确认后只改变状态，不写入 Firestore，也不执行真实 tool。"
             : request.Summary.Trim();
+        var actionType = NormalizeActionType(request?.ActionType, $"{title} {summary}");
 
         var actionId = $"phase8_action_{Guid.NewGuid():N}";
         var created = await _store.CreateAsync(new PendingActionCreateRequest(
@@ -60,7 +63,7 @@ public sealed class Phase80PendingActionRuntime
             ToolId: "phase8_preview_tool",
             ToolVersion: "1.0",
             AdapterId: "phase8_preview_adapter",
-            ActionType: "phase8_fake_pending_action",
+            ActionType: actionType,
             UserSubjectRef: userId,
             SessionSubjectRef: "agent_preview_default_session",
             RiskLevel: "low_preview_only",
@@ -76,7 +79,8 @@ public sealed class Phase80PendingActionRuntime
             Payload: new Dictionary<string, string>
             {
                 ["title"] = title,
-                ["summary"] = summary
+                ["summary"] = summary,
+                ["actionType"] = actionType
             },
             RedactionMetadata: new Dictionary<string, string>
             {
@@ -341,6 +345,30 @@ public sealed class Phase80PendingActionRuntime
             : fallback;
     }
 
+    private static string NormalizeActionType(string? actionType, string source)
+    {
+        if (string.Equals(actionType, LifeRecordPreview, StringComparison.OrdinalIgnoreCase))
+        {
+            return LifeRecordPreview;
+        }
+
+        if (string.Equals(actionType, ReminderPreview, StringComparison.OrdinalIgnoreCase))
+        {
+            return ReminderPreview;
+        }
+
+        return LooksLikeReminder(source) ? ReminderPreview : LifeRecordPreview;
+    }
+
+    private static bool LooksLikeReminder(string value)
+    {
+        return value.Contains("提醒", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("闹钟", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("到点", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("明天", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("后天", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ToPhase80Status(string status)
     {
         return status switch
@@ -364,7 +392,7 @@ public sealed class Phase80PendingActionRuntime
     }
 }
 
-public sealed record Phase80CreatePendingActionRequest(string? Title, string? Summary);
+public sealed record Phase80CreatePendingActionRequest(string? Title, string? Summary, string? ActionType = null);
 
 public sealed record Phase80PendingActionRecord(
     string ActionId,

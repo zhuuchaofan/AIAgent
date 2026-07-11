@@ -109,6 +109,27 @@ interface Phase80PersistenceMetadata {
   safetyMode: string;
 }
 
+const LIFE_RECORD_PREVIEW = "life_record_preview";
+const REMINDER_PREVIEW = "reminder_preview";
+
+function inferPreviewActionType(message: string): string {
+  return /提醒|闹钟|到点|明天|后天|下周|上午|下午|晚上|点/.test(message)
+    ? REMINDER_PREVIEW
+    : LIFE_RECORD_PREVIEW;
+}
+
+function actionTypeLabel(actionType: string): string {
+  if (actionType === REMINDER_PREVIEW) return "提醒";
+  if (actionType === LIFE_RECORD_PREVIEW) return "生活记录";
+  return "待确认";
+}
+
+function actionTypeClass(actionType: string): string {
+  if (actionType === REMINDER_PREVIEW) return "border-amber-500/30 text-amber-200 bg-amber-500/10";
+  if (actionType === LIFE_RECORD_PREVIEW) return "border-cyan-500/30 text-cyan-200 bg-cyan-500/10";
+  return "border-zinc-600/60 text-zinc-300 bg-zinc-800/50";
+}
+
 export function AgentPreview() {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -190,9 +211,12 @@ export function AgentPreview() {
     setPhase80Message(null);
 
     try {
+      const actionType = inferPreviewActionType(message);
+      const actionLabel = actionTypeLabel(actionType);
       const res = await createPhase80PendingAction(
-        `待确认：${message}`,
-        `用户输入：${message}。确认后仍不会执行真实操作。`
+        `${actionLabel}：${message}`,
+        `用户输入：${message}。类型：${actionLabel}。确认后仍不会执行真实操作。`,
+        actionType
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
         setPhase80Message(res.message?.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (res.message || "提交失败，请稍后再试。"));
@@ -300,7 +324,7 @@ export function AgentPreview() {
         <div className="p-5 space-y-5">
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs space-y-3">
             <div>
-              <div className="text-zinc-100 font-semibold">记录一件事，或创建一个提醒...</div>
+              <div className="text-zinc-100 font-semibold">记录生活，或创建一个提醒...</div>
               <div className="text-zinc-500 mt-1">当前不会执行真实操作。</div>
             </div>
 
@@ -310,7 +334,7 @@ export function AgentPreview() {
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
                 disabled={loading}
-                placeholder="记录一件事，或创建一个提醒..."
+                placeholder="记录生活，或创建一个提醒..."
                 className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
               />
               <button
@@ -397,6 +421,9 @@ export function AgentPreview() {
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
                           {phase80StatusLabel(action.status)}
                         </span>
+                        <span className={`px-2 py-0.5 rounded border ${actionTypeClass(action.actionType)}`}>
+                          {actionTypeLabel(action.actionType)}
+                        </span>
                         <span className="text-zinc-200 font-medium">最近一条待确认事项</span>
                       </div>
                       <div className="text-zinc-100 font-medium">{action.title}</div>
@@ -463,6 +490,9 @@ export function AgentPreview() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
                           {phase80StatusLabel(action.status)}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded border ${actionTypeClass(action.actionType)}`}>
+                          {actionTypeLabel(action.actionType)}
                         </span>
                         <span className="text-zinc-200 font-medium">{action.title}</span>
                       </div>

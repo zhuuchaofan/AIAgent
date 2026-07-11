@@ -29,6 +29,39 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void CreateKeepsPreviewActionTypeWithoutExecution()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+
+        var lifeRecord = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest("生活记录：今天跑步三公里", "用户输入：今天跑步三公里", Phase80PendingActionRuntime.LifeRecordPreview));
+        var reminder = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest("提醒：明天九点交材料", "用户输入：明天九点提醒我交材料", Phase80PendingActionRuntime.ReminderPreview));
+        var confirmed = runtime.Confirm("user_a", lifeRecord.Data!.ActionId);
+
+        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, lifeRecord.Data.ActionType);
+        Assert.Equal(Phase80PendingActionRuntime.ReminderPreview, reminder.Data!.ActionType);
+        Assert.False(confirmed.Data!.Executed);
+        Assert.False(confirmed.Data.WroteData);
+        Assert.False(confirmed.Data.RealWritePath);
+    }
+
+    [Fact]
+    public void CreateInfersReminderPreviewTypeWhenActionTypeIsMissing()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+
+        var result = runtime.Create("user_a", new Phase80CreatePendingActionRequest("提醒我", "明天上午九点提醒我交材料"));
+
+        Assert.True(result.Success);
+        Assert.Equal(Phase80PendingActionRuntime.ReminderPreview, result.Data!.ActionType);
+        Assert.False(result.Data.Executed);
+        Assert.False(result.Data.WroteData);
+    }
+
+    [Fact]
     public void ConfirmChangesStatusButDoesNotExecute()
     {
         var runtime = new Phase80PendingActionRuntime();

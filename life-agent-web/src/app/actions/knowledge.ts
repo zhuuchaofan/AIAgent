@@ -222,7 +222,7 @@ export async function confirmAgentAction(actionId: string, decision: "confirm" |
   }
 }
 
-export async function createPhase80PendingAction(title?: string, summary?: string) {
+export async function createPhase80PendingAction(title?: string, summary?: string, actionType?: string) {
   try {
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
@@ -236,6 +236,7 @@ export async function createPhase80PendingAction(title?: string, summary?: strin
       body: JSON.stringify({
         title,
         summary,
+        actionType,
       }),
       cache: "no-store",
     });
