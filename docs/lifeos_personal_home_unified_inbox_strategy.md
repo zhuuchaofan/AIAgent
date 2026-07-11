@@ -36,6 +36,94 @@ The current preview action types are:
 | 生活记录 | `life_record_preview` | Mark confirmed only |
 | 提醒 | `reminder_preview` | Mark confirmed only |
 
+## Current Implementation Model
+
+The current implementation has moved beyond a plain preview form, but remains
+preview-only by default.
+
+### Intent routing
+
+Personal Home input now goes through an internal intent router before the
+pending action is stored.
+
+Current routed intents:
+
+| Intent | Current source | Risk | Disposition | Pending action |
+|---|---|---|---|---|
+| `life_record` | default non-reminder home input | `low_record` | `pending_confirmation` | required |
+| `reminder` | reminder-like home input | `medium_user_state_change` | `pending_confirmation` | required |
+| `plan` | policy-level future intent only | `medium_user_state_change` | `pending_confirmation` | required |
+| `tool_action` | unknown explicit action type | `high_external_or_irreversible` | `required_confirmation` | required |
+
+Important current boundary:
+
+- The home UI still exposes only `生活记录` and `提醒`.
+- The router does not yet infer `plan` as a third home input type.
+- Unknown explicit action types are preserved and routed conservatively as
+  high-risk tool actions.
+
+### Default-off policies
+
+The runtime has explicit policy objects, but they default to conservative
+preview behavior:
+
+- `Phase80PersonalHomeRoutingPolicy.DefaultPreviewOnly()`
+  - does not direct-save low-risk records.
+  - keeps home submissions in pending confirmation.
+- `Phase80ConfirmWritePolicy.DefaultPreviewOnly()`
+  - does not allow `life_events` writes.
+  - does not allow reminder writes.
+
+These policies are code-level extension points only. They are not wired to
+production environment variables, and they do not execute writes.
+
+### Confirm and Memory plans
+
+Each pending action now carries a creation-time snapshot of its confirm and
+memory plans.
+
+Confirm plan snapshot:
+
+- `confirmTarget`
+- `confirmWriteEnabled`
+- `memoryCandidateOnly`
+- `confirmPlanReason`
+
+Memory plan snapshot:
+
+- `memoryTarget`
+- `memoryWriteEnabled`
+- `memoryRequiresDedupe`
+- `memoryRequiresMerge`
+- `memoryRequiresConfirmation`
+
+Current behavior:
+
+- `life_record_preview` targets `life_events`, but write is disabled.
+- `reminder_preview` targets `reminders`, but write is disabled.
+- Memory target is `memory_candidate`.
+- Memory write is disabled.
+- Memory requires de-duplication, merge review, and confirmation before any
+  future durable memory write.
+
+The snapshot is intentionally stored at pending-action creation time so later
+policy changes do not rewrite the meaning of existing pending actions.
+
+### Safety details
+
+The API view exposes route and plan audit fields:
+
+- `intent`
+- `disposition`
+- `riskLevel`
+- `requiresPendingAction`
+- `routeReason`
+- confirm plan fields
+- memory plan fields
+
+The frontend keeps these under `技术与安全详情`, so the default home view stays
+focused on the user's next action rather than implementation details.
+
 ## Beta Direction
 
 Beta should evolve from preview confirmation to selected real writes only after a
@@ -87,4 +175,3 @@ Long-term, the one input becomes the LifeOS inbox:
 The frontend should stay product-oriented. Technical labels such as runtime,
 phase, fake-first, legacy confirm, and store details belong in collapsed safety
 details or project documentation, not the default home view.
-
