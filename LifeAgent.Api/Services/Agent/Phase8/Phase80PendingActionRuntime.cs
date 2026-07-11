@@ -335,6 +335,7 @@ public sealed class Phase80PendingActionRuntime
             Disposition: route.Disposition,
             RiskLevel: route.RiskLevel,
             RequiresPendingAction: route.RequiresPendingAction,
+            RouteReason: route.Reason,
             CreatedAt: record.CreatedAt,
             UpdatedAt: record.UpdatedAt,
             ExpiresAt: record.ExpiresAt,
@@ -385,8 +386,16 @@ public sealed class Phase80PendingActionRuntime
             Intent = ReadPayload(record, "intent", fallback.Intent),
             Disposition = ReadPayload(record, "disposition", fallback.Disposition),
             RiskLevel = string.IsNullOrWhiteSpace(record.RiskLevel) ? fallback.RiskLevel : record.RiskLevel,
-            RequiresPendingAction = ReadBoolPayload(record, "requiresPendingAction", fallback.RequiresPendingAction)
+            RequiresPendingAction = ReadBoolPayload(record, "requiresPendingAction", fallback.RequiresPendingAction),
+            Reason = ReadMetadata(record, "routeReason", fallback.Reason)
         };
+    }
+
+    private static string ReadMetadata(PendingActionRecord record, string key, string fallback)
+    {
+        return record.RedactionMetadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
     }
 
     private static bool ReadBoolPayload(PendingActionRecord record, string key, bool fallback)
@@ -611,6 +620,7 @@ public sealed record Phase80PendingActionView(
     string Disposition,
     string RiskLevel,
     bool RequiresPendingAction,
+    string RouteReason,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset ExpiresAt,

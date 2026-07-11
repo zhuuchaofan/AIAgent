@@ -51,6 +51,8 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, reminder.Data.RiskLevel);
         Assert.True(lifeRecord.Data.RequiresPendingAction);
         Assert.True(reminder.Data.RequiresPendingAction);
+        Assert.Equal("requested_action_type", lifeRecord.Data.RouteReason);
+        Assert.Equal("requested_action_type", reminder.Data.RouteReason);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecord.Data.ConfirmTarget);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminder.Data.ConfirmTarget);
         Assert.False(lifeRecord.Data.ConfirmWriteEnabled);
@@ -393,6 +395,7 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, ReadString(confirmResult.Body, "data", "disposition"));
         Assert.Equal(Phase80PersonalHomeIntentRouter.LowRisk, ReadString(confirmResult.Body, "data", "riskLevel"));
         Assert.True(ReadBool(confirmResult.Body, "data", "requiresPendingAction"));
+        Assert.Equal("inferred_from_home_input", ReadString(confirmResult.Body, "data", "routeReason"));
         Assert.False(ReadBool(confirmResult.Body, "data", "executed"));
         Assert.False(ReadBool(confirmResult.Body, "data", "wroteData"));
         Assert.False(ReadBool(confirmResult.Body, "data", "executionReady"));
