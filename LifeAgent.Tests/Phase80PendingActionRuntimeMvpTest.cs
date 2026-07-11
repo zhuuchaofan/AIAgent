@@ -158,15 +158,41 @@ public class Phase80PendingActionRuntimeMvpTest
     {
         var lifeRecordPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.LifeRecordPreview);
         var reminderPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.ReminderPreview);
+        var defaultPolicy = Phase80ConfirmWritePolicy.DefaultPreviewOnly();
 
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecordPlan.Target);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminderPlan.Target);
+        Assert.False(defaultPolicy.AllowLifeEventWrites);
+        Assert.False(defaultPolicy.AllowReminderWrites);
         Assert.False(lifeRecordPlan.WriteEnabled);
         Assert.False(reminderPlan.WriteEnabled);
         Assert.True(lifeRecordPlan.MemoryCandidateOnly);
         Assert.True(reminderPlan.MemoryCandidateOnly);
         Assert.Contains("beta_gate", lifeRecordPlan.Reason);
         Assert.Contains("beta_gate", reminderPlan.Reason);
+    }
+
+    [Fact]
+    public void ResolveConfirmExecutionPlanCanModelBetaWritesWithoutExecutingThem()
+    {
+        var lifeOnly = new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false);
+        var reminderOnly = new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true);
+
+        var lifeRecordPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            lifeOnly);
+        var reminderPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.ReminderPreview,
+            reminderOnly);
+
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecordPlan.Target);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminderPlan.Target);
+        Assert.True(lifeRecordPlan.WriteEnabled);
+        Assert.True(reminderPlan.WriteEnabled);
+        Assert.True(lifeRecordPlan.MemoryCandidateOnly);
+        Assert.True(reminderPlan.MemoryCandidateOnly);
+        Assert.Contains("allowed_by_policy", lifeRecordPlan.Reason);
+        Assert.Contains("allowed_by_policy", reminderPlan.Reason);
     }
 
     [Fact]

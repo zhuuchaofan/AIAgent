@@ -395,18 +395,29 @@ public sealed class Phase80PendingActionRuntime
 
     internal static Phase80ConfirmExecutionPlan ResolveConfirmExecutionPlan(string actionType)
     {
+        return ResolveConfirmExecutionPlan(actionType, Phase80ConfirmWritePolicy.DefaultPreviewOnly());
+    }
+
+    internal static Phase80ConfirmExecutionPlan ResolveConfirmExecutionPlan(
+        string actionType,
+        Phase80ConfirmWritePolicy policy)
+    {
         return actionType switch
         {
             LifeRecordPreview => new Phase80ConfirmExecutionPlan(
                 Target: ConfirmTargetLifeEvents,
-                WriteEnabled: false,
+                WriteEnabled: policy.AllowLifeEventWrites,
                 MemoryCandidateOnly: true,
-                Reason: "life_record_confirm_write_disabled_until_beta_gate"),
+                Reason: policy.AllowLifeEventWrites
+                    ? "life_record_confirm_write_allowed_by_policy"
+                    : "life_record_confirm_write_disabled_until_beta_gate"),
             ReminderPreview => new Phase80ConfirmExecutionPlan(
                 Target: ConfirmTargetReminders,
-                WriteEnabled: false,
+                WriteEnabled: policy.AllowReminderWrites,
                 MemoryCandidateOnly: true,
-                Reason: "reminder_confirm_write_disabled_until_beta_gate"),
+                Reason: policy.AllowReminderWrites
+                    ? "reminder_confirm_write_allowed_by_policy"
+                    : "reminder_confirm_write_disabled_until_beta_gate"),
             _ => new Phase80ConfirmExecutionPlan(
                 Target: ConfirmTargetNone,
                 WriteEnabled: false,
@@ -606,6 +617,18 @@ public sealed record Phase80ConfirmExecutionPlan(
     bool WriteEnabled,
     bool MemoryCandidateOnly,
     string Reason);
+
+public sealed record Phase80ConfirmWritePolicy(
+    bool AllowLifeEventWrites,
+    bool AllowReminderWrites)
+{
+    public static Phase80ConfirmWritePolicy DefaultPreviewOnly()
+    {
+        return new Phase80ConfirmWritePolicy(
+            AllowLifeEventWrites: false,
+            AllowReminderWrites: false);
+    }
+}
 
 public sealed record Phase80MemoryPlan(
     string Target,
