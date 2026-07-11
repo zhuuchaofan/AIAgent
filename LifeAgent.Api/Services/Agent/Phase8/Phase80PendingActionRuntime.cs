@@ -23,17 +23,20 @@ public sealed class Phase80PendingActionRuntime
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _ttl;
     private readonly string _safetyMode;
+    private readonly Phase80ConfirmWritePolicy _confirmWritePolicy;
 
     public Phase80PendingActionRuntime(
         TimeProvider? timeProvider = null,
         TimeSpan? ttl = null,
         IPendingActionStore? store = null,
-        string? safetyMode = null)
+        string? safetyMode = null,
+        Phase80ConfirmWritePolicy? confirmWritePolicy = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
         _ttl = ttl ?? TimeSpan.FromMinutes(15);
         _store = store ?? new InMemoryPendingActionStore(_timeProvider);
         _safetyMode = string.IsNullOrWhiteSpace(safetyMode) ? SafetyMode : safetyMode;
+        _confirmWritePolicy = confirmWritePolicy ?? Phase80ConfirmWritePolicy.DefaultPreviewOnly();
     }
 
     public Phase80PendingActionResult Create(string userId, Phase80CreatePendingActionRequest? request)
@@ -318,7 +321,7 @@ public sealed class Phase80PendingActionRuntime
     private Phase80PendingActionView ToView(PendingActionRecord record)
     {
         var status = ToPhase80Status(record.Status);
-        var confirmPlan = ResolveConfirmExecutionPlan(record.ActionType);
+        var confirmPlan = ResolveConfirmExecutionPlan(record.ActionType, _confirmWritePolicy);
         var memoryPlan = ResolveMemoryPlan(record.ActionType);
         var route = ResolveStoredRoute(record);
         return new Phase80PendingActionView(

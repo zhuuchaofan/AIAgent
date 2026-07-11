@@ -196,6 +196,32 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
+    {
+        var runtime = new Phase80PendingActionRuntime(
+            confirmWritePolicy: new Phase80ConfirmWritePolicy(
+                AllowLifeEventWrites: true,
+                AllowReminderWrites: false));
+        var created = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "生活记录：读完一本书",
+                "用户输入：今天读完一本书",
+                Phase80PendingActionRuntime.LifeRecordPreview));
+
+        var confirmed = runtime.Confirm("user_a", created.Data!.ActionId);
+
+        Assert.True(created.Data.ConfirmWriteEnabled);
+        Assert.True(confirmed.Data!.ConfirmWriteEnabled);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, confirmed.Data.ConfirmTarget);
+        Assert.False(confirmed.Data.Executed);
+        Assert.False(confirmed.Data.WroteData);
+        Assert.False(confirmed.Data.RealWritePath);
+        Assert.True(confirmed.Data.MemoryCandidateOnly);
+        Assert.False(confirmed.Data.MemoryWriteEnabled);
+    }
+
+    [Fact]
     public void ResolveMemoryPlanCreatesCandidateOnlyWithoutMemoryWrites()
     {
         var lifeRecordMemory = Phase80PendingActionRuntime.ResolveMemoryPlan(Phase80PendingActionRuntime.LifeRecordPreview);
