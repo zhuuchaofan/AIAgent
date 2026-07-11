@@ -320,12 +320,16 @@ public sealed class Phase80PendingActionRuntime
         var status = ToPhase80Status(record.Status);
         var confirmPlan = ResolveConfirmExecutionPlan(record.ActionType);
         var memoryPlan = ResolveMemoryPlan(record.ActionType);
+        var route = ResolveStoredRoute(record);
         return new Phase80PendingActionView(
             ActionId: record.PendingActionId,
             Status: status,
             Title: ReadPayload(record, "title", "保存一条测试生活记录"),
             Summary: ReadPayload(record, "summary", "Phase 8 fake-first 待确认动作。"),
             ActionType: record.ActionType,
+            Intent: route.Intent,
+            Disposition: route.Disposition,
+            RiskLevel: route.RiskLevel,
             CreatedAt: record.CreatedAt,
             UpdatedAt: record.UpdatedAt,
             ExpiresAt: record.ExpiresAt,
@@ -362,6 +366,21 @@ public sealed class Phase80PendingActionRuntime
         return record.Payload.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : fallback;
+    }
+
+    private static Phase80PersonalHomeIntentRoute ResolveStoredRoute(PendingActionRecord record)
+    {
+        var fallback = Phase80PersonalHomeIntentRouter.Route(
+            ReadPayload(record, "title", string.Empty),
+            ReadPayload(record, "summary", string.Empty),
+            record.ActionType);
+
+        return fallback with
+        {
+            Intent = ReadPayload(record, "intent", fallback.Intent),
+            Disposition = ReadPayload(record, "disposition", fallback.Disposition),
+            RiskLevel = string.IsNullOrWhiteSpace(record.RiskLevel) ? fallback.RiskLevel : record.RiskLevel
+        };
     }
 
     private static string ConfirmedPreviewMessage(string actionType)
@@ -555,6 +574,9 @@ public sealed record Phase80PendingActionView(
     string Title,
     string Summary,
     string ActionType,
+    string Intent,
+    string Disposition,
+    string RiskLevel,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset ExpiresAt,
