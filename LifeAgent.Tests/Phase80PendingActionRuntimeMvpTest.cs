@@ -132,6 +132,13 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(confirmedReminder.Data.ConfirmWriteEnabled);
         Assert.True(confirmedLifeRecord.Data.MemoryCandidateOnly);
         Assert.True(confirmedReminder.Data.MemoryCandidateOnly);
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, confirmedLifeRecord.Data.MemoryTarget);
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, confirmedReminder.Data.MemoryTarget);
+        Assert.False(confirmedLifeRecord.Data.MemoryWriteEnabled);
+        Assert.False(confirmedReminder.Data.MemoryWriteEnabled);
+        Assert.True(confirmedLifeRecord.Data.MemoryRequiresDedupe);
+        Assert.True(confirmedLifeRecord.Data.MemoryRequiresMerge);
+        Assert.True(confirmedLifeRecord.Data.MemoryRequiresConfirmation);
         Assert.False(confirmedLifeRecord.Data!.Executed);
         Assert.False(confirmedLifeRecord.Data.WroteData);
         Assert.False(confirmedLifeRecord.Data.RealWritePath);
@@ -154,6 +161,22 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.True(reminderPlan.MemoryCandidateOnly);
         Assert.Contains("beta_gate", lifeRecordPlan.Reason);
         Assert.Contains("beta_gate", reminderPlan.Reason);
+    }
+
+    [Fact]
+    public void ResolveMemoryPlanCreatesCandidateOnlyWithoutMemoryWrites()
+    {
+        var lifeRecordMemory = Phase80PendingActionRuntime.ResolveMemoryPlan(Phase80PendingActionRuntime.LifeRecordPreview);
+        var reminderMemory = Phase80PendingActionRuntime.ResolveMemoryPlan(Phase80PendingActionRuntime.ReminderPreview);
+
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, lifeRecordMemory.Target);
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, reminderMemory.Target);
+        Assert.False(lifeRecordMemory.WriteEnabled);
+        Assert.False(reminderMemory.WriteEnabled);
+        Assert.True(lifeRecordMemory.RequiresDedupe);
+        Assert.True(lifeRecordMemory.RequiresMerge);
+        Assert.True(lifeRecordMemory.RequiresConfirmation);
+        Assert.Contains("candidate_only", lifeRecordMemory.Reason);
     }
 
     [Fact]

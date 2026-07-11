@@ -89,6 +89,11 @@ interface Phase80PendingAction {
   confirmWriteEnabled?: boolean;
   memoryCandidateOnly?: boolean;
   confirmPlanReason?: string;
+  memoryTarget?: string;
+  memoryWriteEnabled?: boolean;
+  memoryRequiresDedupe?: boolean;
+  memoryRequiresMerge?: boolean;
+  memoryRequiresConfirmation?: boolean;
   message: string;
 }
 
@@ -399,6 +404,11 @@ export function AgentPreview() {
                 <div>confirmWriteEnabled: <span className="font-mono">{String(latestPendingAction?.confirmWriteEnabled ?? false)}</span></div>
                 <div>memoryCandidateOnly: <span className="font-mono">{String(latestPendingAction?.memoryCandidateOnly ?? true)}</span></div>
                 <div className="sm:col-span-2 break-words">confirmPlan: <span className="font-mono">{latestPendingAction?.confirmPlanReason ?? "preview_only"}</span></div>
+                <div>memoryTarget: <span className="font-mono">{latestPendingAction?.memoryTarget ?? "memory_candidate"}</span></div>
+                <div>memoryWriteEnabled: <span className="font-mono">{String(latestPendingAction?.memoryWriteEnabled ?? false)}</span></div>
+                <div>memoryDedupe: <span className="font-mono">{String(latestPendingAction?.memoryRequiresDedupe ?? true)}</span></div>
+                <div>memoryMerge: <span className="font-mono">{String(latestPendingAction?.memoryRequiresMerge ?? true)}</span></div>
+                <div>memoryConfirm: <span className="font-mono">{String(latestPendingAction?.memoryRequiresConfirmation ?? true)}</span></div>
                 {phase80Persistence && (
                   <>
                     <div>storeMode: <span className="font-mono">{phase80Persistence.storeMode}</span></div>

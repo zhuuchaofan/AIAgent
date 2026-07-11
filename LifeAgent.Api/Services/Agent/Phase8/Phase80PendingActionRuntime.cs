@@ -17,6 +17,7 @@ public sealed class Phase80PendingActionRuntime
     public const string ConfirmTargetLifeEvents = "life_events";
     public const string ConfirmTargetReminders = "reminders";
     public const string ConfirmTargetNone = "none";
+    public const string MemoryCandidateTarget = "memory_candidate";
 
     private readonly IPendingActionStore _store;
     private readonly TimeProvider _timeProvider;
@@ -318,6 +319,7 @@ public sealed class Phase80PendingActionRuntime
     {
         var status = ToPhase80Status(record.Status);
         var confirmPlan = ResolveConfirmExecutionPlan(record.ActionType);
+        var memoryPlan = ResolveMemoryPlan(record.ActionType);
         return new Phase80PendingActionView(
             ActionId: record.PendingActionId,
             Status: status,
@@ -341,6 +343,11 @@ public sealed class Phase80PendingActionRuntime
             ConfirmWriteEnabled: confirmPlan.WriteEnabled,
             MemoryCandidateOnly: confirmPlan.MemoryCandidateOnly,
             ConfirmPlanReason: confirmPlan.Reason,
+            MemoryTarget: memoryPlan.Target,
+            MemoryWriteEnabled: memoryPlan.WriteEnabled,
+            MemoryRequiresDedupe: memoryPlan.RequiresDedupe,
+            MemoryRequiresMerge: memoryPlan.RequiresMerge,
+            MemoryRequiresConfirmation: memoryPlan.RequiresConfirmation,
             Message: status switch
             {
                 Confirmed => ConfirmedPreviewMessage(record.ActionType),
@@ -386,6 +393,27 @@ public sealed class Phase80PendingActionRuntime
                 WriteEnabled: false,
                 MemoryCandidateOnly: true,
                 Reason: "unknown_action_type_preview_only")
+        };
+    }
+
+    internal static Phase80MemoryPlan ResolveMemoryPlan(string actionType)
+    {
+        return actionType switch
+        {
+            LifeRecordPreview or ReminderPreview => new Phase80MemoryPlan(
+                Target: MemoryCandidateTarget,
+                WriteEnabled: false,
+                RequiresDedupe: true,
+                RequiresMerge: true,
+                RequiresConfirmation: true,
+                Reason: "memory_candidate_only_until_dedupe_merge_confirm"),
+            _ => new Phase80MemoryPlan(
+                Target: ConfirmTargetNone,
+                WriteEnabled: false,
+                RequiresDedupe: true,
+                RequiresMerge: true,
+                RequiresConfirmation: true,
+                Reason: "unknown_action_type_no_memory_write")
         };
     }
 
@@ -544,12 +572,25 @@ public sealed record Phase80PendingActionView(
     bool ConfirmWriteEnabled,
     bool MemoryCandidateOnly,
     string ConfirmPlanReason,
+    string MemoryTarget,
+    bool MemoryWriteEnabled,
+    bool MemoryRequiresDedupe,
+    bool MemoryRequiresMerge,
+    bool MemoryRequiresConfirmation,
     string Message);
 
 public sealed record Phase80ConfirmExecutionPlan(
     string Target,
     bool WriteEnabled,
     bool MemoryCandidateOnly,
+    string Reason);
+
+public sealed record Phase80MemoryPlan(
+    string Target,
+    bool WriteEnabled,
+    bool RequiresDedupe,
+    bool RequiresMerge,
+    bool RequiresConfirmation,
     string Reason);
 
 public sealed record Phase80PendingActionResult(
