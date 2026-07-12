@@ -276,6 +276,28 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void ConfirmWriteDecisionRequiresExplicitExecutorReadiness()
+    {
+        var enabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.ReminderPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
+
+        var noOpDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(
+            enabledPlan,
+            Phase80NoOpConfirmWriteExecutor.Instance);
+        var connectedDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(
+            enabledPlan,
+            new ReadyForTestConfirmWriteExecutor());
+
+        Assert.False(noOpDecision.ExecutionReady);
+        Assert.False(noOpDecision.RealPathReady);
+        Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", noOpDecision.Reason);
+        Assert.True(connectedDecision.ExecutionReady);
+        Assert.True(connectedDecision.RealPathReady);
+        Assert.Equal("test_executor_ready", connectedDecision.Reason);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(
@@ -823,5 +845,16 @@ public class Phase80PendingActionRuntimeMvpTest
                 safetyMode: options.SafetyMode);
         });
         return services.BuildServiceProvider();
+    }
+
+    private sealed class ReadyForTestConfirmWriteExecutor : IPhase80ConfirmWriteExecutor
+    {
+        public Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan)
+        {
+            return new Phase80ConfirmWriteExecutorReadiness(
+                ExecutionReady: true,
+                RealPathReady: true,
+                Reason: "test_executor_ready");
+        }
     }
 }

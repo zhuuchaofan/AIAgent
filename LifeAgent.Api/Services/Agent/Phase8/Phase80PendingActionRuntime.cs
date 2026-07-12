@@ -25,19 +25,22 @@ public sealed class Phase80PendingActionRuntime
     private readonly TimeSpan _ttl;
     private readonly string _safetyMode;
     private readonly Phase80ConfirmWritePolicy _confirmWritePolicy;
+    private readonly IPhase80ConfirmWriteExecutor _confirmWriteExecutor;
 
     public Phase80PendingActionRuntime(
         TimeProvider? timeProvider = null,
         TimeSpan? ttl = null,
         IPendingActionStore? store = null,
         string? safetyMode = null,
-        Phase80ConfirmWritePolicy? confirmWritePolicy = null)
+        Phase80ConfirmWritePolicy? confirmWritePolicy = null,
+        IPhase80ConfirmWriteExecutor? confirmWriteExecutor = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
         _ttl = ttl ?? TimeSpan.FromMinutes(15);
         _store = store ?? new InMemoryPendingActionStore(_timeProvider);
         _safetyMode = string.IsNullOrWhiteSpace(safetyMode) ? SafetyMode : safetyMode;
         _confirmWritePolicy = confirmWritePolicy ?? Phase80ConfirmWritePolicy.DefaultPreviewOnly();
+        _confirmWriteExecutor = confirmWriteExecutor ?? Phase80NoOpConfirmWriteExecutor.Instance;
     }
 
     public Phase80PendingActionResult Create(string userId, Phase80CreatePendingActionRequest? request)
@@ -335,7 +338,7 @@ public sealed class Phase80PendingActionRuntime
     {
         var status = ToPhase80Status(record.Status);
         var confirmPlan = ResolveStoredConfirmPlan(record);
-        var confirmWriteDecision = ResolveConfirmWriteDecision(confirmPlan);
+        var confirmWriteDecision = ResolveConfirmWriteDecision(confirmPlan, _confirmWriteExecutor);
         var memoryPlan = ResolveStoredMemoryPlan(record);
         var route = ResolveStoredRoute(record);
         return new Phase80PendingActionView(
@@ -497,15 +500,26 @@ public sealed class Phase80PendingActionRuntime
 
     internal static Phase80ConfirmWriteDecision ResolveConfirmWriteDecision(Phase80ConfirmExecutionPlan plan)
     {
-        return plan.WriteEnabled
-            ? new Phase80ConfirmWriteDecision(
-                ExecutionReady: false,
-                RealPathReady: false,
-                Reason: "confirm_write_policy_enabled_but_executor_not_connected")
-            : new Phase80ConfirmWriteDecision(
+        return ResolveConfirmWriteDecision(plan, Phase80NoOpConfirmWriteExecutor.Instance);
+    }
+
+    internal static Phase80ConfirmWriteDecision ResolveConfirmWriteDecision(
+        Phase80ConfirmExecutionPlan plan,
+        IPhase80ConfirmWriteExecutor executor)
+    {
+        if (!plan.WriteEnabled)
+        {
+            return new Phase80ConfirmWriteDecision(
                 ExecutionReady: false,
                 RealPathReady: false,
                 Reason: "confirm_write_disabled_by_policy");
+        }
+
+        var readiness = executor.GetReadiness(plan);
+        return new Phase80ConfirmWriteDecision(
+            ExecutionReady: readiness.ExecutionReady,
+            RealPathReady: readiness.RealPathReady,
+            Reason: readiness.Reason);
     }
 
     internal static Phase80MemoryPlan ResolveMemoryPlan(string actionType)
@@ -751,6 +765,33 @@ public sealed record Phase80ConfirmExecutionPlan(
     string Reason);
 
 public sealed record Phase80ConfirmWriteDecision(
+    bool ExecutionReady,
+    bool RealPathReady,
+    string Reason);
+
+public interface IPhase80ConfirmWriteExecutor
+{
+    Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan);
+}
+
+public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecutor
+{
+    public static Phase80NoOpConfirmWriteExecutor Instance { get; } = new();
+
+    private Phase80NoOpConfirmWriteExecutor()
+    {
+    }
+
+    public Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan)
+    {
+        return new Phase80ConfirmWriteExecutorReadiness(
+            ExecutionReady: false,
+            RealPathReady: false,
+            Reason: "confirm_write_policy_enabled_but_executor_not_connected");
+    }
+}
+
+public sealed record Phase80ConfirmWriteExecutorReadiness(
     bool ExecutionReady,
     bool RealPathReady,
     string Reason);
