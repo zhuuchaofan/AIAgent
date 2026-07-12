@@ -24,18 +24,24 @@ confirm-to-write safely with fake executors first.
 | Execution result contract | Ready | `Phase80ConfirmWriteExecutionResult` models success, status, target, resource path, write flags, executor id, and reason. |
 | Invocation gate | Ready | `Phase80ConfirmWriteInvocationGate` blocks execution unless policy and executor readiness are both true. |
 | Fake execution test | Ready | Tests prove gate-false skips executor and gate-true invokes a fake executor exactly once. |
+| Explicit fake Beta mode | Ready | `enableConfirmWriteExecution` defaults false; tests can explicitly enable it with a fake executor. |
 
 ## Current User-Reachable Behavior
 
 User-facing Confirm remains preview-only:
 
 - `ConfirmAsync` changes pending action status to confirmed.
-- `ConfirmAsync` does not call `TryExecuteConfirmWriteAsync`.
-- `ConfirmAsync` does not call `IPhase80ConfirmWriteExecutor.ExecuteAsync`.
+- Default `ConfirmAsync` does not call `TryExecuteConfirmWriteAsync`.
+- Default `ConfirmAsync` does not call `IPhase80ConfirmWriteExecutor.ExecuteAsync`.
 - `executed=false`
 - `wroteData=false`
 - `realWritePath=false`
 - Memory remains candidate-only and is not written.
+
+`enableConfirmWriteExecution=true` is an explicit fake Beta test mode. It can
+call a fake executor and reflect the fake execution result in the immediate
+Confirm response, but it does not persist execution state back into the pending
+action store and must not be treated as a production write switch.
 
 ## Not Connected Yet
 
@@ -52,8 +58,8 @@ The following are intentionally not connected:
 
 The next implementation step should still use fake executors:
 
-1. Add a runtime test where `ConfirmAsync` is explicitly configured for a fake
-   Beta mode and invokes `TryExecuteConfirmWriteAsync`.
+1. Add explicit persistence semantics for fake Beta execution results, or
+   intentionally keep them response-only.
 2. Prove skipped execution when policy is false.
 3. Prove skipped execution when executor readiness is false.
 4. Prove fake execution updates the API audit fields consistently.
