@@ -395,6 +395,35 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void ConfirmAsyncDoesNotInvokeReadyExecutorWithoutExplicitBetaRuntimeMode()
+    {
+        var executor = new CountingReadyForTestConfirmWriteExecutor();
+        var runtime = new Phase80PendingActionRuntime(
+            confirmWritePolicy: new Phase80ConfirmWritePolicy(
+                AllowLifeEventWrites: true,
+                AllowReminderWrites: false),
+            confirmWriteExecutor: executor);
+        var created = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "生活记录：今天跑步三公里",
+                "用户输入：今天跑步三公里",
+                Phase80PendingActionRuntime.LifeRecordPreview));
+
+        var confirmed = runtime.Confirm("user_a", created.Data!.ActionId);
+
+        Assert.Equal("confirmed", confirmed.Data!.Status);
+        Assert.True(confirmed.Data.ConfirmWriteEnabled);
+        Assert.True(confirmed.Data.ConfirmWriteExecutionReady);
+        Assert.True(confirmed.Data.ConfirmWriteRealPathReady);
+        Assert.Equal("counting_test_confirm_write_executor", confirmed.Data.ConfirmWriteExecutorId);
+        Assert.False(confirmed.Data.Executed);
+        Assert.False(confirmed.Data.WroteData);
+        Assert.False(confirmed.Data.RealWritePath);
+        Assert.Equal(0, executor.ExecuteCallCount);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(
