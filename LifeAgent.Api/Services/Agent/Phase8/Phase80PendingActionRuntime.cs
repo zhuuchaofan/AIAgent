@@ -721,9 +721,7 @@ internal static class Phase80PersonalHomeIntentRouter
     {
         return value.Contains("提醒", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("闹钟", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("到点", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("明天", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("后天", StringComparison.OrdinalIgnoreCase);
+               value.Contains("到点", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikePlan(string value)

@@ -78,6 +78,23 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void CreateKeepsTimeMentionedJournalInputAsLifeRecordWithoutReminderIntent()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+
+        var result = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "明天又要上班了",
+                "用户输入：明天又要上班了，还是怎么好累啊"));
+
+        Assert.True(result.Success);
+        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, result.Data!.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.LifeRecordIntent, result.Data.Intent);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, result.Data.ConfirmTarget);
+    }
+
+    [Fact]
     public void PersonalHomeIntentRouterKeepsSingleInputPendingConfirmationFlow()
     {
         var lifeRecord = Phase80PersonalHomeIntentRouter.Route("今天跑步三公里", "感觉还不错", null);
