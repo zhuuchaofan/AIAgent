@@ -93,6 +93,9 @@ Confirm plan snapshot:
 
 - `confirmTarget`
 - `confirmWriteEnabled`
+- `confirmWriteExecutionReady`
+- `confirmWriteRealPathReady`
+- `confirmWriteDecisionReason`
 - `memoryCandidateOnly`
 - `confirmPlanReason`
 
@@ -109,6 +112,12 @@ Current behavior:
 - `life_record_preview` targets `life_events`, but write is disabled.
 - `reminder_preview` targets `reminders`, but write is disabled.
 - `plan_preview` targets no durable planning store yet, and write is disabled.
+- `confirmWriteEnabled` means only that policy would allow the target.
+- `confirmWriteExecutionReady` and `confirmWriteRealPathReady` remain false
+  unless an explicit confirm write executor is connected.
+- The default `Phase80NoOpConfirmWriteExecutor` never writes. It reports
+  `confirm_write_policy_enabled_but_executor_not_connected` when policy is
+  enabled but no real executor has been installed.
 - Memory target is `memory_candidate`.
 - Memory write is disabled.
 - Memory requires de-duplication, merge review, and confirmation before any
@@ -151,6 +160,11 @@ Beta implementation must preserve these constraints:
 - Each generated pending action must show its type before confirmation.
 - The confirm response must state whether a real write happened.
 - The write path must be type-specific and auditable.
+- Real writes require all three gates:
+  - `confirmWriteEnabled=true` from policy.
+  - `confirmWriteExecutionReady=true` and `confirmWriteRealPathReady=true` from
+    the explicit confirm write executor.
+  - the release gate below has been approved.
 - Low-risk direct-save behavior, if introduced later, must be guarded by a
   separate product and safety decision.
 
