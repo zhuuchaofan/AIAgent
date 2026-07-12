@@ -777,6 +777,10 @@ public sealed record Phase80ConfirmWriteDecision(
 public interface IPhase80ConfirmWriteExecutor
 {
     Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan);
+
+    Task<Phase80ConfirmWriteExecutionResult> ExecuteAsync(
+        Phase80ConfirmExecutionRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecutor
@@ -795,7 +799,40 @@ public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecut
             ExecutorId: "noop_confirm_write_executor",
             Reason: "confirm_write_policy_enabled_but_executor_not_connected");
     }
+
+    public Task<Phase80ConfirmWriteExecutionResult> ExecuteAsync(
+        Phase80ConfirmExecutionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new Phase80ConfirmWriteExecutionResult(
+            Success: false,
+            Status: "skipped",
+            Target: request.Plan.Target,
+            ResourcePath: null,
+            WroteData: false,
+            RealWritePath: false,
+            ExecutorId: "noop_confirm_write_executor",
+            Reason: "noop_executor_never_writes"));
+    }
 }
+
+public sealed record Phase80ConfirmExecutionRequest(
+    string UserId,
+    string ActionId,
+    string ActionType,
+    string Title,
+    string Summary,
+    Phase80ConfirmExecutionPlan Plan);
+
+public sealed record Phase80ConfirmWriteExecutionResult(
+    bool Success,
+    string Status,
+    string Target,
+    string? ResourcePath,
+    bool WroteData,
+    bool RealWritePath,
+    string ExecutorId,
+    string Reason);
 
 public sealed record Phase80ConfirmWriteExecutorReadiness(
     bool ExecutionReady,

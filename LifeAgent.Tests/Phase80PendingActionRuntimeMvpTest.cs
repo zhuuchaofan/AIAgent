@@ -302,6 +302,39 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task ConfirmWriteExecutorContractModelsNoOpAndFutureSuccessResults()
+    {
+        var plan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
+        var request = new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "action_a",
+            ActionType: Phase80PendingActionRuntime.LifeRecordPreview,
+            Title: "今天跑步三公里",
+            Summary: "用户输入：今天跑步三公里",
+            Plan: plan);
+
+        var noOpResult = await Phase80NoOpConfirmWriteExecutor.Instance.ExecuteAsync(request);
+        var fakeResult = await new ReadyForTestConfirmWriteExecutor().ExecuteAsync(request);
+
+        Assert.False(noOpResult.Success);
+        Assert.Equal("skipped", noOpResult.Status);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, noOpResult.Target);
+        Assert.Null(noOpResult.ResourcePath);
+        Assert.False(noOpResult.WroteData);
+        Assert.False(noOpResult.RealWritePath);
+        Assert.Equal("noop_confirm_write_executor", noOpResult.ExecutorId);
+        Assert.Equal("noop_executor_never_writes", noOpResult.Reason);
+        Assert.True(fakeResult.Success);
+        Assert.Equal("written", fakeResult.Status);
+        Assert.Equal("users/user_a/life_events/action_a", fakeResult.ResourcePath);
+        Assert.True(fakeResult.WroteData);
+        Assert.True(fakeResult.RealWritePath);
+        Assert.Equal("test_confirm_write_executor", fakeResult.ExecutorId);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(
@@ -862,6 +895,21 @@ public class Phase80PendingActionRuntimeMvpTest
                 RealPathReady: true,
                 ExecutorId: "test_confirm_write_executor",
                 Reason: "test_executor_ready");
+        }
+
+        public Task<Phase80ConfirmWriteExecutionResult> ExecuteAsync(
+            Phase80ConfirmExecutionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new Phase80ConfirmWriteExecutionResult(
+                Success: true,
+                Status: "written",
+                Target: request.Plan.Target,
+                ResourcePath: $"users/{request.UserId}/life_events/{request.ActionId}",
+                WroteData: true,
+                RealWritePath: true,
+                ExecutorId: "test_confirm_write_executor",
+                Reason: "test_write_completed"));
         }
     }
 }
