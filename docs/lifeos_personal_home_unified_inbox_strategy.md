@@ -168,6 +168,11 @@ Beta implementation must preserve these constraints:
   - `confirmWriteExecutionReady=true` and `confirmWriteRealPathReady=true` from
     the explicit confirm write executor.
   - the release gate below has been approved.
+- Runtime executor invocation is governed by `Phase80ConfirmWriteInvocationGate`:
+  - `confirm_write_policy_disabled`: do not invoke executor.
+  - `confirm_write_executor_not_ready`: do not invoke executor.
+  - `confirm_write_all_gates_ready`: executor may be invoked by an intentionally
+    connected Beta runtime path.
 - When runtime execution is intentionally connected in Beta, executor results
   must report:
   - `success`
