@@ -512,6 +512,37 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task Phase8DemoEndpointConfirmUnknownExplicitActionStaysPreviewOnly()
+    {
+        var userId = $"endpoint_user_{Guid.NewGuid():N}";
+        var services = BuildServices();
+
+        var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            new Phase80CreatePendingActionRequest("发送邮件", "用户输入：给客户发邮件", "send_email_tool")));
+        var actionId = ReadString(createResult.Body, "data", "actionId");
+
+        var confirmResult = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            actionId));
+
+        Assert.Equal(StatusCodes.Status200OK, confirmResult.StatusCode);
+        Assert.Equal("confirmed", ReadString(confirmResult.Body, "data", "status"));
+        Assert.Equal("send_email_tool", ReadString(confirmResult.Body, "data", "actionType"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ToolActionIntent, ReadString(confirmResult.Body, "data", "intent"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.RequiredConfirmationDisposition, ReadString(confirmResult.Body, "data", "disposition"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.HighRisk, ReadString(confirmResult.Body, "data", "riskLevel"));
+        Assert.True(ReadBool(confirmResult.Body, "data", "requiresPendingAction"));
+        Assert.Equal("requested_action_type", ReadString(confirmResult.Body, "data", "routeReason"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "confirmWriteEnabled"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "executed"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "wroteData"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "realWritePath"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "memoryWriteEnabled"));
+        Assert.Contains("未执行", ReadString(confirmResult.Body, "message"));
+    }
+
+    [Fact]
     public async Task Phase8DemoEndpointInfersReminderFromUnifiedHomeInputPreviewOnly()
     {
         var userId = $"endpoint_user_{Guid.NewGuid():N}";
