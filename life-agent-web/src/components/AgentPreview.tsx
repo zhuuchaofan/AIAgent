@@ -126,12 +126,6 @@ interface Phase80PersistenceMetadata {
 const LIFE_RECORD_PREVIEW = "life_record_preview";
 const REMINDER_PREVIEW = "reminder_preview";
 
-function inferPreviewActionType(message: string): string {
-  return /提醒|闹钟|到点|明天|后天|下周|上午|下午|晚上|点/.test(message)
-    ? REMINDER_PREVIEW
-    : LIFE_RECORD_PREVIEW;
-}
-
 function actionTypeLabel(actionType: string): string {
   if (actionType === REMINDER_PREVIEW) return "提醒";
   if (actionType === LIFE_RECORD_PREVIEW) return "生活记录";
@@ -225,12 +219,9 @@ export function AgentPreview() {
     setPhase80Message(null);
 
     try {
-      const actionType = inferPreviewActionType(message);
-      const actionLabel = actionTypeLabel(actionType);
       const res = await createPhase80PendingAction(
-        `${actionLabel}：${message}`,
-        `用户输入：${message}。类型：${actionLabel}。确认后仍不会执行真实操作。`,
-        actionType
+        message,
+        `用户输入：${message}。确认后仍不会执行真实操作。`
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
         setPhase80Message(res.message?.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (res.message || "提交失败，请稍后再试。"));
