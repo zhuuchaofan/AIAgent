@@ -143,13 +143,14 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
-    public void PersonalHomeRouterDoesNotInferPlanAsAThirdHomeInputTypeYet()
+    public void PersonalHomeRouterInfersPlanAsMediumRiskPendingPreview()
     {
         var routed = Phase80PersonalHomeIntentRouter.Route("计划一下周末", "用户输入：周末去哪里", null);
 
-        Assert.Equal(Phase80PersonalHomeIntentRouter.LifeRecordIntent, routed.Intent);
-        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, routed.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PlanIntent, routed.Intent);
+        Assert.Equal(Phase80PendingActionRuntime.PlanPreview, routed.ActionType);
         Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, routed.Disposition);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, routed.RiskLevel);
         Assert.True(routed.RequiresPendingAction);
     }
 
@@ -640,6 +641,39 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(ReadBool(confirmResult.Body, "data", "wroteData"));
         Assert.False(ReadBool(confirmResult.Body, "data", "realWritePath"));
         Assert.Contains("未写入 life_events", ReadString(confirmResult.Body, "message"));
+    }
+
+    [Fact]
+    public async Task Phase8DemoEndpointInfersPlanFromUnifiedHomeInputPreviewOnly()
+    {
+        var userId = $"endpoint_user_{Guid.NewGuid():N}";
+        var services = BuildServices();
+
+        var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            new Phase80CreatePendingActionRequest("计划一下周末", "用户输入：计划周末去哪里")));
+        var actionId = ReadString(createResult.Body, "data", "actionId");
+
+        var confirmResult = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            actionId));
+
+        Assert.Equal(StatusCodes.Status200OK, createResult.StatusCode);
+        Assert.Equal(Phase80PendingActionRuntime.PlanPreview, ReadString(createResult.Body, "data", "actionType"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PlanIntent, ReadString(createResult.Body, "data", "intent"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.PendingConfirmationDisposition, ReadString(createResult.Body, "data", "disposition"));
+        Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, ReadString(createResult.Body, "data", "riskLevel"));
+        Assert.True(ReadBool(createResult.Body, "data", "requiresPendingAction"));
+        Assert.Equal("inferred_from_home_input", ReadString(createResult.Body, "data", "routeReason"));
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetNone, ReadString(createResult.Body, "data", "confirmTarget"));
+        Assert.False(ReadBool(createResult.Body, "data", "confirmWriteEnabled"));
+        Assert.Equal("confirmed", ReadString(confirmResult.Body, "data", "status"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "executed"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "wroteData"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "realWritePath"));
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, ReadString(confirmResult.Body, "data", "memoryTarget"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "memoryWriteEnabled"));
+        Assert.Contains("未写入计划数据", ReadString(confirmResult.Body, "message"));
     }
 
     [Fact]

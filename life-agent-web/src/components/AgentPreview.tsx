@@ -125,16 +125,19 @@ interface Phase80PersistenceMetadata {
 
 const LIFE_RECORD_PREVIEW = "life_record_preview";
 const REMINDER_PREVIEW = "reminder_preview";
+const PLAN_PREVIEW = "plan_preview";
 
 function actionTypeLabel(actionType: string): string {
   if (actionType === REMINDER_PREVIEW) return "提醒";
   if (actionType === LIFE_RECORD_PREVIEW) return "生活记录";
+  if (actionType === PLAN_PREVIEW) return "计划";
   return "待确认";
 }
 
 function actionTypeClass(actionType: string): string {
   if (actionType === REMINDER_PREVIEW) return "border-amber-500/30 text-amber-200 bg-amber-500/10";
   if (actionType === LIFE_RECORD_PREVIEW) return "border-cyan-500/30 text-cyan-200 bg-cyan-500/10";
+  if (actionType === PLAN_PREVIEW) return "border-violet-500/30 text-violet-200 bg-violet-500/10";
   return "border-zinc-600/60 text-zinc-300 bg-zinc-800/50";
 }
 

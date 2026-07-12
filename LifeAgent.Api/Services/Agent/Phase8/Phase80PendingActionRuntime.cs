@@ -12,6 +12,7 @@ public sealed class Phase80PendingActionRuntime
     public const string Expired = "expired";
     public const string LifeRecordPreview = "life_record_preview";
     public const string ReminderPreview = "reminder_preview";
+    public const string PlanPreview = "plan_preview";
     public const string SafetyMode = "personal_agent_v2_in_memory_preview_only";
     public const string GuardDecision = "deny_all_no_real_execution";
     public const string ConfirmTargetLifeEvents = "life_events";
@@ -447,6 +448,7 @@ public sealed class Phase80PendingActionRuntime
         {
             LifeRecordPreview => "已确认生活记录；当前仍未写入 life_events，也未执行真实操作。",
             ReminderPreview => "已确认提醒；当前仍未写入 reminders，也未执行真实操作。",
+            PlanPreview => "已确认计划；当前仍未写入计划数据，也未执行真实操作。",
             _ => "已确认，但未执行；没有写入数据，也没有执行真实操作。"
         };
     }
@@ -476,6 +478,11 @@ public sealed class Phase80PendingActionRuntime
                 Reason: policy.AllowReminderWrites
                     ? "reminder_confirm_write_allowed_by_policy"
                     : "reminder_confirm_write_disabled_until_beta_gate"),
+            PlanPreview => new Phase80ConfirmExecutionPlan(
+                Target: ConfirmTargetNone,
+                WriteEnabled: false,
+                MemoryCandidateOnly: true,
+                Reason: "plan_confirm_preview_only_until_planning_store_exists"),
             _ => new Phase80ConfirmExecutionPlan(
                 Target: ConfirmTargetNone,
                 WriteEnabled: false,
@@ -488,7 +495,7 @@ public sealed class Phase80PendingActionRuntime
     {
         return actionType switch
         {
-            LifeRecordPreview or ReminderPreview => new Phase80MemoryPlan(
+            LifeRecordPreview or ReminderPreview or PlanPreview => new Phase80MemoryPlan(
                 Target: MemoryCandidateTarget,
                 WriteEnabled: false,
                 RequiresDedupe: true,
@@ -564,6 +571,8 @@ internal static class Phase80PersonalHomeIntentRouter
         {
             return LooksLikeReminder(source)
                 ? Phase80PendingActionRuntime.ReminderPreview
+                : LooksLikePlan(source)
+                    ? Phase80PendingActionRuntime.PlanPreview
                 : Phase80PendingActionRuntime.LifeRecordPreview;
         }
 
@@ -577,6 +586,11 @@ internal static class Phase80PersonalHomeIntentRouter
             return Phase80PendingActionRuntime.ReminderPreview;
         }
 
+        if (string.Equals(actionType, Phase80PendingActionRuntime.PlanPreview, StringComparison.OrdinalIgnoreCase))
+        {
+            return Phase80PendingActionRuntime.PlanPreview;
+        }
+
         return actionType.Trim();
     }
 
@@ -586,6 +600,7 @@ internal static class Phase80PersonalHomeIntentRouter
         {
             Phase80PendingActionRuntime.LifeRecordPreview => LifeRecordIntent,
             Phase80PendingActionRuntime.ReminderPreview => ReminderIntent,
+            Phase80PendingActionRuntime.PlanPreview => PlanIntent,
             _ => ToolActionIntent
         };
     }
@@ -597,6 +612,13 @@ internal static class Phase80PersonalHomeIntentRouter
                value.Contains("到点", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("明天", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("后天", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikePlan(string value)
+    {
+        return value.Contains("计划", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("安排", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("规划", StringComparison.OrdinalIgnoreCase);
     }
 }
 
