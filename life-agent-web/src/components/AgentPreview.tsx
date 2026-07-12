@@ -148,7 +148,7 @@ function actionTypeClass(actionType: string): string {
 
 function actionPreviewSafetyNote(actionType: string): string {
   if (actionType === REMINDER_PREVIEW) return "确认后仅标记为已确认，当前不会写入 reminders。";
-  if (actionType === LIFE_RECORD_PREVIEW) return "Confirm 后会写入 life_events，并显示在最近生活记录。";
+  if (actionType === LIFE_RECORD_PREVIEW) return "确认后会写入 life_events，并显示在最近生活记录。";
   if (actionType === PLAN_PREVIEW) return "确认后仅标记为已确认，当前不会写入计划数据。";
   return "确认后仍不会执行真实操作，也不会写入数据。";
 }
@@ -236,7 +236,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
     try {
       const res = await createPhase80PendingAction(
         message,
-        `用户输入：${message}。生活记录 Confirm 后写入 life_events；提醒与工具操作仍不执行。`,
+        `用户输入：${message}。生活记录确认后写入 life_events；提醒与工具操作仍不执行。`,
         Intl.DateTimeFormat().resolvedOptions().timeZone
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
@@ -350,7 +350,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs space-y-3">
             <div>
               <div className="text-zinc-100 font-semibold">记录生活，或创建一个提醒...</div>
-              <div className="text-zinc-500 mt-1">生活记录 Confirm 后会写入最近生活记录；提醒与工具操作仍不执行。</div>
+              <div className="text-zinc-500 mt-1">生活记录确认后会写入最近生活记录；提醒与工具操作仍不执行。</div>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
@@ -500,7 +500,9 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                         <div className="space-y-2">
                           <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-3 text-zinc-400">
                             {action.status === "confirmed"
-                              ? "该动作已确认，不能再次确认或取消；它仍未执行。"
+                              ? action.wroteData
+                                ? "该生活记录已写入 life_events，并会出现在最近生活记录。"
+                                : "该动作已确认，不能再次确认或取消；它仍未执行。"
                               : action.status === "cancelled"
                                 ? "该动作已取消，不能再确认。"
                                 : "该动作不再可操作。"}

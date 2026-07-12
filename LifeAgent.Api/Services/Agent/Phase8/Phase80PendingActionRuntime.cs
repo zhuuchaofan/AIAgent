@@ -219,10 +219,13 @@ public sealed class Phase80PendingActionRuntime
 
         if (status == Confirmed)
         {
+            var restoredView = ToView(current);
             return Phase80PendingActionResult.Ok(
                 Confirmed,
-                "该动作已经确认，但仍未执行。",
-                ToView(current));
+                restoredView.WroteData
+                    ? "该生活记录已经确认并写入 life_events。"
+                    : "该动作已经确认，但仍未执行。",
+                restoredView);
         }
 
         var executionResult = _enableConfirmWriteExecution
@@ -409,6 +412,7 @@ public sealed class Phase80PendingActionRuntime
             MemoryRequiresConfirmation: memoryPlan.RequiresConfirmation,
             Message: status switch
             {
+                Confirmed when (executionResult?.WroteData ?? record.WroteData) => ConfirmedWrittenMessage(record.ActionType),
                 Confirmed => ConfirmedPreviewMessage(record.ActionType),
                 Cancelled => "已取消",
                 Expired => "已过期，不能确认",
@@ -495,10 +499,19 @@ public sealed class Phase80PendingActionRuntime
     {
         return actionType switch
         {
-            LifeRecordPreview => "已确认生活记录；默认未写入 life_events，也未执行真实操作；启用写入门禁时会写入 life_events。",
+            LifeRecordPreview => "已确认生活记录；当前未写入 life_events，也未执行真实操作。",
             ReminderPreview => "已确认提醒；当前仍未写入 reminders，也未执行真实操作。",
             PlanPreview => "已确认计划；当前仍未写入计划数据，也未执行真实操作。",
             _ => "已确认，但未执行；没有写入数据，也没有执行真实操作。"
+        };
+    }
+
+    private static string ConfirmedWrittenMessage(string actionType)
+    {
+        return actionType switch
+        {
+            LifeRecordPreview => "已确认生活记录，并写入 life_events。",
+            _ => ConfirmedPreviewMessage(actionType)
         };
     }
 
