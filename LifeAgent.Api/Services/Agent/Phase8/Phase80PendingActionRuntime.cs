@@ -369,6 +369,7 @@ public sealed class Phase80PendingActionRuntime
             ConfirmWriteEnabled: confirmPlan.WriteEnabled,
             ConfirmWriteExecutionReady: confirmWriteDecision.ExecutionReady,
             ConfirmWriteRealPathReady: confirmWriteDecision.RealPathReady,
+            ConfirmWriteExecutorId: confirmWriteDecision.ExecutorId,
             ConfirmWriteDecisionReason: confirmWriteDecision.Reason,
             MemoryCandidateOnly: confirmPlan.MemoryCandidateOnly,
             ConfirmPlanReason: confirmPlan.Reason,
@@ -512,6 +513,7 @@ public sealed class Phase80PendingActionRuntime
             return new Phase80ConfirmWriteDecision(
                 ExecutionReady: false,
                 RealPathReady: false,
+                ExecutorId: "none",
                 Reason: "confirm_write_disabled_by_policy");
         }
 
@@ -519,6 +521,7 @@ public sealed class Phase80PendingActionRuntime
         return new Phase80ConfirmWriteDecision(
             ExecutionReady: readiness.ExecutionReady,
             RealPathReady: readiness.RealPathReady,
+            ExecutorId: readiness.ExecutorId,
             Reason: readiness.Reason);
     }
 
@@ -748,6 +751,7 @@ public sealed record Phase80PendingActionView(
     bool ConfirmWriteEnabled,
     bool ConfirmWriteExecutionReady,
     bool ConfirmWriteRealPathReady,
+    string ConfirmWriteExecutorId,
     string ConfirmWriteDecisionReason,
     bool MemoryCandidateOnly,
     string ConfirmPlanReason,
@@ -767,6 +771,7 @@ public sealed record Phase80ConfirmExecutionPlan(
 public sealed record Phase80ConfirmWriteDecision(
     bool ExecutionReady,
     bool RealPathReady,
+    string ExecutorId,
     string Reason);
 
 public interface IPhase80ConfirmWriteExecutor
@@ -787,6 +792,7 @@ public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecut
         return new Phase80ConfirmWriteExecutorReadiness(
             ExecutionReady: false,
             RealPathReady: false,
+            ExecutorId: "noop_confirm_write_executor",
             Reason: "confirm_write_policy_enabled_but_executor_not_connected");
     }
 }
@@ -794,6 +800,7 @@ public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecut
 public sealed record Phase80ConfirmWriteExecutorReadiness(
     bool ExecutionReady,
     bool RealPathReady,
+    string ExecutorId,
     string Reason);
 
 public sealed record Phase80ConfirmWritePolicy(

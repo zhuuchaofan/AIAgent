@@ -269,9 +269,11 @@ public class Phase80PendingActionRuntimeMvpTest
 
         Assert.False(disabledDecision.ExecutionReady);
         Assert.False(disabledDecision.RealPathReady);
+        Assert.Equal("none", disabledDecision.ExecutorId);
         Assert.Equal("confirm_write_disabled_by_policy", disabledDecision.Reason);
         Assert.False(enabledDecision.ExecutionReady);
         Assert.False(enabledDecision.RealPathReady);
+        Assert.Equal("noop_confirm_write_executor", enabledDecision.ExecutorId);
         Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", enabledDecision.Reason);
     }
 
@@ -291,9 +293,11 @@ public class Phase80PendingActionRuntimeMvpTest
 
         Assert.False(noOpDecision.ExecutionReady);
         Assert.False(noOpDecision.RealPathReady);
+        Assert.Equal("noop_confirm_write_executor", noOpDecision.ExecutorId);
         Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", noOpDecision.Reason);
         Assert.True(connectedDecision.ExecutionReady);
         Assert.True(connectedDecision.RealPathReady);
+        Assert.Equal("test_confirm_write_executor", connectedDecision.ExecutorId);
         Assert.Equal("test_executor_ready", connectedDecision.Reason);
     }
 
@@ -318,9 +322,11 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, confirmed.Data.ConfirmTarget);
         Assert.False(created.Data.ConfirmWriteExecutionReady);
         Assert.False(created.Data.ConfirmWriteRealPathReady);
+        Assert.Equal("noop_confirm_write_executor", created.Data.ConfirmWriteExecutorId);
         Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", created.Data.ConfirmWriteDecisionReason);
         Assert.False(confirmed.Data.ConfirmWriteExecutionReady);
         Assert.False(confirmed.Data.ConfirmWriteRealPathReady);
+        Assert.Equal("noop_confirm_write_executor", confirmed.Data.ConfirmWriteExecutorId);
         Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", confirmed.Data.ConfirmWriteDecisionReason);
         Assert.False(confirmed.Data.Executed);
         Assert.False(confirmed.Data.WroteData);
@@ -854,6 +860,7 @@ public class Phase80PendingActionRuntimeMvpTest
             return new Phase80ConfirmWriteExecutorReadiness(
                 ExecutionReady: true,
                 RealPathReady: true,
+                ExecutorId: "test_confirm_write_executor",
                 Reason: "test_executor_ready");
         }
     }
