@@ -2,6 +2,19 @@
 
 > 评估日期：2026-06-30
 > 评估依据：实际代码、API 端点、前端组件、测试文件、部署配置、docs/ 文档
+> 当前状态：历史评估文件。当前阶段、代码、文档和线上状态以 `docs/lifeos_project_consolidation_map.md`、`docs/lifeos_project_roadmap.md`、`docs/skills/lifeos-phase-assessment.md` 和 `docs/lifeos_unified_inbox_current_design.md` 为准。
+
+## 0. 2026-07-12 状态修正
+
+本文件记录的是 2026-06-30 的阶段评估，不再作为当前状态真源。
+
+当前已变化的关键事实：
+
+- Unified Inbox / 生活收件箱已成为首页主线。
+- pending action 已可持久化到 Firestore。
+- `life_record_preview` 经用户 Confirm 后已允许最小真实写入 `life_events`。
+- Reminder write、durable Memory write、Tool Execution、外部副作用仍关闭。
+- 当前收敛总图见 `docs/lifeos_project_consolidation_map.md`。
 
 ---
 

@@ -28,13 +28,14 @@ Keep AI agents aligned with LifeOS phase-based development and prevent conflatin
 |---|---|---|
 | Phase 3 RAG | Complete | Knowledge access layer: document upload, chunking, embeddings, vector retrieval, RAG answer, citations, history. |
 | Phase 4 Agent MVP | Complete | Agent Preview, read tools, controlled Agent runner, pending action confirmation lifecycle. |
-| Phase 5 Agent Write MVP | Development Complete | `create_life_event` write path exists behind preview / confirm / feature gate controls. |
-| Release Gate | No-Go unless explicitly approved | Real-write canary, production enablement, rollout, rollback, cleanup. Not a development Phase. |
-| Phase 6 Memory Engine | Current development context | Long-term Memory taxonomy, preview proposals, retrieval skeletons, merge/conflict/pollution guard. Durable Memory write and production integration are not ordinary Phase 6 implementation; they require Release Gate or explicit approval. |
+| Phase 5 Agent Write MVP | LifeEvent minimal write live | Unified Inbox can create a server-side pending action and Confirm `life_record_preview` into `life_events`. |
+| Unified Inbox | Current product mainline | Home input -> intent classifier -> pending action -> confirm gate -> allowlisted executor. See `docs/lifeos_unified_inbox_current_design.md`. |
+| Release Gate | LifeEvent minimal gate passed; all other writes No-Go | Reminder writes, durable Memory writes, external tools, MCP, and Cloud Run env changes remain separately approved gates. |
+| Phase 6 Memory Engine | Next development context after consolidation | Long-term Memory taxonomy, preview proposals, retrieval skeletons, merge/conflict/pollution guard. Durable Memory write and production integration require Release Gate or explicit approval. |
 
 ## Release Gate boundary
 
-Release Gate work is not a normal development Phase. It includes enabling real write flags, running real-write smoke, creating production `life_event` or Memory documents, modifying production env, and performing canary rollout.
+Release Gate work is not a normal development Phase. The minimal `life_events` write gate for Unified Inbox has been approved and deployed. New write targets still require a gate: reminders, durable Memory, external tools, MCP, Cloud Run env changes, production Firestore rules changes, and new side-effect integrations.
 
 Development can prepare code, docs, tests, and preview-only validation. It cannot silently cross into real production writes.
 
@@ -42,7 +43,7 @@ Development can prepare code, docs, tests, and preview-only validation. It canno
 
 - Do not rename or redefine Phases ad hoc.
 - Do not call Phase 3 RAG "Agent化".
-- Do not treat Phase 5 Development Complete as production write enabled.
+- Do not treat LifeEvent minimal write enablement as permission to open Reminder, Memory, Tool, MCP, or external writes.
 - Do not place real-write canary inside Phase 6 implementation.
 - Do not mark design-only Memory work as implemented durable Memory.
 
@@ -55,7 +56,7 @@ Development can prepare code, docs, tests, and preview-only validation. It canno
 ## Checklist
 
 - [ ] Phase 3 is RAG / knowledge access only.
-- [ ] Phase 4/5 Agent capabilities are separated from production enablement.
+- [ ] Phase 4/5 Agent capabilities are separated from each production write target.
 - [ ] Phase 6 Memory work distinguishes design, preview, and durable write.
 - [ ] Release Gate actions require explicit approval.
 - [ ] Final wording does not overstate current state.

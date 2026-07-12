@@ -18,6 +18,7 @@ Existing source-of-truth documents remain valid:
 
 - `docs/skills/lifeos-phase-assessment.md` is the authoritative Phase assessment skill.
 - `docs/skills/cloud-run-deploy.md` is the authoritative Cloud Run deployment skill.
+- `docs/lifeos_unified_inbox_current_design.md` is the authoritative current-state design for the home input / pending action / LifeEvent write mainline.
 
 ## New agent first-read order
 
@@ -52,7 +53,7 @@ New agents should read the shared and core baseline rules first, then route to d
 - Phase-based development is mandatory.
 - Docs come before implementation for architecture-impacting work.
 - AI agents must inspect the current repo state before changing files.
-- Feature gates default to off for production write capability.
+- Feature gates default to off for new production write capability.
 - Preview-only behavior is not production-ready real write behavior.
-- Real production writes require a dedicated Release Gate and explicit user approval.
+- The Unified Inbox LifeEvent write path is the only currently approved minimal real write; all new production writes require a dedicated Release Gate and explicit user approval.
 - This project is commit-only by default; do not push unless the user explicitly asks.
