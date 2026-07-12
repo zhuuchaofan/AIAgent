@@ -141,6 +141,13 @@ function actionTypeClass(actionType: string): string {
   return "border-zinc-600/60 text-zinc-300 bg-zinc-800/50";
 }
 
+function actionPreviewSafetyNote(actionType: string): string {
+  if (actionType === REMINDER_PREVIEW) return "确认后仅标记为已确认，当前不会写入 reminders。";
+  if (actionType === LIFE_RECORD_PREVIEW) return "确认后仅标记为已确认，当前不会写入 life_events。";
+  if (actionType === PLAN_PREVIEW) return "确认后仅标记为已确认，当前不会写入计划数据。";
+  return "确认后仍不会执行真实操作，也不会写入数据。";
+}
+
 export function AgentPreview() {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -450,6 +457,9 @@ export function AgentPreview() {
                       </div>
                       <div className="text-zinc-100 font-medium">{action.title}</div>
                       <div className="text-zinc-400 leading-relaxed">{action.summary}</div>
+                      <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/50 p-3 text-zinc-400 leading-relaxed">
+                        {actionPreviewSafetyNote(action.actionType)}
+                      </div>
                       {pending ? (
                         <div className="flex flex-col sm:flex-row gap-2">
                           <button
