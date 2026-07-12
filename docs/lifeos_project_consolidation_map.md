@@ -87,21 +87,23 @@ life-agent-web/src/components/AgentPreview.tsx
 These are cleanup tasks, not prerequisites for current production operation:
 
 1. Wrap or rename `Phase80PendingActionRuntime` to `UnifiedInboxRuntime`.
-2. Move classifier contracts out of the Phase8 file into
-   `Services/Agent/UnifiedInbox/`.
-3. Split `Phase80LifeEventConfirmWriteExecutor` into its own file.
-4. Hide or remove `/api/agent/pending-actions/demo` compatibility aliases after
+2. Hide or remove `/api/agent/pending-actions/demo` compatibility aliases after
    tests and docs stop using them.
-5. Build a dedicated lightweight intent-classification prompt instead of
+3. Build a dedicated lightweight intent-classification prompt instead of
    reusing `ILlmService.ParseAsync`.
-6. Add authenticated production smoke for:
+4. Add authenticated production smoke for:
    - journal text with future time mention -> life record
    - explicit reminder command -> reminder preview
    - life record Confirm -> appears in recent life records
-7. Decide the next approved Release Gate:
+5. Decide the next approved Release Gate:
    - reminder write
    - durable memory write
    - tool execution
+
+Completed cleanup:
+
+- Moved Unified Inbox classifier contracts to `Services/Agent/UnifiedInbox/`.
+- Split `Phase80LifeEventConfirmWriteExecutor` into its own LifeEvents file.
 
 ## Final Goal Path
 

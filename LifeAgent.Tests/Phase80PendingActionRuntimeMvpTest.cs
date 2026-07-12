@@ -3,6 +3,7 @@ using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
+using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;

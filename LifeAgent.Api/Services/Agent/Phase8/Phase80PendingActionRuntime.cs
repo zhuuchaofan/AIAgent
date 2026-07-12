@@ -1,7 +1,5 @@
-using LifeAgent.Api.Models.LifeEvents;
-using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent.PendingActions;
-using LifeAgent.Api.Services.LifeEvents;
+using LifeAgent.Api.Services.Agent.UnifiedInbox;
 
 namespace LifeAgent.Api.Services.Agent.Phase8;
 
@@ -657,7 +655,7 @@ public sealed class Phase80PendingActionRuntime
     }
 }
 
-internal static class Phase80PersonalHomeIntentRouter
+public static class Phase80PersonalHomeIntentRouter
 {
     public const string LifeRecordIntent = "life_record";
     public const string ReminderIntent = "reminder";
@@ -744,99 +742,6 @@ internal static class Phase80PersonalHomeIntentRouter
         return value.Contains("计划", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("安排", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("规划", StringComparison.OrdinalIgnoreCase);
-    }
-}
-
-public interface IUnifiedInboxIntentClassifier
-{
-    Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
-        UnifiedInboxIntentClassifierRequest request,
-        CancellationToken cancellationToken = default);
-}
-
-public sealed record UnifiedInboxIntentClassifierRequest(
-    string Title,
-    string Summary,
-    string? RequestedActionType,
-    string? ClientTimeZone);
-
-public sealed class RuleBasedUnifiedInboxIntentClassifier : IUnifiedInboxIntentClassifier
-{
-    public static RuleBasedUnifiedInboxIntentClassifier Instance { get; } = new();
-
-    private RuleBasedUnifiedInboxIntentClassifier()
-    {
-    }
-
-    public Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
-        UnifiedInboxIntentClassifierRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(Phase80PersonalHomeIntentRouter.Route(
-            request.Title,
-            request.Summary,
-            request.RequestedActionType,
-            "rule_based_intent_classifier"));
-    }
-}
-
-public sealed class LlmUnifiedInboxIntentClassifier : IUnifiedInboxIntentClassifier
-{
-    private readonly ILlmService _llmService;
-    private readonly ILogger<LlmUnifiedInboxIntentClassifier> _logger;
-
-    public LlmUnifiedInboxIntentClassifier(
-        ILlmService llmService,
-        ILogger<LlmUnifiedInboxIntentClassifier> logger)
-    {
-        _llmService = llmService;
-        _logger = logger;
-    }
-
-    public async Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
-        UnifiedInboxIntentClassifierRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        if (!string.IsNullOrWhiteSpace(request.RequestedActionType))
-        {
-            return Phase80PersonalHomeIntentRouter.Route(
-                request.Title,
-                request.Summary,
-                request.RequestedActionType,
-                "explicit_action_type");
-        }
-
-        var source = $"{request.Title}\n{request.Summary}";
-        try
-        {
-            var parsed = await _llmService.ParseAsync(
-                source,
-                string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "Asia/Shanghai" : request.ClientTimeZone);
-
-            if (parsed.DetectedReminderIntent || parsed.Reminder?.HasIntent == true)
-            {
-                return Phase80PersonalHomeIntentRouter.Route(
-                    request.Title,
-                    request.Summary,
-                    Phase80PendingActionRuntime.ReminderPreview,
-                    "llm_detected_reminder_intent");
-            }
-
-            return Phase80PersonalHomeIntentRouter.Route(
-                request.Title,
-                request.Summary,
-                Phase80PendingActionRuntime.LifeRecordPreview,
-                "llm_default_life_record");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Unified inbox LLM intent classification failed; falling back to rule-based classifier.");
-            return Phase80PersonalHomeIntentRouter.Route(
-                request.Title,
-                request.Summary,
-                request.RequestedActionType,
-                "llm_failed_rule_fallback");
-        }
     }
 }
 
@@ -1007,66 +912,6 @@ public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecut
             RealWritePath: false,
             ExecutorId: "noop_confirm_write_executor",
             Reason: "noop_executor_never_writes"));
-    }
-}
-
-public sealed class Phase80LifeEventConfirmWriteExecutor : IPhase80ConfirmWriteExecutor
-{
-    private readonly IAgentLifeEventWriter _writer;
-
-    public Phase80LifeEventConfirmWriteExecutor(IAgentLifeEventWriter writer)
-    {
-        _writer = writer;
-    }
-
-    public Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan)
-    {
-        var ready = string.Equals(plan.Target, Phase80PendingActionRuntime.ConfirmTargetLifeEvents, StringComparison.Ordinal);
-        return new Phase80ConfirmWriteExecutorReadiness(
-            ExecutionReady: ready,
-            RealPathReady: ready,
-            ExecutorId: "phase80_life_event_confirm_write_executor",
-            Reason: ready
-                ? "life_event_confirm_write_executor_ready"
-                : "executor_only_supports_life_events");
-    }
-
-    public async Task<Phase80ConfirmWriteExecutionResult> ExecuteAsync(
-        Phase80ConfirmExecutionRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        if (!string.Equals(request.Plan.Target, Phase80PendingActionRuntime.ConfirmTargetLifeEvents, StringComparison.Ordinal) ||
-            !string.Equals(request.ActionType, Phase80PendingActionRuntime.LifeRecordPreview, StringComparison.Ordinal))
-        {
-            return new Phase80ConfirmWriteExecutionResult(
-                Success: false,
-                Status: "skipped",
-                Target: request.Plan.Target,
-                ResourcePath: null,
-                WroteData: false,
-                RealWritePath: false,
-                ExecutorId: "phase80_life_event_confirm_write_executor",
-                Reason: "unsupported_confirm_write_target");
-        }
-
-        var createRequest = new CreateLifeEventRequest
-        {
-            Type = "life",
-            Title = request.Title,
-            Content = request.Summary
-        };
-        var lifeEvent = AgentLifeEventFactory.Create(request.UserId, request.ActionId, createRequest);
-        await _writer.WriteAsync(request.UserId, lifeEvent.Id, lifeEvent, cancellationToken);
-
-        return new Phase80ConfirmWriteExecutionResult(
-            Success: true,
-            Status: "written",
-            Target: request.Plan.Target,
-            ResourcePath: $"users/{request.UserId}/life_events/{lifeEvent.Id}",
-            WroteData: true,
-            RealWritePath: true,
-            ExecutorId: "phase80_life_event_confirm_write_executor",
-            Reason: "life_event_written_after_confirm");
     }
 }
 

@@ -8,6 +8,7 @@ using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
+using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.Agent.Tools;
 using LifeAgent.Api.Services.LifeEvents;
 using LifeAgent.Api.Services.Memories;
