@@ -26,6 +26,7 @@ public sealed class Phase80PendingActionRuntime
     private readonly string _safetyMode;
     private readonly Phase80ConfirmWritePolicy _confirmWritePolicy;
     private readonly IPhase80ConfirmWriteExecutor _confirmWriteExecutor;
+    private readonly bool _enableConfirmWriteExecution;
 
     public Phase80PendingActionRuntime(
         TimeProvider? timeProvider = null,
@@ -33,7 +34,8 @@ public sealed class Phase80PendingActionRuntime
         IPendingActionStore? store = null,
         string? safetyMode = null,
         Phase80ConfirmWritePolicy? confirmWritePolicy = null,
-        IPhase80ConfirmWriteExecutor? confirmWriteExecutor = null)
+        IPhase80ConfirmWriteExecutor? confirmWriteExecutor = null,
+        bool enableConfirmWriteExecution = false)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
         _ttl = ttl ?? TimeSpan.FromMinutes(15);
@@ -41,6 +43,7 @@ public sealed class Phase80PendingActionRuntime
         _safetyMode = string.IsNullOrWhiteSpace(safetyMode) ? SafetyMode : safetyMode;
         _confirmWritePolicy = confirmWritePolicy ?? Phase80ConfirmWritePolicy.DefaultPreviewOnly();
         _confirmWriteExecutor = confirmWriteExecutor ?? Phase80NoOpConfirmWriteExecutor.Instance;
+        _enableConfirmWriteExecution = enableConfirmWriteExecution;
     }
 
     public Phase80PendingActionResult Create(string userId, Phase80CreatePendingActionRequest? request)
@@ -147,7 +150,7 @@ public sealed class Phase80PendingActionRuntime
         }
 
         var records = await _store.QueryAsync(new PendingActionQuery(userId), cancellationToken);
-        return records.Select(ToView).ToArray();
+        return records.Select(record => ToView(record)).ToArray();
     }
 
     public async Task<Phase80PendingActionResult> ArchiveAsync(
@@ -231,10 +234,19 @@ public sealed class Phase80PendingActionRuntime
                 updated.Record is null ? null : ToView(updated.Record));
         }
 
+        var executionResult = _enableConfirmWriteExecution
+            ? await TryExecuteConfirmWriteAsync(
+                ToConfirmExecutionRequest(updated.Record),
+                ResolveConfirmWriteDecision(ResolveStoredConfirmPlan(updated.Record), _confirmWriteExecutor),
+                cancellationToken)
+            : null;
+
         return Phase80PendingActionResult.Ok(
             Confirmed,
-            ConfirmedPreviewMessage(updated.Record.ActionType),
-            ToView(updated.Record));
+            executionResult?.Success == true
+                ? "已确认并完成 Beta 测试写入。"
+                : ConfirmedPreviewMessage(updated.Record.ActionType),
+            ToView(updated.Record, executionResult));
     }
 
     public Phase80PendingActionResult Cancel(string userId, string actionId)
@@ -334,7 +346,9 @@ public sealed class Phase80PendingActionRuntime
         }
     }
 
-    private Phase80PendingActionView ToView(PendingActionRecord record)
+    private Phase80PendingActionView ToView(
+        PendingActionRecord record,
+        Phase80ConfirmWriteExecutionResult? executionResult = null)
     {
         var status = ToPhase80Status(record.Status);
         var confirmPlan = ResolveStoredConfirmPlan(record);
@@ -357,13 +371,13 @@ public sealed class Phase80PendingActionRuntime
             ExpiresAt: record.ExpiresAt,
             ConfirmedAt: status == Confirmed ? record.UpdatedAt : null,
             CancelledAt: status == Cancelled ? record.UpdatedAt : null,
-            Executed: false,
-            WroteData: false,
-            ExecutionReady: false,
+            Executed: executionResult?.Success ?? false,
+            WroteData: executionResult?.WroteData ?? false,
+            ExecutionReady: executionResult?.Success ?? false,
             GuardDecision: GuardDecision,
             SafetyMode: _safetyMode,
             LegacyConfirmEndpointUsed: false,
-            RealWritePath: false,
+            RealWritePath: executionResult?.RealWritePath ?? false,
             IsArchived: record.IsArchived,
             ConfirmTarget: confirmPlan.Target,
             ConfirmWriteEnabled: confirmPlan.WriteEnabled,
@@ -385,6 +399,17 @@ public sealed class Phase80PendingActionRuntime
                 Expired => "已过期，不能确认",
                 _ => "待确认"
             });
+    }
+
+    private Phase80ConfirmExecutionRequest ToConfirmExecutionRequest(PendingActionRecord record)
+    {
+        return new Phase80ConfirmExecutionRequest(
+            UserId: record.UserSubjectRef,
+            ActionId: record.PendingActionId,
+            ActionType: record.ActionType,
+            Title: ReadPayload(record, "title", "保存一条测试生活记录"),
+            Summary: ReadPayload(record, "summary", "Phase 8 fake-first 待确认动作。"),
+            Plan: ResolveStoredConfirmPlan(record));
     }
 
     private static string ReadPayload(PendingActionRecord record, string key, string fallback)

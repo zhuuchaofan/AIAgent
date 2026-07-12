@@ -424,6 +424,41 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void ConfirmAsyncCanInvokeFakeExecutorInExplicitBetaRuntimeMode()
+    {
+        var executor = new CountingReadyForTestConfirmWriteExecutor();
+        var runtime = new Phase80PendingActionRuntime(
+            confirmWritePolicy: new Phase80ConfirmWritePolicy(
+                AllowLifeEventWrites: true,
+                AllowReminderWrites: false),
+            confirmWriteExecutor: executor,
+            enableConfirmWriteExecution: true);
+        var created = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "生活记录：今天跑步三公里",
+                "用户输入：今天跑步三公里",
+                Phase80PendingActionRuntime.LifeRecordPreview));
+
+        var confirmed = runtime.Confirm("user_a", created.Data!.ActionId);
+        var restored = runtime.List("user_a").Single(action => action.ActionId == created.Data.ActionId);
+
+        Assert.Equal("confirmed", confirmed.Data!.Status);
+        Assert.Equal("已确认并完成 Beta 测试写入。", confirmed.Message);
+        Assert.True(confirmed.Data.ConfirmWriteEnabled);
+        Assert.True(confirmed.Data.ConfirmWriteExecutionReady);
+        Assert.True(confirmed.Data.ConfirmWriteRealPathReady);
+        Assert.Equal("counting_test_confirm_write_executor", confirmed.Data.ConfirmWriteExecutorId);
+        Assert.True(confirmed.Data.Executed);
+        Assert.True(confirmed.Data.WroteData);
+        Assert.True(confirmed.Data.RealWritePath);
+        Assert.Equal(1, executor.ExecuteCallCount);
+        Assert.False(restored.Executed);
+        Assert.False(restored.WroteData);
+        Assert.False(restored.RealWritePath);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(
