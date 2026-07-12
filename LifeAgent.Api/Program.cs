@@ -58,6 +58,7 @@ builder.Services.AddSingleton<IPendingActionStore>(sp =>
         () => sp.GetRequiredService<FirestoreDb>(),
         sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<IPhase80ConfirmWriteExecutor, Phase80LifeEventConfirmWriteExecutor>();
+builder.Services.AddScoped<IUnifiedInboxIntentClassifier, LlmUnifiedInboxIntentClassifier>();
 builder.Services.AddScoped(sp =>
 {
     var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
@@ -69,6 +70,7 @@ builder.Services.AddScoped(sp =>
             AllowLifeEventWrites: true,
             AllowReminderWrites: false),
         confirmWriteExecutor: sp.GetRequiredService<IPhase80ConfirmWriteExecutor>(),
+        intentClassifier: sp.GetRequiredService<IUnifiedInboxIntentClassifier>(),
         enableConfirmWriteExecution: true);
 });
 builder.Services.AddScoped<IMemoryContextProvider>(sp =>

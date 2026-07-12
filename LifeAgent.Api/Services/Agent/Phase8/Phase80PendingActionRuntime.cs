@@ -1,4 +1,5 @@
 using LifeAgent.Api.Models.LifeEvents;
+using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.LifeEvents;
 
@@ -28,6 +29,7 @@ public sealed class Phase80PendingActionRuntime
     private readonly string _safetyMode;
     private readonly Phase80ConfirmWritePolicy _confirmWritePolicy;
     private readonly IPhase80ConfirmWriteExecutor _confirmWriteExecutor;
+    private readonly IUnifiedInboxIntentClassifier _intentClassifier;
     private readonly bool _enableConfirmWriteExecution;
 
     public Phase80PendingActionRuntime(
@@ -37,6 +39,7 @@ public sealed class Phase80PendingActionRuntime
         string? safetyMode = null,
         Phase80ConfirmWritePolicy? confirmWritePolicy = null,
         IPhase80ConfirmWriteExecutor? confirmWriteExecutor = null,
+        IUnifiedInboxIntentClassifier? intentClassifier = null,
         bool enableConfirmWriteExecution = false)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -45,6 +48,7 @@ public sealed class Phase80PendingActionRuntime
         _safetyMode = string.IsNullOrWhiteSpace(safetyMode) ? SafetyMode : safetyMode;
         _confirmWritePolicy = confirmWritePolicy ?? Phase80ConfirmWritePolicy.DefaultPreviewOnly();
         _confirmWriteExecutor = confirmWriteExecutor ?? Phase80NoOpConfirmWriteExecutor.Instance;
+        _intentClassifier = intentClassifier ?? RuleBasedUnifiedInboxIntentClassifier.Instance;
         _enableConfirmWriteExecution = enableConfirmWriteExecution;
     }
 
@@ -70,7 +74,9 @@ public sealed class Phase80PendingActionRuntime
         var summary = string.IsNullOrWhiteSpace(request?.Summary)
             ? "Phase 8.0 fake-first 待确认动作：确认后只改变状态，不写入 Firestore，也不执行真实 tool。"
             : request.Summary.Trim();
-        var route = Phase80PersonalHomeIntentRouter.Route(title, summary, request?.ActionType);
+        var route = await _intentClassifier.ClassifyAsync(
+            new UnifiedInboxIntentClassifierRequest(title, summary, request?.ActionType, request?.ClientTimeZone),
+            cancellationToken);
         var actionType = route.ActionType;
         var confirmPlan = ResolveConfirmExecutionPlan(actionType, _confirmWritePolicy);
         var memoryPlan = ResolveMemoryPlan(actionType);
@@ -103,6 +109,7 @@ public sealed class Phase80PendingActionRuntime
                 ["intent"] = route.Intent,
                 ["disposition"] = route.Disposition,
                 ["requiresPendingAction"] = route.RequiresPendingAction.ToString(),
+                ["intentClassifier"] = route.Classifier,
                 ["confirmTarget"] = confirmPlan.Target,
                 ["confirmWriteEnabled"] = confirmPlan.WriteEnabled.ToString(),
                 ["memoryCandidateOnly"] = confirmPlan.MemoryCandidateOnly.ToString(),
@@ -116,7 +123,8 @@ public sealed class Phase80PendingActionRuntime
             RedactionMetadata: new Dictionary<string, string>
             {
                 ["mode"] = "preview_only",
-                ["routeReason"] = route.Reason
+                ["routeReason"] = route.Reason,
+                ["intentClassifier"] = route.Classifier
             },
             ValidationSnapshot: new Dictionary<string, string>
             {
@@ -374,6 +382,7 @@ public sealed class Phase80PendingActionRuntime
             RiskLevel: route.RiskLevel,
             RequiresPendingAction: route.RequiresPendingAction,
             RouteReason: route.Reason,
+            IntentClassifier: route.Classifier,
             CreatedAt: record.CreatedAt,
             UpdatedAt: record.UpdatedAt,
             ExpiresAt: record.ExpiresAt,
@@ -440,7 +449,8 @@ public sealed class Phase80PendingActionRuntime
             Disposition = ReadPayload(record, "disposition", fallback.Disposition),
             RiskLevel = string.IsNullOrWhiteSpace(record.RiskLevel) ? fallback.RiskLevel : record.RiskLevel,
             RequiresPendingAction = ReadBoolPayload(record, "requiresPendingAction", fallback.RequiresPendingAction),
-            Reason = ReadMetadata(record, "routeReason", fallback.Reason)
+            Reason = ReadMetadata(record, "routeReason", fallback.Reason),
+            Classifier = ReadMetadata(record, "intentClassifier", fallback.Classifier)
         };
     }
 
@@ -660,7 +670,11 @@ internal static class Phase80PersonalHomeIntentRouter
     public const string MediumRisk = "medium_user_state_change";
     public const string HighRisk = "high_external_or_irreversible";
 
-    public static Phase80PersonalHomeIntentRoute Route(string title, string summary, string? requestedActionType)
+    public static Phase80PersonalHomeIntentRoute Route(
+        string title,
+        string summary,
+        string? requestedActionType,
+        string classifier = "rule_based_intent_classifier")
     {
         var source = $"{title} {summary}";
         var actionType = NormalizeActionType(requestedActionType, source);
@@ -674,7 +688,8 @@ internal static class Phase80PersonalHomeIntentRouter
             RequiresPendingAction: policy.RequiresPendingAction,
             Reason: string.IsNullOrWhiteSpace(requestedActionType)
                 ? "inferred_from_home_input"
-                : "requested_action_type");
+                : "requested_action_type",
+            Classifier: classifier);
     }
 
     private static string NormalizeActionType(string? actionType, string source)
@@ -732,6 +747,99 @@ internal static class Phase80PersonalHomeIntentRouter
     }
 }
 
+public interface IUnifiedInboxIntentClassifier
+{
+    Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
+        UnifiedInboxIntentClassifierRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record UnifiedInboxIntentClassifierRequest(
+    string Title,
+    string Summary,
+    string? RequestedActionType,
+    string? ClientTimeZone);
+
+public sealed class RuleBasedUnifiedInboxIntentClassifier : IUnifiedInboxIntentClassifier
+{
+    public static RuleBasedUnifiedInboxIntentClassifier Instance { get; } = new();
+
+    private RuleBasedUnifiedInboxIntentClassifier()
+    {
+    }
+
+    public Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
+        UnifiedInboxIntentClassifierRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Phase80PersonalHomeIntentRouter.Route(
+            request.Title,
+            request.Summary,
+            request.RequestedActionType,
+            "rule_based_intent_classifier"));
+    }
+}
+
+public sealed class LlmUnifiedInboxIntentClassifier : IUnifiedInboxIntentClassifier
+{
+    private readonly ILlmService _llmService;
+    private readonly ILogger<LlmUnifiedInboxIntentClassifier> _logger;
+
+    public LlmUnifiedInboxIntentClassifier(
+        ILlmService llmService,
+        ILogger<LlmUnifiedInboxIntentClassifier> logger)
+    {
+        _llmService = llmService;
+        _logger = logger;
+    }
+
+    public async Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
+        UnifiedInboxIntentClassifierRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!string.IsNullOrWhiteSpace(request.RequestedActionType))
+        {
+            return Phase80PersonalHomeIntentRouter.Route(
+                request.Title,
+                request.Summary,
+                request.RequestedActionType,
+                "explicit_action_type");
+        }
+
+        var source = $"{request.Title}\n{request.Summary}";
+        try
+        {
+            var parsed = await _llmService.ParseAsync(
+                source,
+                string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "Asia/Shanghai" : request.ClientTimeZone);
+
+            if (parsed.DetectedReminderIntent || parsed.Reminder?.HasIntent == true)
+            {
+                return Phase80PersonalHomeIntentRouter.Route(
+                    request.Title,
+                    request.Summary,
+                    Phase80PendingActionRuntime.ReminderPreview,
+                    "llm_detected_reminder_intent");
+            }
+
+            return Phase80PersonalHomeIntentRouter.Route(
+                request.Title,
+                request.Summary,
+                Phase80PendingActionRuntime.LifeRecordPreview,
+                "llm_default_life_record");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unified inbox LLM intent classification failed; falling back to rule-based classifier.");
+            return Phase80PersonalHomeIntentRouter.Route(
+                request.Title,
+                request.Summary,
+                request.RequestedActionType,
+                "llm_failed_rule_fallback");
+        }
+    }
+}
+
 internal sealed record Phase80PersonalHomeRoutingPolicy(bool AllowLowRiskDirectSave)
 {
     public static Phase80PersonalHomeRoutingPolicy DefaultPreviewOnly()
@@ -772,15 +880,20 @@ internal sealed record Phase80PersonalHomeRoutingDecision(
     string RiskLevel,
     bool RequiresPendingAction);
 
-internal sealed record Phase80PersonalHomeIntentRoute(
+public sealed record Phase80PersonalHomeIntentRoute(
     string Intent,
     string ActionType,
     string Disposition,
     string RiskLevel,
     bool RequiresPendingAction,
-    string Reason);
+    string Reason,
+    string Classifier = "rule_based_intent_classifier");
 
-public sealed record Phase80CreatePendingActionRequest(string? Title, string? Summary, string? ActionType = null);
+public sealed record Phase80CreatePendingActionRequest(
+    string? Title,
+    string? Summary,
+    string? ActionType = null,
+    string? ClientTimeZone = null);
 
 public sealed record Phase80PendingActionRecord(
     string ActionId,
@@ -810,6 +923,7 @@ public sealed record Phase80PendingActionView(
     string RiskLevel,
     bool RequiresPendingAction,
     string RouteReason,
+    string IntentClassifier,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset ExpiresAt,

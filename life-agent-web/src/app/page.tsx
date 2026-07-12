@@ -89,7 +89,7 @@ export default function Home() {
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                个人助手
+                生活收件箱
                 {activeTab === "assistant" && (
                   <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
                 )}

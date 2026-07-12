@@ -78,6 +78,7 @@ interface Phase80PendingAction {
   riskLevel?: string;
   requiresPendingAction?: boolean;
   routeReason?: string;
+  intentClassifier?: string;
   createdAt: string;
   expiresAt: string;
   confirmedAt?: string | null;
@@ -196,7 +197,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
       setPhase80Actions(res.data ?? []);
       setPhase80Persistence(res.persistence ?? null);
       if ((res.data ?? []).length > 0) {
-        setPhase80Message("已从 Firestore 恢复待确认动作历史；刷新后状态会保留。");
+        setPhase80Message("已恢复待确认历史；刷新后状态会保留。");
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -235,7 +236,8 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
     try {
       const res = await createPhase80PendingAction(
         message,
-        `用户输入：${message}。生活记录 Confirm 后写入 life_events；提醒与工具操作仍不执行。`
+        `用户输入：${message}。生活记录 Confirm 后写入 life_events；提醒与工具操作仍不执行。`,
+        Intl.DateTimeFormat().resolvedOptions().timeZone
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
         setPhase80Message(res.message?.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (res.message || "提交失败，请稍后再试。"));
@@ -334,10 +336,11 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
     return "border-amber-500/30 text-amber-200 bg-amber-500/10";
   };
 
-  const phase80StatusLabel = (status: string) => {
-    if (status === "confirmed") return "已确认，尚未执行";
-    if (status === "cancelled") return "已取消";
-    if (status === "expired") return "已过期";
+  const phase80StatusLabel = (action: Phase80PendingAction) => {
+    if (action.status === "confirmed" && action.wroteData) return "已确认，已写入";
+    if (action.status === "confirmed") return "已确认，未执行";
+    if (action.status === "cancelled") return "已取消";
+    if (action.status === "expired") return "已过期";
     return "待确认";
   };
 
@@ -418,6 +421,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                 <div>riskLevel: <span className="font-mono">{latestPendingAction?.riskLevel ?? "low_record"}</span></div>
                 <div>requiresPendingAction: <span className="font-mono">{String(latestPendingAction?.requiresPendingAction ?? true)}</span></div>
                 <div>routeReason: <span className="font-mono">{latestPendingAction?.routeReason ?? "inferred_from_home_input"}</span></div>
+                <div>intentClassifier: <span className="font-mono">{latestPendingAction?.intentClassifier ?? "unknown"}</span></div>
                 <div>confirmTarget: <span className="font-mono">{latestPendingAction?.confirmTarget ?? "none"}</span></div>
                 <div>confirmWriteEnabled: <span className="font-mono">{String(latestPendingAction?.confirmWriteEnabled ?? false)}</span></div>
                 <div>confirmWriteExecutionReady: <span className="font-mono">{String(latestPendingAction?.confirmWriteExecutionReady ?? false)}</span></div>
@@ -459,7 +463,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                     <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
-                          {phase80StatusLabel(action.status)}
+                          {phase80StatusLabel(action)}
                         </span>
                         <span className={`px-2 py-0.5 rounded border ${actionTypeClass(action.actionType)}`}>
                           {actionTypeLabel(action.actionType)}
@@ -532,7 +536,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                     <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
-                          {phase80StatusLabel(action.status)}
+                          {phase80StatusLabel(action)}
                         </span>
                         <span className={`px-2 py-0.5 rounded border ${actionTypeClass(action.actionType)}`}>
                           {actionTypeLabel(action.actionType)}

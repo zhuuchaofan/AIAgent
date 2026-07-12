@@ -95,6 +95,26 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void RuntimeUsesInjectedUnifiedInboxIntentClassifier()
+    {
+        var runtime = new Phase80PendingActionRuntime(
+            intentClassifier: new FixedUnifiedInboxIntentClassifier(Phase80PendingActionRuntime.ReminderPreview));
+
+        var result = runtime.Create(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "普通生活输入",
+                "用户输入：这句话没有提醒关键词"));
+
+        Assert.True(result.Success);
+        Assert.Equal(Phase80PendingActionRuntime.ReminderPreview, result.Data!.ActionType);
+        Assert.Equal(Phase80PersonalHomeIntentRouter.ReminderIntent, result.Data.Intent);
+        Assert.Equal("requested_action_type", result.Data.RouteReason);
+        Assert.Equal("fixed_test_classifier", result.Data.IntentClassifier);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, result.Data.ConfirmTarget);
+    }
+
+    [Fact]
     public void PersonalHomeIntentRouterKeepsSingleInputPendingConfirmationFlow()
     {
         var lifeRecord = Phase80PersonalHomeIntentRouter.Route("今天跑步三公里", "感觉还不错", null);
@@ -1152,6 +1172,27 @@ public class Phase80PendingActionRuntimeMvpTest
         {
             Writes.Add((authenticatedUserId, eventId, lifeEvent));
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FixedUnifiedInboxIntentClassifier : IUnifiedInboxIntentClassifier
+    {
+        private readonly string _actionType;
+
+        public FixedUnifiedInboxIntentClassifier(string actionType)
+        {
+            _actionType = actionType;
+        }
+
+        public Task<Phase80PersonalHomeIntentRoute> ClassifyAsync(
+            UnifiedInboxIntentClassifierRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Phase80PersonalHomeIntentRouter.Route(
+                request.Title,
+                request.Summary,
+                _actionType,
+                "fixed_test_classifier"));
         }
     }
 }
