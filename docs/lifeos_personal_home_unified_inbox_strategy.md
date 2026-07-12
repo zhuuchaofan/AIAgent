@@ -23,6 +23,7 @@ The current short-term behavior is:
 - Pending action cards show a user-visible type:
   - `生活记录`
   - `提醒`
+  - `计划`
 - Confirm changes pending action state only.
 - Confirm does not execute a tool.
 - Confirm does not write `life_events`.
@@ -35,6 +36,7 @@ The current preview action types are:
 |---|---|---|
 | 生活记录 | `life_record_preview` | Mark confirmed only |
 | 提醒 | `reminder_preview` | Mark confirmed only |
+| 计划 | `plan_preview` | Mark confirmed only |
 
 ## Current Implementation Model
 
@@ -46,19 +48,24 @@ preview-only by default.
 Personal Home input now goes through an internal intent router before the
 pending action is stored.
 
+The frontend does not choose or submit `actionType` for normal home input. It
+submits the user's text to `/api/agent/pending-actions`; the backend router is
+the authority for classifying the input.
+
 Current routed intents:
 
 | Intent | Current source | Risk | Disposition | Pending action |
 |---|---|---|---|---|
 | `life_record` | default non-reminder home input | `low_record` | `pending_confirmation` | required |
 | `reminder` | reminder-like home input | `medium_user_state_change` | `pending_confirmation` | required |
-| `plan` | policy-level future intent only | `medium_user_state_change` | `pending_confirmation` | required |
+| `plan` | plan-like home input | `medium_user_state_change` | `pending_confirmation` | required |
 | `tool_action` | unknown explicit action type | `high_external_or_irreversible` | `required_confirmation` | required |
 
 Important current boundary:
 
-- The home UI still exposes only `生活记录` and `提醒`.
-- The router does not yet infer `plan` as a third home input type.
+- The home UI still exposes only one input box.
+- The home UI does not expose a separate plan composer.
+- The router may infer `plan_preview`, but it remains a pending preview action.
 - Unknown explicit action types are preserved and routed conservatively as
   high-risk tool actions.
 
@@ -101,6 +108,7 @@ Current behavior:
 
 - `life_record_preview` targets `life_events`, but write is disabled.
 - `reminder_preview` targets `reminders`, but write is disabled.
+- `plan_preview` targets no durable planning store yet, and write is disabled.
 - Memory target is `memory_candidate`.
 - Memory write is disabled.
 - Memory requires de-duplication, merge review, and confirmation before any
