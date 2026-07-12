@@ -335,6 +335,33 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void ConfirmWriteInvocationGateRequiresPolicyAndExecutorReadiness()
+    {
+        var disabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.LifeRecordPreview);
+        var enabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
+        var disabledDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(disabledPlan);
+        var noOpDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(
+            enabledPlan,
+            Phase80NoOpConfirmWriteExecutor.Instance);
+        var readyDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(
+            enabledPlan,
+            new ReadyForTestConfirmWriteExecutor());
+
+        var disabledGate = Phase80PendingActionRuntime.ResolveConfirmWriteInvocationGate(disabledPlan, disabledDecision);
+        var noOpGate = Phase80PendingActionRuntime.ResolveConfirmWriteInvocationGate(enabledPlan, noOpDecision);
+        var readyGate = Phase80PendingActionRuntime.ResolveConfirmWriteInvocationGate(enabledPlan, readyDecision);
+
+        Assert.False(disabledGate.ShouldInvoke);
+        Assert.Equal("confirm_write_policy_disabled", disabledGate.Reason);
+        Assert.False(noOpGate.ShouldInvoke);
+        Assert.Equal("confirm_write_executor_not_ready", noOpGate.Reason);
+        Assert.True(readyGate.ShouldInvoke);
+        Assert.Equal("confirm_write_all_gates_ready", readyGate.Reason);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(

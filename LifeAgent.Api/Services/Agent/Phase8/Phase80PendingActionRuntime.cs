@@ -525,6 +525,29 @@ public sealed class Phase80PendingActionRuntime
             Reason: readiness.Reason);
     }
 
+    internal static Phase80ConfirmWriteInvocationGate ResolveConfirmWriteInvocationGate(
+        Phase80ConfirmExecutionPlan plan,
+        Phase80ConfirmWriteDecision decision)
+    {
+        if (!plan.WriteEnabled)
+        {
+            return new Phase80ConfirmWriteInvocationGate(
+                ShouldInvoke: false,
+                Reason: "confirm_write_policy_disabled");
+        }
+
+        if (!decision.ExecutionReady || !decision.RealPathReady)
+        {
+            return new Phase80ConfirmWriteInvocationGate(
+                ShouldInvoke: false,
+                Reason: "confirm_write_executor_not_ready");
+        }
+
+        return new Phase80ConfirmWriteInvocationGate(
+            ShouldInvoke: true,
+            Reason: "confirm_write_all_gates_ready");
+    }
+
     internal static Phase80MemoryPlan ResolveMemoryPlan(string actionType)
     {
         return actionType switch
@@ -772,6 +795,10 @@ public sealed record Phase80ConfirmWriteDecision(
     bool ExecutionReady,
     bool RealPathReady,
     string ExecutorId,
+    string Reason);
+
+public sealed record Phase80ConfirmWriteInvocationGate(
+    bool ShouldInvoke,
     string Reason);
 
 public interface IPhase80ConfirmWriteExecutor
