@@ -612,6 +612,29 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task Phase8DemoEndpointConfirmKeepsMemoryCandidateOnly()
+    {
+        var userId = $"endpoint_user_{Guid.NewGuid():N}";
+        var services = BuildServices();
+        var createResult = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            new Phase80CreatePendingActionRequest("今天跑步三公里", "用户输入：今天跑步三公里，感觉不错")));
+        var actionId = ReadString(createResult.Body, "data", "actionId");
+
+        var confirmResult = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+            AuthenticatedContext(userId, services),
+            actionId));
+
+        Assert.Equal(StatusCodes.Status200OK, confirmResult.StatusCode);
+        Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, ReadString(confirmResult.Body, "data", "memoryTarget"));
+        Assert.True(ReadBool(confirmResult.Body, "data", "memoryCandidateOnly"));
+        Assert.False(ReadBool(confirmResult.Body, "data", "memoryWriteEnabled"));
+        Assert.True(ReadBool(confirmResult.Body, "data", "memoryRequiresDedupe"));
+        Assert.True(ReadBool(confirmResult.Body, "data", "memoryRequiresMerge"));
+        Assert.True(ReadBool(confirmResult.Body, "data", "memoryRequiresConfirmation"));
+    }
+
+    [Fact]
     public async Task Phase8DemoEndpointCancelBlocksLaterConfirmWithoutLegacyWritePath()
     {
         var userId = $"endpoint_user_{Guid.NewGuid():N}";
