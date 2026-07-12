@@ -362,6 +362,39 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task TryExecuteConfirmWriteOnlyInvokesExecutorWhenGateIsReady()
+    {
+        var executor = new CountingReadyForTestConfirmWriteExecutor();
+        var runtime = new Phase80PendingActionRuntime(
+            confirmWritePolicy: new Phase80ConfirmWritePolicy(
+                AllowLifeEventWrites: true,
+                AllowReminderWrites: false),
+            confirmWriteExecutor: executor);
+        var disabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.LifeRecordPreview);
+        var enabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
+        var disabledRequest = ConfirmExecutionRequestForPlan(disabledPlan);
+        var enabledRequest = ConfirmExecutionRequestForPlan(enabledPlan);
+        var disabledDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(disabledPlan, executor);
+        var readyDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(enabledPlan, executor);
+
+        var skipped = await runtime.TryExecuteConfirmWriteAsync(disabledRequest, disabledDecision);
+        var written = await runtime.TryExecuteConfirmWriteAsync(enabledRequest, readyDecision);
+
+        Assert.False(skipped.Success);
+        Assert.Equal("skipped", skipped.Status);
+        Assert.Equal("confirm_write_policy_disabled", skipped.Reason);
+        Assert.False(skipped.WroteData);
+        Assert.False(skipped.RealWritePath);
+        Assert.True(written.Success);
+        Assert.Equal("written", written.Status);
+        Assert.True(written.WroteData);
+        Assert.True(written.RealWritePath);
+        Assert.Equal(1, executor.ExecuteCallCount);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(
@@ -881,6 +914,17 @@ public class Phase80PendingActionRuntimeMvpTest
         return element.GetBoolean();
     }
 
+    private static Phase80ConfirmExecutionRequest ConfirmExecutionRequestForPlan(Phase80ConfirmExecutionPlan plan)
+    {
+        return new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "action_a",
+            ActionType: Phase80PendingActionRuntime.LifeRecordPreview,
+            Title: "今天跑步三公里",
+            Summary: "用户输入：今天跑步三公里",
+            Plan: plan);
+    }
+
     private static JsonElement ReadElement(JsonElement root, params string[] path)
     {
         var current = root;
@@ -936,6 +980,36 @@ public class Phase80PendingActionRuntimeMvpTest
                 WroteData: true,
                 RealWritePath: true,
                 ExecutorId: "test_confirm_write_executor",
+                Reason: "test_write_completed"));
+        }
+    }
+
+    private sealed class CountingReadyForTestConfirmWriteExecutor : IPhase80ConfirmWriteExecutor
+    {
+        public int ExecuteCallCount { get; private set; }
+
+        public Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan)
+        {
+            return new Phase80ConfirmWriteExecutorReadiness(
+                ExecutionReady: true,
+                RealPathReady: true,
+                ExecutorId: "counting_test_confirm_write_executor",
+                Reason: "test_executor_ready");
+        }
+
+        public Task<Phase80ConfirmWriteExecutionResult> ExecuteAsync(
+            Phase80ConfirmExecutionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ExecuteCallCount++;
+            return Task.FromResult(new Phase80ConfirmWriteExecutionResult(
+                Success: true,
+                Status: "written",
+                Target: request.Plan.Target,
+                ResourcePath: $"users/{request.UserId}/life_events/{request.ActionId}",
+                WroteData: true,
+                RealWritePath: true,
+                ExecutorId: "counting_test_confirm_write_executor",
                 Reason: "test_write_completed"));
         }
     }

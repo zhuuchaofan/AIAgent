@@ -548,6 +548,28 @@ public sealed class Phase80PendingActionRuntime
             Reason: "confirm_write_all_gates_ready");
     }
 
+    internal async Task<Phase80ConfirmWriteExecutionResult> TryExecuteConfirmWriteAsync(
+        Phase80ConfirmExecutionRequest request,
+        Phase80ConfirmWriteDecision decision,
+        CancellationToken cancellationToken = default)
+    {
+        var gate = ResolveConfirmWriteInvocationGate(request.Plan, decision);
+        if (!gate.ShouldInvoke)
+        {
+            return new Phase80ConfirmWriteExecutionResult(
+                Success: false,
+                Status: "skipped",
+                Target: request.Plan.Target,
+                ResourcePath: null,
+                WroteData: false,
+                RealWritePath: false,
+                ExecutorId: decision.ExecutorId,
+                Reason: gate.Reason);
+        }
+
+        return await _confirmWriteExecutor.ExecuteAsync(request, cancellationToken);
+    }
+
     internal static Phase80MemoryPlan ResolveMemoryPlan(string actionType)
     {
         return actionType switch
