@@ -335,6 +335,7 @@ public sealed class Phase80PendingActionRuntime
     {
         var status = ToPhase80Status(record.Status);
         var confirmPlan = ResolveStoredConfirmPlan(record);
+        var confirmWriteDecision = ResolveConfirmWriteDecision(confirmPlan);
         var memoryPlan = ResolveStoredMemoryPlan(record);
         var route = ResolveStoredRoute(record);
         return new Phase80PendingActionView(
@@ -363,6 +364,9 @@ public sealed class Phase80PendingActionRuntime
             IsArchived: record.IsArchived,
             ConfirmTarget: confirmPlan.Target,
             ConfirmWriteEnabled: confirmPlan.WriteEnabled,
+            ConfirmWriteExecutionReady: confirmWriteDecision.ExecutionReady,
+            ConfirmWriteRealPathReady: confirmWriteDecision.RealPathReady,
+            ConfirmWriteDecisionReason: confirmWriteDecision.Reason,
             MemoryCandidateOnly: confirmPlan.MemoryCandidateOnly,
             ConfirmPlanReason: confirmPlan.Reason,
             MemoryTarget: memoryPlan.Target,
@@ -489,6 +493,19 @@ public sealed class Phase80PendingActionRuntime
                 MemoryCandidateOnly: true,
                 Reason: "unknown_action_type_preview_only")
         };
+    }
+
+    internal static Phase80ConfirmWriteDecision ResolveConfirmWriteDecision(Phase80ConfirmExecutionPlan plan)
+    {
+        return plan.WriteEnabled
+            ? new Phase80ConfirmWriteDecision(
+                ExecutionReady: false,
+                RealPathReady: false,
+                Reason: "confirm_write_policy_enabled_but_executor_not_connected")
+            : new Phase80ConfirmWriteDecision(
+                ExecutionReady: false,
+                RealPathReady: false,
+                Reason: "confirm_write_disabled_by_policy");
     }
 
     internal static Phase80MemoryPlan ResolveMemoryPlan(string actionType)
@@ -715,6 +732,9 @@ public sealed record Phase80PendingActionView(
     bool IsArchived,
     string ConfirmTarget,
     bool ConfirmWriteEnabled,
+    bool ConfirmWriteExecutionReady,
+    bool ConfirmWriteRealPathReady,
+    string ConfirmWriteDecisionReason,
     bool MemoryCandidateOnly,
     string ConfirmPlanReason,
     string MemoryTarget,
@@ -728,6 +748,11 @@ public sealed record Phase80ConfirmExecutionPlan(
     string Target,
     bool WriteEnabled,
     bool MemoryCandidateOnly,
+    string Reason);
+
+public sealed record Phase80ConfirmWriteDecision(
+    bool ExecutionReady,
+    bool RealPathReady,
     string Reason);
 
 public sealed record Phase80ConfirmWritePolicy(

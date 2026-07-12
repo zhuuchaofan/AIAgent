@@ -257,6 +257,25 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public void ConfirmWriteDecisionSeparatesPolicyFromExecutionReadiness()
+    {
+        var disabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(Phase80PendingActionRuntime.LifeRecordPreview);
+        var enabledPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
+
+        var disabledDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(disabledPlan);
+        var enabledDecision = Phase80PendingActionRuntime.ResolveConfirmWriteDecision(enabledPlan);
+
+        Assert.False(disabledDecision.ExecutionReady);
+        Assert.False(disabledDecision.RealPathReady);
+        Assert.Equal("confirm_write_disabled_by_policy", disabledDecision.Reason);
+        Assert.False(enabledDecision.ExecutionReady);
+        Assert.False(enabledDecision.RealPathReady);
+        Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", enabledDecision.Reason);
+    }
+
+    [Fact]
     public void RuntimeCanExposeBetaWritePolicyWithoutExecutingWrites()
     {
         var runtime = new Phase80PendingActionRuntime(
@@ -275,6 +294,12 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.True(created.Data.ConfirmWriteEnabled);
         Assert.True(confirmed.Data!.ConfirmWriteEnabled);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, confirmed.Data.ConfirmTarget);
+        Assert.False(created.Data.ConfirmWriteExecutionReady);
+        Assert.False(created.Data.ConfirmWriteRealPathReady);
+        Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", created.Data.ConfirmWriteDecisionReason);
+        Assert.False(confirmed.Data.ConfirmWriteExecutionReady);
+        Assert.False(confirmed.Data.ConfirmWriteRealPathReady);
+        Assert.Equal("confirm_write_policy_enabled_but_executor_not_connected", confirmed.Data.ConfirmWriteDecisionReason);
         Assert.False(confirmed.Data.Executed);
         Assert.False(confirmed.Data.WroteData);
         Assert.False(confirmed.Data.RealWritePath);

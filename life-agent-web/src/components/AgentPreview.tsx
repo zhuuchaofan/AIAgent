@@ -92,6 +92,9 @@ interface Phase80PendingAction {
   isArchived?: boolean;
   confirmTarget?: string;
   confirmWriteEnabled?: boolean;
+  confirmWriteExecutionReady?: boolean;
+  confirmWriteRealPathReady?: boolean;
+  confirmWriteDecisionReason?: string;
   memoryCandidateOnly?: boolean;
   confirmPlanReason?: string;
   memoryTarget?: string;
@@ -413,6 +416,9 @@ export function AgentPreview() {
                 <div>routeReason: <span className="font-mono">{latestPendingAction?.routeReason ?? "inferred_from_home_input"}</span></div>
                 <div>confirmTarget: <span className="font-mono">{latestPendingAction?.confirmTarget ?? "none"}</span></div>
                 <div>confirmWriteEnabled: <span className="font-mono">{String(latestPendingAction?.confirmWriteEnabled ?? false)}</span></div>
+                <div>confirmWriteExecutionReady: <span className="font-mono">{String(latestPendingAction?.confirmWriteExecutionReady ?? false)}</span></div>
+                <div>confirmWriteRealPathReady: <span className="font-mono">{String(latestPendingAction?.confirmWriteRealPathReady ?? false)}</span></div>
+                <div className="sm:col-span-2 break-words">confirmWriteDecision: <span className="font-mono">{latestPendingAction?.confirmWriteDecisionReason ?? "confirm_write_disabled_by_policy"}</span></div>
                 <div>memoryCandidateOnly: <span className="font-mono">{String(latestPendingAction?.memoryCandidateOnly ?? true)}</span></div>
                 <div className="sm:col-span-2 break-words">confirmPlan: <span className="font-mono">{latestPendingAction?.confirmPlanReason ?? "preview_only"}</span></div>
                 <div>memoryTarget: <span className="font-mono">{latestPendingAction?.memoryTarget ?? "memory_candidate"}</span></div>
