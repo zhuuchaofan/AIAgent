@@ -118,6 +118,9 @@ Current behavior:
 - The default `Phase80NoOpConfirmWriteExecutor` never writes. It reports
   `confirm_write_policy_enabled_but_executor_not_connected` when policy is
   enabled but no real executor has been installed.
+- The confirm write executor contract also defines `ExecuteAsync`, but the
+  current Confirm path does not call it. The default no-op executor would return
+  `status=skipped`, `wroteData=false`, and `realWritePath=false`.
 - Memory target is `memory_candidate`.
 - Memory write is disabled.
 - Memory requires de-duplication, merge review, and confirmation before any
@@ -165,6 +168,16 @@ Beta implementation must preserve these constraints:
   - `confirmWriteExecutionReady=true` and `confirmWriteRealPathReady=true` from
     the explicit confirm write executor.
   - the release gate below has been approved.
+- When runtime execution is intentionally connected in Beta, executor results
+  must report:
+  - `success`
+  - `status`
+  - `target`
+  - `resourcePath`
+  - `wroteData`
+  - `realWritePath`
+  - `executorId`
+  - `reason`
 - Low-risk direct-save behavior, if introduced later, must be guarded by a
   separate product and safety decision.
 
