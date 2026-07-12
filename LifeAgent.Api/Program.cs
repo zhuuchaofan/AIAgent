@@ -57,13 +57,19 @@ builder.Services.AddSingleton<IPendingActionStore>(sp =>
         sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>(),
         () => sp.GetRequiredService<FirestoreDb>(),
         sp.GetRequiredService<TimeProvider>()));
-builder.Services.AddSingleton(sp =>
+builder.Services.AddScoped<IPhase80ConfirmWriteExecutor, Phase80LifeEventConfirmWriteExecutor>();
+builder.Services.AddScoped(sp =>
 {
     var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
     return new Phase80PendingActionRuntime(
         timeProvider: sp.GetRequiredService<TimeProvider>(),
         store: sp.GetRequiredService<IPendingActionStore>(),
-        safetyMode: options.SafetyMode);
+        safetyMode: "personal_agent_v2_life_record_confirm_write_only",
+        confirmWritePolicy: new Phase80ConfirmWritePolicy(
+            AllowLifeEventWrites: true,
+            AllowReminderWrites: false),
+        confirmWriteExecutor: sp.GetRequiredService<IPhase80ConfirmWriteExecutor>(),
+        enableConfirmWriteExecution: true);
 });
 builder.Services.AddScoped<IMemoryContextProvider>(sp =>
 {

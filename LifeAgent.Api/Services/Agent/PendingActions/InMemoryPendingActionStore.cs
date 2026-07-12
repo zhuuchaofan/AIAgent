@@ -123,6 +123,8 @@ public sealed class InMemoryPendingActionStore : IPendingActionStore
             ConfirmationId = update.ConfirmationId ?? record.ConfirmationId,
             BlockedReason = update.BlockedReason,
             CancellationReason = update.CancellationReason,
+            WroteData = update.WroteData ?? record.WroteData,
+            Executed = update.Executed ?? record.Executed,
             AuditEventRefs = AppendAudit(record, update.AuditEventRef)
         };
         _records[StoreKey(updated.UserSubjectRef, updated.PendingActionId)] = updated;

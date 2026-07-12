@@ -134,6 +134,8 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
                 ConfirmationId = update.ConfirmationId ?? record.ConfirmationId,
                 BlockedReason = update.BlockedReason,
                 CancellationReason = update.CancellationReason,
+                WroteData = update.WroteData ?? record.WroteData,
+                Executed = update.Executed ?? record.Executed,
                 AuditEventRefs = AppendAudit(record, update.AuditEventRef)
             },
             cancellationToken);
@@ -463,8 +465,8 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             ["blockedReason"] = record.BlockedReason,
             ["cancellationReason"] = record.CancellationReason,
             ["schemaVersion"] = record.SchemaVersion,
-            ["wroteData"] = false,
-            ["executed"] = false,
+            ["wroteData"] = record.WroteData,
+            ["executed"] = record.Executed,
             ["isArchived"] = record.IsArchived,
             ["archivedAt"] = record.ArchivedAt is null ? null : ToTimestamp(record.ArchivedAt.Value),
             ["archivedByUserId"] = record.ArchivedByUserId
@@ -514,8 +516,8 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             BlockedReason = ReadNullableString(data, "blockedReason"),
             CancellationReason = ReadNullableString(data, "cancellationReason"),
             SchemaVersion = ReadString(data, "schemaVersion"),
-            WroteData = false,
-            Executed = false,
+            WroteData = ReadBool(data, "wroteData"),
+            Executed = ReadBool(data, "executed"),
             IsArchived = ReadBool(data, "isArchived"),
             ArchivedAt = ReadNullableDateTimeOffset(data, "archivedAt"),
             ArchivedByUserId = ReadNullableString(data, "archivedByUserId")
@@ -554,8 +556,8 @@ public sealed class FirestorePendingActionStore : IPendingActionStore
             BlockedReason = record.BlockedReason,
             CancellationReason = record.CancellationReason,
             SchemaVersion = record.SchemaVersion,
-            WroteData = false,
-            Executed = false,
+            WroteData = record.WroteData,
+            Executed = record.Executed,
             IsArchived = record.IsArchived,
             ArchivedAt = record.ArchivedAt,
             ArchivedByUserId = record.ArchivedByUserId

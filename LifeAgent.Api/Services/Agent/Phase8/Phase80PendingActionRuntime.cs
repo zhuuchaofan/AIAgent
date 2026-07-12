@@ -1,4 +1,6 @@
+using LifeAgent.Api.Models.LifeEvents;
 using LifeAgent.Api.Services.Agent.PendingActions;
+using LifeAgent.Api.Services.LifeEvents;
 
 namespace LifeAgent.Api.Services.Agent.Phase8;
 
@@ -217,36 +219,42 @@ public sealed class Phase80PendingActionRuntime
                 ToView(current));
         }
 
-        var updated = await _store.UpdateStatusAsync(new PendingActionStatusUpdate(
+        var executionResult = _enableConfirmWriteExecution
+            ? await TryExecuteConfirmWriteAsync(
+                ToConfirmExecutionRequest(current),
+                ResolveConfirmWriteDecision(ResolveStoredConfirmPlan(current), _confirmWriteExecutor),
+                cancellationToken)
+            : null;
+
+        var confirmed = await _store.UpdateStatusAsync(new PendingActionStatusUpdate(
             PendingActionId: actionId,
             UserSubjectRef: userId,
             ExpectedStatus: PendingActionStatus.ConfirmationRequired,
             NewStatus: PendingActionStatus.Confirmed,
             ConfirmationId: $"phase8_confirmation_{actionId}",
-            AuditEventRef: $"phase8_audit_{actionId}_confirmed"),
+            AuditEventRef: executionResult?.Success == true
+                ? $"phase8_audit_{actionId}_confirmed_write_completed"
+                : $"phase8_audit_{actionId}_confirmed",
+            WroteData: executionResult?.Success == true && executionResult.WroteData,
+            Executed: executionResult?.Success == true),
             cancellationToken);
 
-        if (!updated.Success || updated.Record is null)
+        if (!confirmed.Success || confirmed.Record is null)
         {
             return Phase80PendingActionResult.Fail(
-                updated.Status,
-                updated.Message ?? "Pending action could not be confirmed.",
-                updated.Record is null ? null : ToView(updated.Record));
+                confirmed.Status,
+                confirmed.Message ?? "Pending action could not be confirmed.",
+                confirmed.Record is null ? null : ToView(confirmed.Record));
         }
 
-        var executionResult = _enableConfirmWriteExecution
-            ? await TryExecuteConfirmWriteAsync(
-                ToConfirmExecutionRequest(updated.Record),
-                ResolveConfirmWriteDecision(ResolveStoredConfirmPlan(updated.Record), _confirmWriteExecutor),
-                cancellationToken)
-            : null;
+        var viewRecord = confirmed.Record;
 
         return Phase80PendingActionResult.Ok(
             Confirmed,
             executionResult?.Success == true
                 ? "已确认并完成 Beta 测试写入。"
-                : ConfirmedPreviewMessage(updated.Record.ActionType),
-            ToView(updated.Record, executionResult));
+                : ConfirmedPreviewMessage(confirmed.Record.ActionType),
+            ToView(viewRecord, executionResult));
     }
 
     public Phase80PendingActionResult Cancel(string userId, string actionId)
@@ -371,13 +379,13 @@ public sealed class Phase80PendingActionRuntime
             ExpiresAt: record.ExpiresAt,
             ConfirmedAt: status == Confirmed ? record.UpdatedAt : null,
             CancelledAt: status == Cancelled ? record.UpdatedAt : null,
-            Executed: executionResult?.Success ?? false,
-            WroteData: executionResult?.WroteData ?? false,
-            ExecutionReady: executionResult?.Success ?? false,
+            Executed: executionResult?.Success ?? record.Executed,
+            WroteData: executionResult?.WroteData ?? record.WroteData,
+            ExecutionReady: executionResult?.Success ?? record.Executed,
             GuardDecision: GuardDecision,
             SafetyMode: _safetyMode,
             LegacyConfirmEndpointUsed: false,
-            RealWritePath: executionResult?.RealWritePath ?? false,
+            RealWritePath: executionResult?.RealWritePath ?? record.WroteData,
             IsArchived: record.IsArchived,
             ConfirmTarget: confirmPlan.Target,
             ConfirmWriteEnabled: confirmPlan.WriteEnabled,
@@ -479,7 +487,7 @@ public sealed class Phase80PendingActionRuntime
     {
         return actionType switch
         {
-            LifeRecordPreview => "已确认生活记录；当前仍未写入 life_events，也未执行真实操作。",
+            LifeRecordPreview => "已确认生活记录；默认未写入 life_events，也未执行真实操作；启用写入门禁时会写入 life_events。",
             ReminderPreview => "已确认提醒；当前仍未写入 reminders，也未执行真实操作。",
             PlanPreview => "已确认计划；当前仍未写入计划数据，也未执行真实操作。",
             _ => "已确认，但未执行；没有写入数据，也没有执行真实操作。"
@@ -887,6 +895,66 @@ public sealed class Phase80NoOpConfirmWriteExecutor : IPhase80ConfirmWriteExecut
             RealWritePath: false,
             ExecutorId: "noop_confirm_write_executor",
             Reason: "noop_executor_never_writes"));
+    }
+}
+
+public sealed class Phase80LifeEventConfirmWriteExecutor : IPhase80ConfirmWriteExecutor
+{
+    private readonly IAgentLifeEventWriter _writer;
+
+    public Phase80LifeEventConfirmWriteExecutor(IAgentLifeEventWriter writer)
+    {
+        _writer = writer;
+    }
+
+    public Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan)
+    {
+        var ready = string.Equals(plan.Target, Phase80PendingActionRuntime.ConfirmTargetLifeEvents, StringComparison.Ordinal);
+        return new Phase80ConfirmWriteExecutorReadiness(
+            ExecutionReady: ready,
+            RealPathReady: ready,
+            ExecutorId: "phase80_life_event_confirm_write_executor",
+            Reason: ready
+                ? "life_event_confirm_write_executor_ready"
+                : "executor_only_supports_life_events");
+    }
+
+    public async Task<Phase80ConfirmWriteExecutionResult> ExecuteAsync(
+        Phase80ConfirmExecutionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!string.Equals(request.Plan.Target, Phase80PendingActionRuntime.ConfirmTargetLifeEvents, StringComparison.Ordinal) ||
+            !string.Equals(request.ActionType, Phase80PendingActionRuntime.LifeRecordPreview, StringComparison.Ordinal))
+        {
+            return new Phase80ConfirmWriteExecutionResult(
+                Success: false,
+                Status: "skipped",
+                Target: request.Plan.Target,
+                ResourcePath: null,
+                WroteData: false,
+                RealWritePath: false,
+                ExecutorId: "phase80_life_event_confirm_write_executor",
+                Reason: "unsupported_confirm_write_target");
+        }
+
+        var createRequest = new CreateLifeEventRequest
+        {
+            Type = "life",
+            Title = request.Title,
+            Content = request.Summary
+        };
+        var lifeEvent = AgentLifeEventFactory.Create(request.UserId, request.ActionId, createRequest);
+        await _writer.WriteAsync(request.UserId, lifeEvent.Id, lifeEvent, cancellationToken);
+
+        return new Phase80ConfirmWriteExecutionResult(
+            Success: true,
+            Status: "written",
+            Target: request.Plan.Target,
+            ResourcePath: $"users/{request.UserId}/life_events/{lifeEvent.Id}",
+            WroteData: true,
+            RealWritePath: true,
+            ExecutorId: "phase80_life_event_confirm_write_executor",
+            Reason: "life_event_written_after_confirm");
     }
 }
 

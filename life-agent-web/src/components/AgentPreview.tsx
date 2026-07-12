@@ -147,12 +147,12 @@ function actionTypeClass(actionType: string): string {
 
 function actionPreviewSafetyNote(actionType: string): string {
   if (actionType === REMINDER_PREVIEW) return "确认后仅标记为已确认，当前不会写入 reminders。";
-  if (actionType === LIFE_RECORD_PREVIEW) return "确认后仅标记为已确认，当前不会写入 life_events。";
+  if (actionType === LIFE_RECORD_PREVIEW) return "Confirm 后会写入 life_events，并显示在最近生活记录。";
   if (actionType === PLAN_PREVIEW) return "确认后仅标记为已确认，当前不会写入计划数据。";
   return "确认后仍不会执行真实操作，也不会写入数据。";
 }
 
-export function AgentPreview() {
+export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: () => void }) {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState<"confirm" | "cancel" | null>(null);
@@ -235,7 +235,7 @@ export function AgentPreview() {
     try {
       const res = await createPhase80PendingAction(
         message,
-        `用户输入：${message}。确认后仍不会执行真实操作。`
+        `用户输入：${message}。生活记录 Confirm 后写入 life_events；提醒与工具操作仍不执行。`
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
         setPhase80Message(res.message?.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (res.message || "提交失败，请稍后再试。"));
@@ -293,6 +293,9 @@ export function AgentPreview() {
 
       setPhase80Actions(prev => prev.map(action => action.actionId === actionId ? res.data! : action));
       setPhase80Message(res.message || res.data.message);
+      if (res.data.actionType === LIFE_RECORD_PREVIEW && res.data.wroteData) {
+        onLifeRecordWritten?.();
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setPhase80Message(errMsg || "待确认动作更新失败");
@@ -344,7 +347,7 @@ export function AgentPreview() {
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs space-y-3">
             <div>
               <div className="text-zinc-100 font-semibold">记录生活，或创建一个提醒...</div>
-              <div className="text-zinc-500 mt-1">当前不会执行真实操作。</div>
+              <div className="text-zinc-500 mt-1">生活记录 Confirm 后会写入最近生活记录；提醒与工具操作仍不执行。</div>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
@@ -395,7 +398,7 @@ export function AgentPreview() {
 
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-100 leading-relaxed flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>当前不会执行真实操作。</span>
+              <span>仅生活记录允许 Confirm 后写入 life_events；Memory 保持 candidate-only，Reminder 和 Tool Execution 保持关闭。</span>
             </div>
 
             <details
@@ -405,10 +408,10 @@ export function AgentPreview() {
             >
               <summary className="cursor-pointer select-none text-zinc-300 font-medium">技术与安全详情</summary>
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                <div>executed: <span className="font-mono">false</span></div>
-                <div>wroteData: <span className="font-mono">false</span></div>
+                <div>executed: <span className="font-mono">{String(latestPendingAction?.executed ?? false)}</span></div>
+                <div>wroteData: <span className="font-mono">{String(latestPendingAction?.wroteData ?? false)}</span></div>
                 <div>legacyConfirm: <span className="font-mono">false</span></div>
-                <div>realWritePath: <span className="font-mono">false</span></div>
+                <div>realWritePath: <span className="font-mono">{String(latestPendingAction?.realWritePath ?? false)}</span></div>
                 <div>guard: <span className="font-mono">preview_only</span></div>
                 <div>intent: <span className="font-mono">{latestPendingAction?.intent ?? "life_record"}</span></div>
                 <div>disposition: <span className="font-mono">{latestPendingAction?.disposition ?? "pending_confirmation"}</span></div>

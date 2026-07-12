@@ -1,7 +1,9 @@
 using System.Text.Json;
 using LifeAgent.Api.Endpoints;
+using LifeAgent.Api.Models;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
+using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -395,6 +397,49 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task LifeEventConfirmWriteExecutorOnlyWritesConfirmedLifeRecords()
+    {
+        var writer = new CapturingAgentLifeEventWriter();
+        var executor = new Phase80LifeEventConfirmWriteExecutor(writer);
+        var lifePlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
+        var reminderPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.ReminderPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
+
+        var lifeResult = await executor.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "action_123",
+            ActionType: Phase80PendingActionRuntime.LifeRecordPreview,
+            Title: "今天跑步三公里",
+            Summary: "用户输入：今天跑步三公里",
+            Plan: lifePlan));
+        var reminderResult = await executor.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "reminder_123",
+            ActionType: Phase80PendingActionRuntime.ReminderPreview,
+            Title: "提醒",
+            Summary: "明天提醒我",
+            Plan: reminderPlan));
+
+        Assert.True(lifeResult.Success);
+        Assert.True(lifeResult.WroteData);
+        Assert.True(lifeResult.RealWritePath);
+        Assert.Equal("users/user_a/life_events/evt_action_123", lifeResult.ResourcePath);
+        Assert.Single(writer.Writes);
+        Assert.Equal("user_a", writer.Writes[0].UserId);
+        Assert.Equal("evt_action_123", writer.Writes[0].EventId);
+        Assert.Equal("life", writer.Writes[0].Event.Type);
+        Assert.Equal("agent_confirmed", writer.Writes[0].Event.Source);
+        Assert.Equal("agent", writer.Writes[0].Event.CreatedBy);
+        Assert.Equal("action_123", writer.Writes[0].Event.AgentActionId);
+        Assert.False(reminderResult.Success);
+        Assert.False(reminderResult.WroteData);
+        Assert.Single(writer.Writes);
+    }
+
+    [Fact]
     public void ConfirmAsyncDoesNotInvokeReadyExecutorWithoutExplicitBetaRuntimeMode()
     {
         var executor = new CountingReadyForTestConfirmWriteExecutor();
@@ -453,9 +498,9 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.True(confirmed.Data.WroteData);
         Assert.True(confirmed.Data.RealWritePath);
         Assert.Equal(1, executor.ExecuteCallCount);
-        Assert.False(restored.Executed);
-        Assert.False(restored.WroteData);
-        Assert.False(restored.RealWritePath);
+        Assert.True(restored.Executed);
+        Assert.True(restored.WroteData);
+        Assert.True(restored.RealWritePath);
     }
 
     [Fact]
@@ -1075,6 +1120,21 @@ public class Phase80PendingActionRuntimeMvpTest
                 RealWritePath: true,
                 ExecutorId: "counting_test_confirm_write_executor",
                 Reason: "test_write_completed"));
+        }
+    }
+
+    private sealed class CapturingAgentLifeEventWriter : IAgentLifeEventWriter
+    {
+        public List<(string UserId, string EventId, LifeEvent Event)> Writes { get; } = new();
+
+        public Task WriteAsync(
+            string authenticatedUserId,
+            string eventId,
+            LifeEvent lifeEvent,
+            CancellationToken cancellationToken = default)
+        {
+            Writes.Add((authenticatedUserId, eventId, lifeEvent));
+            return Task.CompletedTask;
         }
     }
 }

@@ -32,7 +32,9 @@ public sealed record PendingActionStatusUpdate(
     string? BlockedReason = null,
     string? CancellationReason = null,
     string? AuditEventRef = null,
-    string? IdempotencyKeyHash = null);
+    string? IdempotencyKeyHash = null,
+    bool? WroteData = null,
+    bool? Executed = null);
 
 public sealed record PendingActionStoreResult(
     bool Success,

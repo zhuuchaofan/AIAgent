@@ -714,8 +714,8 @@ public class Phase9PendingActionPersistenceTest
         Assert.Equal("user_a", audit["createdByUserId"]);
         Assert.IsType<Google.Cloud.Firestore.Timestamp>(audit["updatedAt"]);
         Assert.Equal(new[] { "audit_created", "audit_confirmed" }, audit["refs"]);
-        Assert.False((bool)document["executed"]!);
-        Assert.False((bool)document["wroteData"]!);
+        Assert.True((bool)document["executed"]!);
+        Assert.True((bool)document["wroteData"]!);
     }
 
     [Fact]
@@ -774,8 +774,8 @@ public class Phase9PendingActionPersistenceTest
         Assert.Equal(Phase80PendingActionRuntime.GuardDecision, restored.ValidationSnapshot["guardDecision"]);
         Assert.Equal(new[] { "audit_created", "audit_cancelled" }, restored.AuditEventRefs);
         Assert.Equal("user_cancelled", restored.CancellationReason);
-        Assert.False(restored.Executed);
-        Assert.False(restored.WroteData);
+        Assert.True(restored.Executed);
+        Assert.True(restored.WroteData);
     }
 
     private static DefaultHttpContext AuthenticatedContext(string userId, IServiceProvider? services = null)
