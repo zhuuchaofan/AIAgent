@@ -52,6 +52,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<IMemoryProposalGuard, MemoryProposalGuard>();
 builder.Services.AddScoped<IMemoryExtractionService, MemoryExtractionService>();
 builder.Services.AddScoped<IMemoryInsightPreviewService, MemoryInsightPreviewService>();
+builder.Services.AddScoped<IMemoryReviewInboxPreviewService, MemoryReviewInboxPreviewService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp =>
     Options.Create(PendingActionPersistenceOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));

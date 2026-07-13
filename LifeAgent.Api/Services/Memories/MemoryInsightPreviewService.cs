@@ -9,6 +9,8 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
     private const int MaxInsightCount = 3;
     private const int MaxInsightTextLength = 72;
     private const double AggregatedInsightConfidence = 0.84;
+    private const double RepeatedThemeWeight = 2.0;
+    private const double RecentVisibleWeight = 3.0;
     private readonly IMemoryExtractionService _memoryExtractionService;
 
     public MemoryInsightPreviewService(IMemoryExtractionService memoryExtractionService)
@@ -91,7 +93,7 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
     private static IReadOnlyList<MemoryInsightPreviewItem> BuildAggregatedInsights(IReadOnlyList<LifeEvent> events)
     {
         return events
-            .SelectMany(BuildSignals)
+            .SelectMany((lifeEvent, index) => BuildSignals(lifeEvent, index))
             .GroupBy(signal => signal.Key, StringComparer.OrdinalIgnoreCase)
             .Select(group =>
             {
@@ -104,6 +106,7 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
                 {
                     Signal = ordered[0],
                     Count = ordered.Count,
+                    Score = ordered.Sum(signal => signal.Score),
                     SourceIds = ordered
                         .Select(signal => signal.SourceEventId)
                         .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -111,7 +114,8 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
                         .ToArray()
                 };
             })
-            .OrderByDescending(group => group.Count)
+            .OrderByDescending(group => group.Score)
+            .ThenByDescending(group => group.Count)
             .ThenByDescending(group => group.Signal.OccurredAt)
             .Take(MaxInsightCount)
             .Select(group => new MemoryInsightPreviewItem
@@ -124,7 +128,7 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
             .ToList();
     }
 
-    private static IEnumerable<InsightSignal> BuildSignals(LifeEvent lifeEvent)
+    private static IEnumerable<InsightSignal> BuildSignals(LifeEvent lifeEvent, int index)
     {
         var text = BuildExtractionText(lifeEvent);
         if (string.IsNullOrWhiteSpace(text))
@@ -132,40 +136,48 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
             yield break;
         }
 
+        var score = RepeatedThemeWeight + Math.Max(0, 3 - index) * RecentVisibleWeight;
+
         if (ContainsAny(text, "codex", "lifeos", "项目", "整理"))
         {
-            yield return Signal(lifeEvent, "project_work", "theme", "你最近在持续整理项目相关的事情。");
+            yield return Signal(lifeEvent, "project_work", "theme", "你最近在持续整理项目相关的事情。", score);
         }
 
         if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "新疆", "路上"))
         {
-            yield return Signal(lifeEvent, "travel_experience", "theme", "你最近在记录出行和新体验。");
+            yield return Signal(lifeEvent, "travel_experience", "theme", "你最近在记录出行和新体验。", score);
         }
 
         if (ContainsAny(text, "美食", "吃", "饺子", "蒸饺", "支出", "消费"))
         {
-            yield return Signal(lifeEvent, "food_spending", "preference", "你最近在记录饮食和消费感受。");
+            yield return Signal(lifeEvent, "food_spending", "preference", "你最近在记录饮食和消费感受。", score);
         }
 
         if (ContainsAny(text, "骑车", "骑行", "心率", "运动", "身体"))
         {
-            yield return Signal(lifeEvent, "body_movement", "theme", "你最近在关注运动状态和身体感受。");
+            yield return Signal(lifeEvent, "body_movement", "theme", "你最近在关注运动状态和身体感受。", score);
         }
 
-        if (ContainsAny(text, "价格", "贵", "购买", "值得", "划算", "版型"))
+        if (ContainsAny(text, "kolon", "sports", "户外", "运动服饰", "版型") &&
+            ContainsAny(text, "价格", "贵", "购买", "值得", "划算"))
         {
-            yield return Signal(lifeEvent, "purchase_price", "preference", "你最近在权衡购买和价格。");
+            yield return Signal(lifeEvent, "sportswear_price", "preference", "你最近在关注运动服饰，也在权衡价格。", score + 2.0);
+        }
+        else if (ContainsAny(text, "价格", "贵", "购买", "值得", "划算", "版型"))
+        {
+            yield return Signal(lifeEvent, "purchase_price", "preference", "你最近在权衡购买和价格。", score);
         }
     }
 
-    private static InsightSignal Signal(LifeEvent lifeEvent, string key, string kind, string text)
+    private static InsightSignal Signal(LifeEvent lifeEvent, string key, string kind, string text, double score)
     {
         return new InsightSignal(
             key,
             kind,
             text,
             lifeEvent.Id,
-            lifeEvent.OccurredAt);
+            lifeEvent.OccurredAt,
+            score);
     }
 
     private static MemoryInsightPreviewItem ToInsight(MemoryExtractionResult result)
@@ -378,5 +390,6 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
         string Kind,
         string Text,
         string SourceEventId,
-        DateTime OccurredAt);
+        DateTime OccurredAt,
+        double Score);
 }

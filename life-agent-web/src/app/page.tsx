@@ -50,6 +50,12 @@ function InsightCard({
               ))}
             </ul>
           )}
+          <Link
+            href="/memory/review"
+            className="mt-4 inline-flex text-sm text-indigo-300 transition-colors hover:text-indigo-200"
+          >
+            查看可能值得记住的事
+          </Link>
         </div>
       </div>
     </section>

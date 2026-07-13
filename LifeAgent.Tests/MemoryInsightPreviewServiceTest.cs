@@ -122,7 +122,27 @@ public class MemoryInsightPreviewServiceTest
 
         Assert.Equal(3, preview.Insights.Count);
         Assert.Contains(preview.Insights, insight => insight.Text == "你最近在持续整理项目相关的事情。");
-        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在权衡购买和价格。");
+        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在关注运动服饰，也在权衡价格。");
+    }
+
+    [Fact]
+    public void BuildPreview_RecentVisibleRecordsOutrankOlderFrequentThemes()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_brand", "kolon sports", "种草了一个户外品牌，版型很好看，但是价格很贵。", minutesAgo: 1),
+            NewEvent("evt_xinjiang", "新疆路上", "下周应该就在去新疆的路上啦。", minutesAgo: 2),
+            NewEvent("evt_codex_recent", "整理项目", "最近让 codex 整理项目。", minutesAgo: 3),
+            NewEvent("evt_food_old", "美食", "晚上吃了饺子，也有一点支出。", minutesAgo: 40),
+            NewEvent("evt_bike_old_1", "骑行", "今天骑车，心率不高。", minutesAgo: 50),
+            NewEvent("evt_bike_old_2", "骑行", "继续记录运动和身体状态。", minutesAgo: 60)
+        });
+
+        Assert.Equal(3, preview.Insights.Count);
+        Assert.Equal("你最近在关注运动服饰，也在权衡价格。", preview.Insights[0].Text);
+        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在记录出行和新体验。");
+        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在持续整理项目相关的事情。");
+        Assert.DoesNotContain(preview.Insights, insight => insight.Text == "你最近在关注运动状态和身体感受。");
     }
 
     [Fact]
