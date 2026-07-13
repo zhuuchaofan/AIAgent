@@ -50,6 +50,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
     Options.Create(MemoryProposalRuntimeOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
 builder.Services.AddSingleton<IMemoryProposalGuard, MemoryProposalGuard>();
+builder.Services.AddScoped<IMemoryExtractionService, MemoryExtractionService>();
+builder.Services.AddScoped<IMemoryInsightPreviewService, MemoryInsightPreviewService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp =>
     Options.Create(PendingActionPersistenceOptions.FromConfiguration(sp.GetRequiredService<IConfiguration>())));
@@ -254,6 +256,7 @@ app.MapDocumentEndpoints();
 app.MapInternalDocumentEndpoints();
 app.MapRagChatEndpoints();
 app.MapAgentEndpoints();
+app.MapMemoryInsightEndpoints();
 
 // GET /health — 无需鉴权
 app.MapGet("/health", () => Results.Ok("healthy"));
