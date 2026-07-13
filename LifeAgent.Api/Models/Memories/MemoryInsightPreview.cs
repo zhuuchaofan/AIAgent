@@ -60,3 +60,26 @@ public sealed class MemoryReviewSourceItem
     public string Snippet { get; set; } = string.Empty;
     public DateTime OccurredAt { get; set; }
 }
+
+public sealed class MemoryContextPreviewResponse
+{
+    public bool Success { get; set; } = true;
+    public MemoryContextPreviewData Data { get; set; } = new();
+}
+
+public sealed class MemoryContextPreviewData
+{
+    public int ScannedCount { get; set; }
+    public bool PreviewOnly { get; set; } = true;
+    public bool WroteData { get; set; } = false;
+    public bool MemoryWriteEnabled { get; set; } = false;
+    public IReadOnlyList<MemoryContextPreviewItem> Items { get; set; } = Array.Empty<MemoryContextPreviewItem>();
+}
+
+public sealed class MemoryContextPreviewItem
+{
+    public string Kind { get; set; } = "theme";
+    public string Text { get; set; } = string.Empty;
+    public string ReviewStage { get; set; } = "observing";
+    public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
+}

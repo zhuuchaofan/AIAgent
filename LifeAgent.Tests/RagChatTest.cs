@@ -13,6 +13,7 @@ using Xunit;
 using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services;
+using LifeAgent.Api.Services.Memories;
 
 namespace LifeAgent.Tests;
 
@@ -56,6 +57,20 @@ public class RagChatTest
             DailyEmbeddingCallLimit = 0,
             DailyDocumentProcessLimit = 0
         }));
+    }
+
+    private static LifeEvent NewLifeEvent(string id, string title, string content, int minutesAgo = 0)
+    {
+        return new LifeEvent
+        {
+            Id = id,
+            Type = "life",
+            Title = title,
+            Content = content,
+            OccurredAt = DateTime.UtcNow.AddMinutes(-minutesAgo),
+            Tags = new List<string> { "生活日常" },
+            Importance = 1
+        };
     }
 
     [Fact]
@@ -148,6 +163,60 @@ public class RagChatTest
         Assert.Equal("user", _sessionRepo.SavedMessages[0].Role);
         Assert.Equal("assistant", _sessionRepo.SavedMessages[1].Role);
         Assert.Equal("根据资料，您下周二应当骑行 18km [1]。", _sessionRepo.SavedMessages[1].Content);
+    }
+
+    [Fact]
+    public async Task ProcessChatAsync_WithMemoryContextPreview_AddsReadOnlyContextToPrompt()
+    {
+        var userId = "user_123";
+        var session = new ChatSession { Id = "conv_memory", Title = "Test Title" };
+        _sessionRepo.Sessions[$"{userId}_conv_memory"] = session;
+
+        var request = new RagChatRequest
+        {
+            ConversationId = "conv_memory",
+            Message = "结合资料给我建议",
+            ClientTimeZone = "Asia/Shanghai"
+        };
+
+        _vectorStore.ChunksToReturn.Add(new VectorSearchResult
+        {
+            Distance = 0.2,
+            Chunk = new KnowledgeChunk
+            {
+                Id = "chunk_1",
+                DocumentId = "doc_1",
+                DocumentName = "计划.md",
+                ChunkIndex = 0,
+                PageNumber = 1,
+                Content = "计划里建议保留恢复日。"
+            }
+        });
+
+        var lifeEventService = new FakeLifeEventService(new[]
+        {
+            NewLifeEvent("evt_bike_1", "骑车", "今天骑车，心率不高。", minutesAgo: 20),
+            NewLifeEvent("evt_bike_2", "运动", "继续记录运动和身体状态。", minutesAgo: 10)
+        });
+        var service = new RagChatService(
+            _sessionRepo,
+            _embeddingService,
+            _vectorStore,
+            _answerGenerator,
+            _ragOptions,
+            NullLogger<RagChatService>.Instance,
+            new MemoryContextPreviewService(new MemoryReviewInboxPreviewService()),
+            lifeEventService);
+
+        _answerGenerator.AnswerToReturn = "资料建议保留恢复日 [1]。";
+
+        var result = await service.ProcessChatAsync(userId, request);
+
+        Assert.Equal("资料建议保留恢复日 [1]。", result.Response);
+        Assert.NotNull(_answerGenerator.LastUserPrompt);
+        Assert.Contains("【只读生活线索 Context Preview】", _answerGenerator.LastUserPrompt);
+        Assert.Contains("你会关注运动状态和身体感受。", _answerGenerator.LastUserPrompt);
+        Assert.Contains("不得替代 Chunks", _answerGenerator.LastUserPrompt);
     }
 
     [Fact]
@@ -712,6 +781,55 @@ public class InspectableAnswerGenerator : IRagAnswerGenerator
         LastSystemInstruction = systemInstruction;
         LastUserPrompt = userPrompt;
         return Task.FromResult(AnswerToReturn);
+    }
+}
+
+public class FakeLifeEventService : ILifeEventService
+{
+    private readonly IReadOnlyList<LifeEvent> _events;
+
+    public FakeLifeEventService(IReadOnlyList<LifeEvent> events)
+    {
+        _events = events;
+    }
+
+    public Task<LifeEvent> SaveEventAsync(string userId, LifeEvent lifeEvent)
+    {
+        throw new NotSupportedException("FakeLifeEventService is read-only.");
+    }
+
+    public Task<(LifeEvent, Reminder?)> SaveEventWithReminderAsync(string userId, LifeEvent lifeEvent, ParsedEvent parsedEvent)
+    {
+        throw new NotSupportedException("FakeLifeEventService is read-only.");
+    }
+
+    public Task<ListEventsResult> ListEventsAsync(
+        string userId,
+        string? type = null,
+        int limit = 20,
+        string? cursor = null,
+        string? tag = null)
+    {
+        return Task.FromResult(new ListEventsResult
+        {
+            Data = _events.Take(limit).ToList(),
+            NextCursor = null
+        });
+    }
+
+    public Task<LifeEvent?> GetEventAsync(string userId, string eventId)
+    {
+        return Task.FromResult(_events.FirstOrDefault(item => item.Id == eventId));
+    }
+
+    public Task<bool> UpdateEventAsync(string userId, string eventId, LifeEvent updatedEvent)
+    {
+        throw new NotSupportedException("FakeLifeEventService is read-only.");
+    }
+
+    public Task<bool> SoftDeleteEventAsync(string userId, string eventId)
+    {
+        throw new NotSupportedException("FakeLifeEventService is read-only.");
     }
 }
 

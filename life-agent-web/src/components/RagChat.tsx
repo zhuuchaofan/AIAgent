@@ -266,9 +266,12 @@ export function RagChat() {
       <div className="lg:col-span-3 bg-zinc-900/10 border border-zinc-800/40 rounded-2xl flex flex-col overflow-hidden shadow-2xl min-h-[500px] min-w-0 relative">
         {/* 聊天窗头部 */}
         <div className="px-5 py-4 border-b border-zinc-800/40 bg-zinc-900/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-sm font-semibold text-white">RAG 知识库检索对话</h3>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 shrink-0 text-indigo-400" />
+              <h3 className="text-sm font-semibold text-white">RAG 知识库检索对话</h3>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-600">回答会参考近期生活记录线索，但不会写入长期记忆。</p>
           </div>
           <div className="flex items-center gap-2">
             {selectedDocIds.length > 0 && (

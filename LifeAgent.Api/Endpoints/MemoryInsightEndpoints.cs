@@ -68,5 +68,34 @@ public static class MemoryInsightEndpoints
                 Data = preview
             });
         }).RequireRateLimiting("auth-user");
+
+        group.MapGet("/context/preview", async (
+            HttpContext ctx,
+            ILifeEventService lifeEventService,
+            IMemoryContextPreviewService memoryContextPreviewService,
+            int limit = 20) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            var boundedLimit = Math.Clamp(limit, 1, 50);
+            var events = await lifeEventService.ListEventsAsync(
+                userId,
+                type: "all",
+                limit: boundedLimit,
+                cursor: null,
+                tag: null);
+
+            var preview = memoryContextPreviewService.BuildPreview(userId, events.Data);
+
+            return Results.Ok(new MemoryContextPreviewResponse
+            {
+                Success = true,
+                Data = preview
+            });
+        }).RequireRateLimiting("auth-user");
     }
 }

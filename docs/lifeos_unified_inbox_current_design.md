@@ -111,6 +111,8 @@ The home page has two separate data surfaces:
    - Source: recent `life_events` only.
    - `GET /api/memory/insights/preview` powers the Home `AI 发现` card.
    - `GET /api/memory/review-inbox/preview` powers `/memory/review`.
+   - `GET /api/memory/context/preview` exposes read-only context for product
+     validation and RAG background use.
    - Review Inbox actions such as keep, inspect source, and hide are product
      UI affordances only; they do not persist durable Memory records.
 
@@ -153,6 +155,8 @@ These remain non-negotiable:
 - Memory durable writes are not enabled.
 - Memory review candidates are preview-only and may include source summaries
   from recent life records.
+- RAG may use Memory context preview as non-cited background only; document
+  citations must still come from retrieved Chunks.
 - Reminder durable writes are not enabled.
 - Tool execution is not enabled.
 - Cloud Run env changes require explicit approval.

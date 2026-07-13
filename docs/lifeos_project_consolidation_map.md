@@ -82,12 +82,18 @@ GET /api/memory/review-inbox/preview
   -> read recent life_events
   -> return candidate memory signals with source summaries
   -> no Memory write
+
+GET /api/memory/context/preview
+  -> read recent life_events
+  -> return read-only context items for product and RAG validation
+  -> no Memory write
 ```
 
 The web product surfaces are:
 
 - Home `AI 发现`: a lightweight preview of repeated themes.
 - `/memory/review`: a candidate inbox where the user can inspect, keep, or locally hide signals.
+- `/chat`: RAG answers may receive a read-only life context preview as background, but citations still come only from retrieved document Chunks.
 
 These actions do not create, update, archive, or merge durable Memory records.
 Durable Memory write preparation is tracked in

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Google.Cloud.Firestore;
 using LifeAgent.Api.Models;
+using LifeAgent.Api.Services.Memories;
 
 namespace LifeAgent.Api.Services;
 
@@ -17,6 +18,8 @@ public class RagChatService : IRagChatService
     private readonly IRagAnswerGenerator _answerGenerator;
     private readonly RagOptions _ragOptions;
     private readonly ILogger<RagChatService> _logger;
+    private readonly IMemoryContextPreviewService? _memoryContextPreviewService;
+    private readonly ILifeEventService? _lifeEventService;
 
     public RagChatService(
         IChatSessionRepository sessionRepository,
@@ -24,7 +27,9 @@ public class RagChatService : IRagChatService
         IFirestoreVectorStore vectorStore,
         IRagAnswerGenerator answerGenerator,
         IOptions<RagOptions> ragOptions,
-        ILogger<RagChatService> logger)
+        ILogger<RagChatService> logger,
+        IMemoryContextPreviewService? memoryContextPreviewService = null,
+        ILifeEventService? lifeEventService = null)
     {
         _sessionRepository = sessionRepository;
         _embeddingService = embeddingService;
@@ -32,6 +37,8 @@ public class RagChatService : IRagChatService
         _answerGenerator = answerGenerator;
         _ragOptions = ragOptions.Value;
         _logger = logger;
+        _memoryContextPreviewService = memoryContextPreviewService;
+        _lifeEventService = lifeEventService;
     }
 
     public async Task<RagChatResponse> ProcessChatAsync(string userId, RagChatRequest request)
@@ -172,6 +179,13 @@ public class RagChatService : IRagChatService
         contextBuilder.AppendLine($"用户本地时区: {tz}");
         contextBuilder.AppendLine($"用户当前本地时间: {TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, userTz):yyyy-MM-dd HH:mm:ss}");
         contextBuilder.AppendLine();
+
+        var memoryContextSection = await BuildMemoryContextSectionAsync(userId);
+        if (!string.IsNullOrWhiteSpace(memoryContextSection))
+        {
+            contextBuilder.Append(memoryContextSection);
+        }
+
         contextBuilder.AppendLine("【检索资料上下文 Chunks】");
         contextBuilder.AppendLine("请对照以下 Chunks 回答问题。每一条 Chunk 都有对应的标号，回答引用时必须采用对应的标号：");
         contextBuilder.AppendLine();
@@ -267,5 +281,31 @@ public class RagChatService : IRagChatService
             CitationIntegrity = integrity,
             Citations = citations
         };
+    }
+
+    private async Task<string> BuildMemoryContextSectionAsync(string userId)
+    {
+        if (_memoryContextPreviewService is null || _lifeEventService is null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var events = await _lifeEventService.ListEventsAsync(
+                userId,
+                type: "all",
+                limit: 20,
+                cursor: null,
+                tag: null);
+
+            var context = _memoryContextPreviewService.BuildPreview(userId, events.Data);
+            return MemoryContextPreviewService.BuildPromptSection(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[RAG Process] Memory context preview unavailable. Continuing without memory context.");
+            return string.Empty;
+        }
     }
 }
