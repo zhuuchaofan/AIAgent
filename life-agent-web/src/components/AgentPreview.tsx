@@ -164,9 +164,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
   const [phase80Refreshing, setPhase80Refreshing] = useState(false);
   const [phase80Updating, setPhase80Updating] = useState<string | null>(null);
   const [phase80Message, setPhase80Message] = useState<string | null>(null);
-  const [phase80Persistence, setPhase80Persistence] = useState<Phase80PersistenceMetadata | null>(null);
   const [showCompletedHistory, setShowCompletedHistory] = useState(false);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const toolCalls = useMemo(() => result?.toolCalls ?? [], [result]);
@@ -195,7 +193,6 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
       }
 
       setPhase80Actions(res.data ?? []);
-      setPhase80Persistence(res.persistence ?? null);
       if ((res.data ?? []).length > 0) {
         setPhase80Message("已恢复待确认历史；刷新后状态会保留。");
       }
@@ -401,49 +398,8 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
 
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-emerald-100 leading-relaxed flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>仅生活记录确认后写入；Memory、提醒和工具仍保持关闭。</span>
+              <span>当前仅生活记录会在确认后保存；提醒、Memory 和工具操作仍不会执行。</span>
             </div>
-
-            <details
-              open={showTechnicalDetails}
-              onToggle={(event) => setShowTechnicalDetails(event.currentTarget.open)}
-              className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-3 text-zinc-400"
-            >
-              <summary className="cursor-pointer select-none text-zinc-300 font-medium">技术与安全详情</summary>
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                <div>executed: <span className="font-mono">{String(latestPendingAction?.executed ?? false)}</span></div>
-                <div>wroteData: <span className="font-mono">{String(latestPendingAction?.wroteData ?? false)}</span></div>
-                <div>legacyConfirm: <span className="font-mono">false</span></div>
-                <div>realWritePath: <span className="font-mono">{String(latestPendingAction?.realWritePath ?? false)}</span></div>
-                <div>guard: <span className="font-mono">preview_only</span></div>
-                <div>intent: <span className="font-mono">{latestPendingAction?.intent ?? "life_record"}</span></div>
-                <div>disposition: <span className="font-mono">{latestPendingAction?.disposition ?? "pending_confirmation"}</span></div>
-                <div>riskLevel: <span className="font-mono">{latestPendingAction?.riskLevel ?? "low_record"}</span></div>
-                <div>requiresPendingAction: <span className="font-mono">{String(latestPendingAction?.requiresPendingAction ?? true)}</span></div>
-                <div>routeReason: <span className="font-mono">{latestPendingAction?.routeReason ?? "inferred_from_home_input"}</span></div>
-                <div>intentClassifier: <span className="font-mono">{latestPendingAction?.intentClassifier ?? "unknown"}</span></div>
-                <div>confirmTarget: <span className="font-mono">{latestPendingAction?.confirmTarget ?? "none"}</span></div>
-                <div>confirmWriteEnabled: <span className="font-mono">{String(latestPendingAction?.confirmWriteEnabled ?? false)}</span></div>
-                <div>confirmWriteExecutionReady: <span className="font-mono">{String(latestPendingAction?.confirmWriteExecutionReady ?? false)}</span></div>
-                <div>confirmWriteRealPathReady: <span className="font-mono">{String(latestPendingAction?.confirmWriteRealPathReady ?? false)}</span></div>
-                <div>confirmWriteExecutor: <span className="font-mono">{latestPendingAction?.confirmWriteExecutorId ?? "none"}</span></div>
-                <div className="sm:col-span-2 break-words">confirmWriteDecision: <span className="font-mono">{latestPendingAction?.confirmWriteDecisionReason ?? "confirm_write_disabled_by_policy"}</span></div>
-                <div>memoryCandidateOnly: <span className="font-mono">{String(latestPendingAction?.memoryCandidateOnly ?? true)}</span></div>
-                <div className="sm:col-span-2 break-words">confirmPlan: <span className="font-mono">{latestPendingAction?.confirmPlanReason ?? "preview_only"}</span></div>
-                <div>memoryTarget: <span className="font-mono">{latestPendingAction?.memoryTarget ?? "memory_candidate"}</span></div>
-                <div>memoryWriteEnabled: <span className="font-mono">{String(latestPendingAction?.memoryWriteEnabled ?? false)}</span></div>
-                <div>memoryDedupe: <span className="font-mono">{String(latestPendingAction?.memoryRequiresDedupe ?? true)}</span></div>
-                <div>memoryMerge: <span className="font-mono">{String(latestPendingAction?.memoryRequiresMerge ?? true)}</span></div>
-                <div>memoryConfirm: <span className="font-mono">{String(latestPendingAction?.memoryRequiresConfirmation ?? true)}</span></div>
-                {phase80Persistence && (
-                  <>
-                    <div>storeMode: <span className="font-mono">{phase80Persistence.storeMode}</span></div>
-                    <div>previewOnly: <span className="font-mono">{String(phase80Persistence.previewOnly)}</span></div>
-                    <div>safetyMode: <span className="font-mono">{phase80Persistence.safetyMode}</span></div>
-                  </>
-                )}
-              </div>
-            </details>
 
             {phase80Message && pendingActions.length === 0 && (
               <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3 text-zinc-300">

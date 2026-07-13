@@ -72,6 +72,7 @@ builder.Services.AddScoped(sp =>
             AllowReminderWrites: false),
         confirmWriteExecutor: sp.GetRequiredService<IPhase80ConfirmWriteExecutor>(),
         intentClassifier: sp.GetRequiredService<IUnifiedInboxIntentClassifier>(),
+        logger: sp.GetRequiredService<ILogger<Phase80PendingActionRuntime>>(),
         enableConfirmWriteExecution: true);
 });
 builder.Services.AddScoped<IMemoryContextProvider>(sp =>

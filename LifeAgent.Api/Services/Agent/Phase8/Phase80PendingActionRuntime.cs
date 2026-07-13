@@ -1,5 +1,6 @@
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.UnifiedInbox;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LifeAgent.Api.Services.Agent.Phase8;
 
@@ -28,6 +29,7 @@ public sealed class Phase80PendingActionRuntime
     private readonly Phase80ConfirmWritePolicy _confirmWritePolicy;
     private readonly IPhase80ConfirmWriteExecutor _confirmWriteExecutor;
     private readonly IUnifiedInboxIntentClassifier _intentClassifier;
+    private readonly ILogger<Phase80PendingActionRuntime> _logger;
     private readonly bool _enableConfirmWriteExecution;
 
     public Phase80PendingActionRuntime(
@@ -38,6 +40,7 @@ public sealed class Phase80PendingActionRuntime
         Phase80ConfirmWritePolicy? confirmWritePolicy = null,
         IPhase80ConfirmWriteExecutor? confirmWriteExecutor = null,
         IUnifiedInboxIntentClassifier? intentClassifier = null,
+        ILogger<Phase80PendingActionRuntime>? logger = null,
         bool enableConfirmWriteExecution = false)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -47,6 +50,7 @@ public sealed class Phase80PendingActionRuntime
         _confirmWritePolicy = confirmWritePolicy ?? Phase80ConfirmWritePolicy.DefaultPreviewOnly();
         _confirmWriteExecutor = confirmWriteExecutor ?? Phase80NoOpConfirmWriteExecutor.Instance;
         _intentClassifier = intentClassifier ?? RuleBasedUnifiedInboxIntentClassifier.Instance;
+        _logger = logger ?? NullLogger<Phase80PendingActionRuntime>.Instance;
         _enableConfirmWriteExecution = enableConfirmWriteExecution;
     }
 
@@ -136,6 +140,17 @@ public sealed class Phase80PendingActionRuntime
                 created.Status,
                 created.Message ?? "Pending action could not be created.");
         }
+
+        _logger.LogInformation(
+            "LifeOS pending action created. UserSubjectRef={UserSubjectRef} ActionId={ActionId} ActionType={ActionType} Intent={Intent} Disposition={Disposition} ConfirmTarget={ConfirmTarget} MemoryTarget={MemoryTarget} TraceId={TraceId}",
+            userId,
+            created.Record.PendingActionId,
+            created.Record.ActionType,
+            route.Intent,
+            route.Disposition,
+            confirmPlan.Target,
+            memoryPlan.Target,
+            created.Record.TraceId);
 
         return Phase80PendingActionResult.Ok(
             "pending",
@@ -257,6 +272,16 @@ public sealed class Phase80PendingActionRuntime
         }
 
         var viewRecord = confirmed.Record;
+        _logger.LogInformation(
+            "LifeOS pending action confirmed. UserSubjectRef={UserSubjectRef} ActionId={ActionId} ActionType={ActionType} Status={Status} WroteData={WroteData} Executed={Executed} ConfirmTarget={ConfirmTarget} Reason={Reason}",
+            userId,
+            actionId,
+            confirmed.Record.ActionType,
+            confirmed.Record.Status,
+            confirmed.Record.WroteData,
+            confirmed.Record.Executed,
+            ResolveStoredConfirmPlan(confirmed.Record).Target,
+            executionResult?.Reason ?? "confirm_write_not_executed");
 
         return Phase80PendingActionResult.Ok(
             Confirmed,
@@ -610,6 +635,15 @@ public sealed class Phase80PendingActionRuntime
         var gate = ResolveConfirmWriteInvocationGate(request.Plan, decision);
         if (!gate.ShouldInvoke)
         {
+            _logger.LogInformation(
+                "LifeOS confirm write skipped. UserSubjectRef={UserSubjectRef} ActionId={ActionId} ActionType={ActionType} Target={Target} ExecutorId={ExecutorId} Reason={Reason}",
+                request.UserId,
+                request.ActionId,
+                request.ActionType,
+                request.Plan.Target,
+                decision.ExecutorId,
+                gate.Reason);
+
             return new Phase80ConfirmWriteExecutionResult(
                 Success: false,
                 Status: "skipped",
@@ -621,7 +655,19 @@ public sealed class Phase80PendingActionRuntime
                 Reason: gate.Reason);
         }
 
-        return await _confirmWriteExecutor.ExecuteAsync(request, cancellationToken);
+        var result = await _confirmWriteExecutor.ExecuteAsync(request, cancellationToken);
+        _logger.LogInformation(
+            "LifeOS confirm write completed. UserSubjectRef={UserSubjectRef} ActionId={ActionId} ActionType={ActionType} Target={Target} WroteData={WroteData} RealWritePath={RealWritePath} ExecutorId={ExecutorId} Reason={Reason}",
+            request.UserId,
+            request.ActionId,
+            request.ActionType,
+            result.Target,
+            result.WroteData,
+            result.RealWritePath,
+            result.ExecutorId,
+            result.Reason);
+
+        return result;
     }
 
     internal static Phase80MemoryPlan ResolveMemoryPlan(string actionType)
