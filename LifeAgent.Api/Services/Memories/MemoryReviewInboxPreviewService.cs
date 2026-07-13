@@ -9,7 +9,8 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
     private const int MaxCandidateCount = 8;
     private const int MaxSourceCount = 3;
     private const int MaxSourceSnippetLength = 96;
-    private const double CandidateConfidence = 0.82;
+    private const double ObservingConfidence = 0.72;
+    private const double StableConfidence = 0.86;
 
     public MemoryReviewInboxPreviewData BuildPreview(string userId, IReadOnlyList<LifeEvent> events)
     {
@@ -39,22 +40,29 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                     .Select(item => item.EventId)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
+                var isStable = sourceIds.Length > 1;
+                var candidateType = ToCandidateType(signal, isStable);
+                var candidateTitle = ToCandidateTitle(signal, isStable);
+                var stage = isStable ? "stable" : "observing";
 
                 return new MemoryReviewCandidateItem
                 {
                     Id = $"review_{signal.Key}",
-                    Type = signal.Type,
-                    Title = signal.Title,
-                    Detail = signal.Detail,
+                    Type = candidateType,
+                    Title = candidateTitle,
+                    Detail = BuildDetail(candidateType, sourceIds.Length, isStable),
+                    ReviewStage = stage,
+                    ReviewStageLabel = isStable ? "更稳定" : "观察中",
                     SourceEventIds = sourceIds,
                     Sources = sources,
-                    Confidence = CandidateConfidence,
-                    Reason = ordered.Count > 1 ? "最近多次出现" : "最近记录中出现",
+                    Confidence = isStable ? StableConfidence : ObservingConfidence,
+                    Reason = isStable ? "最近多次出现" : "近期线索",
                     PreviewOnly = true,
                     WroteData = false
                 };
             })
-            .OrderByDescending(candidate => candidate.SourceEventIds.Count)
+            .OrderByDescending(candidate => candidate.ReviewStage == "stable")
+            .ThenByDescending(candidate => candidate.SourceEventIds.Count)
             .ThenBy(candidate => candidate.Id, StringComparer.Ordinal)
             .Take(MaxCandidateCount)
             .ToList();
@@ -82,8 +90,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "project_work",
                 "theme",
-                "你最近在持续整理 LifeOS 项目。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为长期项目线索。");
+                "你最近在持续整理 LifeOS 项目。");
         }
 
         if (ContainsAny(text, "新疆"))
@@ -92,8 +99,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "xinjiang_travel_plan",
                 "temporary_context",
-                "你近期有去新疆的出行计划。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为近期背景线索。");
+                "你近期有去新疆的出行计划。");
         }
         else if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "路上"))
         {
@@ -101,8 +107,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "travel_experience",
                 "theme",
-                "你最近在记录出行和新体验。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为生活主题线索。");
+                "你最近在记录出行和新体验。");
         }
 
         if (ContainsAny(text, "美食", "吃", "饺子", "蒸饺", "支出", "消费"))
@@ -111,8 +116,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "food_spending",
                 "preference",
-                "你最近会记录饮食体验和消费感受。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为偏好线索。");
+                "你最近会记录饮食体验和消费感受。");
         }
 
         if (ContainsAny(text, "骑车", "骑行", "心率", "运动", "身体"))
@@ -121,8 +125,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "body_movement",
                 "habit",
-                "你会关注运动状态和身体感受。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为习惯线索。");
+                "你会关注运动状态和身体感受。");
         }
 
         if (ContainsAny(text, "kolon", "sports", "户外", "运动服饰"))
@@ -131,8 +134,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "sportswear_brand_interest",
                 "preference",
-                "你最近在关注户外/运动服饰品牌。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为偏好线索。");
+                "你最近在关注户外/运动服饰品牌。");
         }
 
         if (ContainsAny(text, "版型") && ContainsAny(text, "价格", "贵", "购买", "值得", "划算"))
@@ -141,8 +143,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "style_price_hesitation",
                 "preference",
-                "你会在喜欢版型和价格偏高之间犹豫。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为购买偏好线索。");
+                "你会在喜欢版型和价格偏高之间犹豫。");
         }
         else if (ContainsAny(text, "价格", "贵", "购买", "值得", "划算"))
         {
@@ -150,8 +151,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "purchase_price",
                 "preference",
-                "你会权衡购买价格是否值得。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为消费偏好线索。");
+                "你会权衡购买价格是否值得。");
         }
 
         if (ContainsAny(text, "喜欢", "不喜欢", "偏好"))
@@ -160,14 +160,64 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 lifeEvent,
                 "explicit_preference",
                 "preference",
-                "你最近明确表达过一个偏好。",
-                "来自最近的生活记录。之后如果你确认，我可以把它作为偏好线索。");
+                "你最近明确表达过一个偏好。");
         }
     }
 
-    private static ReviewSignal Signal(LifeEvent lifeEvent, string key, string type, string title, string detail)
+    private static ReviewSignal Signal(LifeEvent lifeEvent, string key, string type, string title)
     {
-        return new ReviewSignal(key, type, title, detail, lifeEvent);
+        return new ReviewSignal(key, type, title, lifeEvent);
+    }
+
+    private static string ToCandidateType(ReviewSignal signal, bool isStable)
+    {
+        if (isStable)
+        {
+            return signal.Type;
+        }
+
+        return signal.Key switch
+        {
+            "body_movement" => "temporary_context",
+            "food_spending" => "temporary_context",
+            "travel_experience" => "temporary_context",
+            _ => signal.Type
+        };
+    }
+
+    private static string ToCandidateTitle(ReviewSignal signal, bool isStable)
+    {
+        if (isStable)
+        {
+            return signal.Title;
+        }
+
+        return signal.Key switch
+        {
+            "body_movement" => "你最近记录过运动状态和身体感受。",
+            "food_spending" => "你最近记录过饮食体验和消费感受。",
+            "travel_experience" => "你最近记录过出行和新体验。",
+            _ => signal.Title
+        };
+    }
+
+    private static string BuildDetail(string type, int sourceCount, bool isStable)
+    {
+        if (isStable)
+        {
+            var typeText = type switch
+            {
+                "preference" => "偏好",
+                "habit" => "习惯",
+                "goal" => "目标",
+                "temporary_context" => "近期背景",
+                _ => "主题"
+            };
+
+            return $"来自最近 {sourceCount} 条生活记录，可以先作为较稳定的{typeText}线索观察。";
+        }
+
+        return "来自最近一条生活记录，先作为线索观察，等更多记录出现后再判断是否值得记住。";
     }
 
     private static string BuildText(LifeEvent lifeEvent)
@@ -234,7 +284,6 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
         string Key,
         string Type,
         string Title,
-        string Detail,
         LifeEvent LifeEvent)
     {
         public string SourceEventId => LifeEvent.Id;

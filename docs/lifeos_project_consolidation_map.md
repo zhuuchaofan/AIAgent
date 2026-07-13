@@ -14,6 +14,7 @@ Authoritative companion docs:
 - `docs/skills/lifeos-phase-assessment.md`
 - `docs/skills/_shared/phase-map.md`
 - `docs/lifeos_unified_inbox_current_design.md`
+- `docs/memory_durable_write_release_gate_readiness.md`
 - `docs/skills/cloud-run-deploy.md`
 
 ## Current One-line State
@@ -89,6 +90,8 @@ The web product surfaces are:
 - `/memory/review`: a candidate inbox where the user can inspect, keep, or locally hide signals.
 
 These actions do not create, update, archive, or merge durable Memory records.
+Durable Memory write preparation is tracked in
+`docs/memory_durable_write_release_gate_readiness.md`.
 
 ## Docs Policy Going Forward
 

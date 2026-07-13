@@ -29,6 +29,7 @@ public class MemoryReviewInboxPreviewServiceTest
             candidate.Id == "review_sportswear_brand_interest" &&
             candidate.Type == "preference" &&
             candidate.Title == "你最近在关注户外/运动服饰品牌。" &&
+            candidate.ReviewStage == "observing" &&
             candidate.PreviewOnly &&
             !candidate.WroteData);
         Assert.Contains(preview.Candidates, candidate =>
@@ -61,6 +62,9 @@ public class MemoryReviewInboxPreviewServiceTest
         var candidate = Assert.Single(preview.Candidates);
         Assert.Equal("review_project_work", candidate.Id);
         Assert.Equal("最近多次出现", candidate.Reason);
+        Assert.Equal("stable", candidate.ReviewStage);
+        Assert.Equal("更稳定", candidate.ReviewStageLabel);
+        Assert.Equal(0.86, candidate.Confidence);
         Assert.Equal(new[] { "evt_project_2", "evt_project_1" }, candidate.SourceEventIds);
         Assert.Equal(new[] { "evt_project_2", "evt_project_1" }, candidate.Sources.Select(source => source.EventId));
     }
@@ -99,7 +103,44 @@ public class MemoryReviewInboxPreviewServiceTest
         Assert.Equal("review_xinjiang_travel_plan", candidate.Id);
         Assert.Equal("temporary_context", candidate.Type);
         Assert.Equal("你近期有去新疆的出行计划。", candidate.Title);
+        Assert.Equal("observing", candidate.ReviewStage);
+        Assert.Equal("观察中", candidate.ReviewStageLabel);
+        Assert.Equal(0.72, candidate.Confidence);
         Assert.DoesNotContain("出行和新体验", candidate.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildPreview_TreatsSingleHabitLikeSignalAsRecentContext()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_bike", "骑车", "今天骑车回来，心率不高。")
+        });
+
+        var candidate = Assert.Single(preview.Candidates);
+        Assert.Equal("review_body_movement", candidate.Id);
+        Assert.Equal("temporary_context", candidate.Type);
+        Assert.Equal("你最近记录过运动状态和身体感受。", candidate.Title);
+        Assert.Equal("近期线索", candidate.Reason);
+        Assert.Contains("更多记录", candidate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildPreview_PromotesRepeatedHabitLikeSignalToStableHabit()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_bike_1", "骑车", "今天骑车回来，心率不高。", minutesAgo: 20),
+            NewEvent("evt_bike_2", "运动", "继续记录运动和身体状态。", minutesAgo: 10)
+        });
+
+        var candidate = Assert.Single(preview.Candidates);
+        Assert.Equal("review_body_movement", candidate.Id);
+        Assert.Equal("habit", candidate.Type);
+        Assert.Equal("你会关注运动状态和身体感受。", candidate.Title);
+        Assert.Equal("最近多次出现", candidate.Reason);
+        Assert.Equal("stable", candidate.ReviewStage);
+        Assert.Contains("较稳定的习惯线索", candidate.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

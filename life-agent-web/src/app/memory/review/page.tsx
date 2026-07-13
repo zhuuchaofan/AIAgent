@@ -123,6 +123,13 @@ export default function MemoryReviewPage() {
                       <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-300">
                         {typeLabel(candidate.type)}
                       </span>
+                      <span className={`rounded-md border px-2 py-0.5 text-xs ${
+                        candidate.reviewStage === "stable"
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          : "border-zinc-700 bg-zinc-900 text-zinc-500"
+                      }`}>
+                        {candidate.reviewStageLabel || "观察中"}
+                      </span>
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
                       {keptIds.has(candidate.id) && (
                         <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">

@@ -43,6 +43,8 @@ public sealed class MemoryReviewCandidateItem
     public string Type { get; set; } = "theme";
     public string Title { get; set; } = string.Empty;
     public string Detail { get; set; } = string.Empty;
+    public string ReviewStage { get; set; } = "observing";
+    public string ReviewStageLabel { get; set; } = "观察中";
     public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
     public IReadOnlyList<MemoryReviewSourceItem> Sources { get; set; } = Array.Empty<MemoryReviewSourceItem>();
     public double Confidence { get; set; }

@@ -9,6 +9,8 @@ export interface MemoryReviewCandidate {
   type: "theme" | "preference" | "habit" | "goal" | "temporary_context";
   title: string;
   detail: string;
+  reviewStage: "observing" | "stable";
+  reviewStageLabel: string;
   sourceEventIds: string[];
   sources: MemoryReviewSource[];
   confidence: number;
