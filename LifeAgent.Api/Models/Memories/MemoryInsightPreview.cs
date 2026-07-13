@@ -34,6 +34,7 @@ public sealed class MemoryReviewInboxPreviewData
     public int ScannedCount { get; set; }
     public bool PreviewOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
+    public bool MemoryWriteEnabled { get; set; } = false;
     public IReadOnlyList<MemoryReviewCandidateItem> Candidates { get; set; } = Array.Empty<MemoryReviewCandidateItem>();
 }
 
@@ -49,8 +50,20 @@ public sealed class MemoryReviewCandidateItem
     public IReadOnlyList<MemoryReviewSourceItem> Sources { get; set; } = Array.Empty<MemoryReviewSourceItem>();
     public double Confidence { get; set; }
     public string Reason { get; set; } = string.Empty;
+    public string ReviewStatus { get; set; } = "pending";
+    public DateTime? ReviewedAt { get; set; }
     public bool PreviewOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
+}
+
+public sealed class MemoryReviewCandidateActionResponse
+{
+    public bool Success { get; set; } = true;
+    public bool PreviewOnly { get; set; } = true;
+    public bool MemoryWriteEnabled { get; set; } = false;
+    public bool WroteMemory { get; set; } = false;
+    public bool WroteReviewState { get; set; } = true;
+    public MemoryReviewCandidateItem Data { get; set; } = new();
 }
 
 public sealed class MemoryReviewSourceItem

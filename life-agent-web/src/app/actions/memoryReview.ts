@@ -15,6 +15,8 @@ export interface MemoryReviewCandidate {
   sources: MemoryReviewSource[];
   confidence: number;
   reason: string;
+  reviewStatus?: "pending" | "kept" | "dismissed";
+  reviewedAt?: string | null;
   previewOnly: boolean;
   wroteData: boolean;
 }
@@ -30,7 +32,16 @@ export interface MemoryReviewInboxPreviewData {
   scannedCount: number;
   previewOnly: boolean;
   wroteData: boolean;
+  memoryWriteEnabled: boolean;
   candidates: MemoryReviewCandidate[];
+}
+
+export interface MemoryReviewCandidateActionData {
+  previewOnly: boolean;
+  memoryWriteEnabled: boolean;
+  wroteMemory: boolean;
+  wroteReviewState: boolean;
+  data: MemoryReviewCandidate;
 }
 
 export async function getMemoryReviewInboxPreview(limit = 20): Promise<MemoryReviewInboxPreviewData> {
@@ -53,4 +64,32 @@ export async function getMemoryReviewInboxPreview(limit = 20): Promise<MemoryRev
   }
 
   return data.data;
+}
+
+async function updateMemoryReviewCandidate(candidateId: string, action: "keep" | "dismiss"): Promise<MemoryReviewCandidateActionData> {
+  const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
+
+  const res = await fetch(`${API_BASE}/api/memory/review-inbox/${encodeURIComponent(candidateId)}/${action}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || "Failed to update memory review candidate");
+  }
+
+  return data;
+}
+
+export async function keepMemoryReviewCandidate(candidateId: string): Promise<MemoryReviewCandidateActionData> {
+  return updateMemoryReviewCandidate(candidateId, "keep");
+}
+
+export async function dismissMemoryReviewCandidate(candidateId: string): Promise<MemoryReviewCandidateActionData> {
+  return updateMemoryReviewCandidate(candidateId, "dismiss");
 }

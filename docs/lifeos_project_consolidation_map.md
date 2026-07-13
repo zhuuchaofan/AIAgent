@@ -15,6 +15,7 @@ Authoritative companion docs:
 - `docs/skills/_shared/phase-map.md`
 - `docs/lifeos_unified_inbox_current_design.md`
 - `docs/memory_durable_write_release_gate_readiness.md`
+- `docs/memory_review_inbox_state_release_gate.md`
 - `docs/skills/cloud-run-deploy.md`
 
 ## Current One-line State
@@ -40,7 +41,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
 | Phase 5 Agent Write MVP | Live for LifeEvent only | `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, `Phase80LifeEventConfirmWriteExecutor`, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`. |
 | Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Other write targets remain No-Go. |
-| Phase 6 Memory Engine | Preview / next | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*/preview` | `docs/phase6_*` | Home AI insights and Memory Review Inbox can surface candidate-only memory signals. Durable Memory write is not enabled. |
+| Phase 6 Memory Engine | Preview / next | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*/preview` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md` | Home AI insights and Memory Review Inbox can surface candidate-only memory signals. Review Inbox status can persist, but durable Memory write is not enabled. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
 | Phase 8/9 Pending Action | Historical foundation now absorbed | `IPendingActionStore`, `FirestorePendingActionStore`, `Phase80PendingActionRuntime` | `docs/phase8_*`, `docs/phase9_*` | Docs are historical unless explicitly updated. Current truth is Unified Inbox doc. |
 
@@ -80,8 +81,12 @@ GET /api/memory/insights/preview
 
 GET /api/memory/review-inbox/preview
   -> read recent life_events
-  -> return candidate memory signals with source summaries
-  -> no Memory write
+  -> return candidate memory signals with source summaries and review status
+  -> no durable Memory write
+
+POST /api/memory/review-inbox/{candidateId}/keep|dismiss
+  -> persist review UI state to users/{userId}/memory_review_items
+  -> no durable Memory write
 
 GET /api/memory/context/preview
   -> read recent life_events
@@ -92,10 +97,11 @@ GET /api/memory/context/preview
 The web product surfaces are:
 
 - Home `AI 发现`: a lightweight preview of repeated themes.
-- `/memory/review`: a candidate inbox where the user can inspect, keep, or locally hide signals.
+- `/memory/review`: a candidate inbox where the user can inspect, keep, or hide signals.
 - `/chat`: RAG answers may receive a read-only life context preview as background, but citations still come only from retrieved document Chunks.
 
 These actions do not create, update, archive, or merge durable Memory records.
+Only Review Inbox status is persisted so the user's decision survives refresh.
 Durable Memory write preparation is tracked in
 `docs/memory_durable_write_release_gate_readiness.md`.
 

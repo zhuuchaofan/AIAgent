@@ -1,4 +1,5 @@
 using LifeAgent.Api.Models;
+using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Memories;
 
 namespace LifeAgent.Tests;
@@ -24,6 +25,7 @@ public class MemoryReviewInboxPreviewServiceTest
 
         Assert.True(preview.PreviewOnly);
         Assert.False(preview.WroteData);
+        Assert.False(preview.MemoryWriteEnabled);
         Assert.Equal(2, preview.ScannedCount);
         Assert.Contains(preview.Candidates, candidate =>
             candidate.Id == "review_sportswear_brand_interest" &&
@@ -48,6 +50,63 @@ public class MemoryReviewInboxPreviewServiceTest
                 Assert.DoesNotContain("life_events", source.Snippet, StringComparison.OrdinalIgnoreCase);
             });
         });
+    }
+
+    [Fact]
+    public void StateProjection_KeepsReviewStateAndFiltersDismissedByDefault()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_brand", "户外品牌", "种草了 kolon sports，版型好看，但是价格很贵。"),
+            NewEvent("evt_project", "整理项目", "最近让 codex 整理 LifeOS 项目。")
+        });
+        var reviewedAt = DateTime.UtcNow;
+        var states = new Dictionary<string, MemoryReviewStateRecord>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["review_project_work"] = new("review_project_work", "kept", reviewedAt, reviewedAt),
+            ["review_sportswear_brand_interest"] = new("review_sportswear_brand_interest", "dismissed", reviewedAt, reviewedAt)
+        };
+
+        var projected = MemoryReviewInboxStateProjection.Apply(preview, states);
+
+        Assert.True(projected.PreviewOnly);
+        Assert.False(projected.WroteData);
+        Assert.False(projected.MemoryWriteEnabled);
+        Assert.DoesNotContain(projected.Candidates, candidate => candidate.Id == "review_sportswear_brand_interest");
+        var kept = Assert.Single(projected.Candidates, candidate => candidate.Id == "review_project_work");
+        Assert.Equal("kept", kept.ReviewStatus);
+        Assert.Equal(reviewedAt, kept.ReviewedAt);
+    }
+
+    [Fact]
+    public void StateProjection_AppendsPersistedKeptCandidatesThatAreNoLongerGenerated()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_plain", "普通记录", "今天买了咖啡。")
+        });
+        var reviewedAt = DateTime.UtcNow;
+        var keptCandidate = new MemoryReviewCandidateItem
+        {
+            Id = "review_old_context",
+            Type = "temporary_context",
+            Title = "你之前留过的一条线索。",
+            Detail = "这条线索来自之前的记录。",
+            ReviewStatus = "kept",
+            ReviewedAt = reviewedAt,
+            PreviewOnly = true,
+            WroteData = false
+        };
+
+        var projected = MemoryReviewInboxStateProjection.AddMissingKeptCandidates(
+            preview,
+            new[] { keptCandidate });
+
+        var kept = Assert.Single(projected.Candidates);
+        Assert.Equal("review_old_context", kept.Id);
+        Assert.Equal("kept", kept.ReviewStatus);
+        Assert.Equal(reviewedAt, kept.ReviewedAt);
+        Assert.False(projected.MemoryWriteEnabled);
     }
 
     [Fact]

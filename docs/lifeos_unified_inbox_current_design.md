@@ -111,10 +111,12 @@ The home page has two separate data surfaces:
    - Source: recent `life_events` only.
    - `GET /api/memory/insights/preview` powers the Home `AI 发现` card.
    - `GET /api/memory/review-inbox/preview` powers `/memory/review`.
+   - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
+     Review Inbox status to `users/{userId}/memory_review_items`.
    - `GET /api/memory/context/preview` exposes read-only context for product
      validation and RAG background use.
    - Review Inbox actions such as keep, inspect source, and hide are product
-     UI affordances only; they do not persist durable Memory records.
+     UI affordances; they do not persist durable Memory records.
 
 ## Legacy Paths
 
@@ -155,6 +157,8 @@ These remain non-negotiable:
 - Memory durable writes are not enabled.
 - Memory review candidates are preview-only and may include source summaries
   from recent life records.
+- Memory review status may persist only under `memory_review_items`; this is
+  not a durable Memory write.
 - RAG may use Memory context preview as non-cited background only; document
   citations must still come from retrieved Chunks.
 - Reminder durable writes are not enabled.

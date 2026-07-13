@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Brain, Check, ChevronDown, Loader2, X } from "lucide-react";
-import { getMemoryReviewInboxPreview, type MemoryReviewCandidate } from "@/app/actions/memoryReview";
+import {
+  dismissMemoryReviewCandidate,
+  getMemoryReviewInboxPreview,
+  keepMemoryReviewCandidate,
+  type MemoryReviewCandidate
+} from "@/app/actions/memoryReview";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
 function typeLabel(type: MemoryReviewCandidate["type"]): string {
@@ -23,11 +28,12 @@ function typeLabel(type: MemoryReviewCandidate["type"]): string {
 
 export default function MemoryReviewPage() {
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
-  const [keptIds, setKeptIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<"pending" | "kept">("pending");
   const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +65,9 @@ export default function MemoryReviewPage() {
     };
   }, []);
 
-  const visibleCandidates = candidates.filter(candidate => !hiddenIds.has(candidate.id));
+  const pendingCandidates = candidates.filter(candidate => (candidate.reviewStatus ?? "pending") !== "kept");
+  const keptCandidates = candidates.filter(candidate => candidate.reviewStatus === "kept");
+  const visibleCandidates = activeTab === "pending" ? pendingCandidates : keptCandidates;
 
   const toggleSources = (candidateId: string) => {
     setExpandedSourceIds(prev => {
@@ -71,6 +79,35 @@ export default function MemoryReviewPage() {
       }
       return next;
     });
+  };
+
+  const keepCandidate = async (candidateId: string) => {
+    setUpdatingId(candidateId);
+    setActionError(null);
+    try {
+      const result = await keepMemoryReviewCandidate(candidateId);
+      setCandidates(prev => prev.map(candidate => (
+        candidate.id === candidateId ? result.data : candidate
+      )));
+      setActiveTab("kept");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "暂时无法保留这条线索");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const dismissCandidate = async (candidateId: string) => {
+    setUpdatingId(candidateId);
+    setActionError(null);
+    try {
+      await dismissMemoryReviewCandidate(candidateId);
+      setCandidates(prev => prev.filter(candidate => candidate.id !== candidateId));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "暂时无法忽略这条线索");
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   return (
@@ -106,13 +143,41 @@ export default function MemoryReviewPage() {
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
             暂时无法整理这些线索。你可以稍后再来看看。
           </div>
-        ) : visibleCandidates.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
-            暂时没有明显值得记住的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。
-          </div>
         ) : (
           <div className="space-y-4">
-            {visibleCandidates.map(candidate => (
+            <div className="flex rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
+              {[
+                { key: "pending" as const, label: `待处理 ${pendingCandidates.length}` },
+                { key: "kept" as const, label: `已留着 ${keptCandidates.length}` }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    activeTab === tab.key
+                      ? "bg-zinc-800 text-zinc-100"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {actionError && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+                {actionError}
+              </div>
+            )}
+
+            {visibleCandidates.length === 0 ? (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
+                {activeTab === "pending"
+                  ? "暂时没有需要处理的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。"
+                  : "还没有保留下来的线索。你可以先把不确定但有价值的内容留在这里。"}
+              </div>
+            ) : visibleCandidates.map(candidate => (
               <article
                 key={candidate.id}
                 className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4"
@@ -131,7 +196,7 @@ export default function MemoryReviewPage() {
                         {candidate.reviewStageLabel || "观察中"}
                       </span>
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
-                      {keptIds.has(candidate.id) && (
+                      {candidate.reviewStatus === "kept" && (
                         <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
                           已留在这里
                         </span>
@@ -142,7 +207,8 @@ export default function MemoryReviewPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setHiddenIds(prev => new Set(prev).add(candidate.id))}
+                    onClick={() => dismissCandidate(candidate.id)}
+                    disabled={updatingId === candidate.id}
                     className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-200"
                     aria-label="忽略这条线索"
                     title="忽略这条线索"
@@ -154,11 +220,16 @@ export default function MemoryReviewPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => setKeptIds(prev => new Set(prev).add(candidate.id))}
+                    onClick={() => keepCandidate(candidate.id)}
+                    disabled={updatingId === candidate.id || candidate.reviewStatus === "kept"}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
                   >
-                    <Check className="h-4 w-4" />
-                    先留着
+                    {updatingId === candidate.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    {candidate.reviewStatus === "kept" ? "已留着" : "先留着"}
                   </button>
                   {(candidate.sources?.length ?? 0) > 0 && (
                     <button
@@ -191,7 +262,7 @@ export default function MemoryReviewPage() {
               </article>
             ))}
             <p className="px-1 text-xs leading-relaxed text-zinc-600">
-              这些只是线索，确认记住功能还未开启；忽略和先留着只影响当前页面显示。
+              这些只是待整理线索，还没有写入长期记忆；忽略和先留着会保存在这个收件箱里。
             </p>
           </div>
         )}
