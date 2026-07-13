@@ -84,10 +84,11 @@ public static class MemoryInsightEndpoints
                 userId,
                 candidateId,
                 lifeEventService,
-                memoryReviewInboxPreviewService);
+                memoryReviewInboxPreviewService,
+                memoryReviewStateStore);
             var state = await memoryReviewStateStore.UpsertAsync(
                 userId,
-                new MemoryReviewStateUpsertRequest(candidate, "kept"));
+                new MemoryReviewStateUpsertRequest(candidate, "kept", candidate.MemoryId));
             var updated = MemoryReviewInboxStateProjection.ApplyState(
                 candidate,
                 new Dictionary<string, MemoryReviewStateRecord>(StringComparer.OrdinalIgnoreCase)
@@ -119,10 +120,11 @@ public static class MemoryInsightEndpoints
                 userId,
                 candidateId,
                 lifeEventService,
-                memoryReviewInboxPreviewService);
+                memoryReviewInboxPreviewService,
+                memoryReviewStateStore);
             var state = await memoryReviewStateStore.UpsertAsync(
                 userId,
-                new MemoryReviewStateUpsertRequest(candidate, "dismissed"));
+                new MemoryReviewStateUpsertRequest(candidate, "dismissed", candidate.MemoryId));
             var updated = MemoryReviewInboxStateProjection.ApplyState(
                 candidate,
                 new Dictionary<string, MemoryReviewStateRecord>(StringComparer.OrdinalIgnoreCase)
@@ -135,6 +137,22 @@ public static class MemoryInsightEndpoints
                 Success = true,
                 Data = updated
             });
+        }).RequireRateLimiting("auth-user");
+
+        group.MapPost("/review-inbox/{candidateId}/remember", async (
+            string candidateId,
+            MemoryReviewRememberRequest request,
+            HttpContext ctx,
+            IMemoryReviewRememberService memoryReviewRememberService) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            var result = await memoryReviewRememberService.RememberAsync(userId, candidateId, request);
+            return Results.Ok(result);
         }).RequireRateLimiting("auth-user");
 
         group.MapGet("/context/preview", async (
@@ -196,11 +214,18 @@ public static class MemoryInsightEndpoints
         string userId,
         string candidateId,
         ILifeEventService lifeEventService,
-        IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService)
+        IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
+        IMemoryReviewStateStore memoryReviewStateStore)
     {
         if (string.IsNullOrWhiteSpace(candidateId))
         {
             throw new InvalidInputException("记忆候选 id 不能为空。");
+        }
+
+        var storedCandidate = await memoryReviewStateStore.GetCandidateAsync(userId, candidateId);
+        if (storedCandidate != null)
+        {
+            return storedCandidate;
         }
 
         var events = await lifeEventService.ListEventsAsync(

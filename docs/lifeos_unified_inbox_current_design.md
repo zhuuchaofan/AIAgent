@@ -113,10 +113,13 @@ The home page has two separate data surfaces:
    - `GET /api/memory/review-inbox/preview` powers `/memory/review`.
    - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
      Review Inbox status to `users/{userId}/memory_review_items`.
+   - `POST /api/memory/review-inbox/{candidateId}/remember` writes an edited,
+     user-confirmed durable Memory from a kept candidate.
    - `GET /api/memory/context/preview` exposes read-only context for product
      validation and RAG background use.
    - Review Inbox actions such as keep, inspect source, and hide are product
-     UI affordances; they do not persist durable Memory records.
+     UI affordances; only the explicit `remember` action persists durable
+     Memory records.
 
 ## Legacy Paths
 
@@ -154,11 +157,13 @@ These remain non-negotiable:
 - Confirm references a server-side pending action.
 - Confirm checks owner, status, expiry, policy, and executor readiness.
 - Only allowlisted executors may write.
-- Memory durable writes are not enabled.
+- Automatic Memory durable writes are not enabled.
 - Memory review candidates are preview-only and may include source summaries
   from recent life records.
 - Memory review status may persist only under `memory_review_items`; this is
   not a durable Memory write.
+- Memory Review `remember` may write durable Memory only from a kept candidate
+  after user confirmation and guard validation.
 - RAG may use Memory context preview as non-cited background only; document
   citations must still come from retrieved Chunks.
 - Reminder durable writes are not enabled.

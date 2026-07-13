@@ -21,13 +21,14 @@ Authoritative companion docs:
 ## Current One-line State
 
 LifeOS has completed the foundation, life data layer, RAG, Agent Preview,
-pending-action persistence, and the first minimal real write:
+pending-action persistence, and two minimal user-confirmed real writes:
 
 ```text
 Unified Inbox life_record Confirm -> life_events
+Memory Review kept candidate Remember -> memories
 ```
 
-It is still not a fully autonomous personal Agent. Memory durable writes,
+It is still not a fully autonomous personal Agent. Automatic Memory writes,
 Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 
 ## Phase / Code / Docs Map
@@ -40,8 +41,8 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 | Phase 3.5 Stabilization | Absorbed | rate limiting, validators, deployment docs, tests | `docs/phase3_5/*`, `docs/skills/development/*` | Non-feature hardening. |
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
 | Phase 5 Agent Write MVP | Live for LifeEvent only | `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, `Phase80LifeEventConfirmWriteExecutor`, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`. |
-| Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Other write targets remain No-Go. |
-| Phase 6 Memory Engine | Preview / next | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*/preview` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md` | Home AI insights and Memory Review Inbox can surface candidate-only memory signals. Review Inbox status can persist, but durable Memory write is not enabled. |
+| Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Memory Review minimal write approved locally. Other write targets remain No-Go. |
+| Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights and Memory Review Inbox can surface memory signals. Kept review candidates can be explicitly remembered; automatic Memory write remains closed. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
 | Phase 8/9 Pending Action | Historical foundation now absorbed | `IPendingActionStore`, `FirestorePendingActionStore`, `Phase80PendingActionRuntime` | `docs/phase8_*`, `docs/phase9_*` | Docs are historical unless explicitly updated. Current truth is Unified Inbox doc. |
 
@@ -88,6 +89,11 @@ POST /api/memory/review-inbox/{candidateId}/keep|dismiss
   -> persist review UI state to users/{userId}/memory_review_items
   -> no durable Memory write
 
+POST /api/memory/review-inbox/{candidateId}/remember
+  -> require kept candidate
+  -> validate and guard edited memory content
+  -> write users/{userId}/memories/{memoryId}
+
 GET /api/memory/context/preview
   -> read recent life_events
   -> return read-only context items for product and RAG validation
@@ -100,8 +106,8 @@ The web product surfaces are:
 - `/memory/review`: a candidate inbox where the user can inspect, keep, or hide signals.
 - `/chat`: RAG answers may receive a read-only life context preview as background, but citations still come only from retrieved document Chunks.
 
-These actions do not create, update, archive, or merge durable Memory records.
-Only Review Inbox status is persisted so the user's decision survives refresh.
+Only `remember` creates durable Memory records. Keep/dismiss only persist Review
+Inbox state so the user's decision survives refresh.
 Durable Memory write preparation is tracked in
 `docs/memory_durable_write_release_gate_readiness.md`.
 

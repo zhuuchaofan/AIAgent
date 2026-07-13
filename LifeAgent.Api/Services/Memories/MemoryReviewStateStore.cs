@@ -14,6 +14,11 @@ public interface IMemoryReviewStateStore
         string userId,
         CancellationToken cancellationToken = default);
 
+    Task<MemoryReviewCandidateItem?> GetCandidateAsync(
+        string userId,
+        string candidateId,
+        CancellationToken cancellationToken = default);
+
     Task<MemoryReviewStateRecord> UpsertAsync(
         string userId,
         MemoryReviewStateUpsertRequest request,
@@ -22,13 +27,15 @@ public interface IMemoryReviewStateStore
 
 public sealed record MemoryReviewStateUpsertRequest(
     MemoryReviewCandidateItem Candidate,
-    string Status);
+    string Status,
+    string? MemoryId = null);
 
 public sealed record MemoryReviewStateRecord(
     string CandidateId,
     string Status,
     DateTime UpdatedAt,
-    DateTime? ReviewedAt);
+    DateTime? ReviewedAt,
+    string? MemoryId = null);
 
 public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
 {
@@ -37,7 +44,8 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
     {
         "pending",
         "kept",
-        "dismissed"
+        "dismissed",
+        "remembered"
     };
 
     private readonly FirestoreDb _db;
@@ -94,7 +102,7 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
         }
 
         var snapshot = await UserCollection(userId)
-            .WhereEqualTo("status", "kept")
+            .WhereIn("status", new[] { "kept", "remembered" })
             .GetSnapshotAsync(cancellationToken);
 
         return snapshot.Documents
@@ -104,6 +112,28 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
             .OrderByDescending(candidate => candidate.ReviewedAt ?? DateTime.MinValue)
             .ThenBy(candidate => candidate.Id, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    public async Task<MemoryReviewCandidateItem?> GetCandidateAsync(
+        string userId,
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new ArgumentException("userId is required.", nameof(userId));
+        }
+
+        if (string.IsNullOrWhiteSpace(candidateId))
+        {
+            return null;
+        }
+
+        var snapshot = await UserCollection(userId)
+            .Document(candidateId)
+            .GetSnapshotAsync(cancellationToken);
+
+        return snapshot.Exists ? ToCandidate(candidateId, snapshot.ToDictionary()) : null;
     }
 
     public async Task<MemoryReviewStateRecord> UpsertAsync(
@@ -129,7 +159,7 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var docRef = UserCollection(userId).Document(request.Candidate.Id);
         var snapshot = await docRef.GetSnapshotAsync(cancellationToken);
-        var data = BuildData(request.Candidate, request.Status, now, includeCreatedAt: !snapshot.Exists);
+        var data = BuildData(request.Candidate, request.Status, request.MemoryId, now, includeCreatedAt: !snapshot.Exists);
 
         await docRef.SetAsync(data, SetOptions.MergeAll, cancellationToken);
 
@@ -137,7 +167,8 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
             request.Candidate.Id,
             request.Status,
             now,
-            request.Status is "kept" or "dismissed" ? now : null);
+            request.Status is "kept" or "dismissed" or "remembered" ? now : null,
+            request.MemoryId);
     }
 
     private CollectionReference UserCollection(string userId)
@@ -150,6 +181,7 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
     private static Dictionary<string, object> BuildData(
         MemoryReviewCandidateItem candidate,
         string status,
+        string? memoryId,
         DateTime now,
         bool includeCreatedAt)
     {
@@ -157,6 +189,7 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
         {
             ["candidateId"] = candidate.Id,
             ["status"] = status,
+            ["memoryId"] = memoryId ?? string.Empty,
             ["type"] = candidate.Type,
             ["title"] = candidate.Title,
             ["detail"] = candidate.Detail,
@@ -203,7 +236,8 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
             candidateId,
             status,
             ToDateTime(data, "updatedAt") ?? DateTime.MinValue,
-            ToDateTime(data, "reviewedAt"));
+            ToDateTime(data, "reviewedAt"),
+            ReadString(data, "memoryId"));
     }
 
     private static DateTime? ToDateTime(Dictionary<string, object> data, string field)
@@ -251,6 +285,7 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
             Reason = ReadString(data, "reason") ?? "已留着",
             ReviewStatus = status,
             ReviewedAt = ToDateTime(data, "reviewedAt"),
+            MemoryId = ReadString(data, "memoryId"),
             PreviewOnly = true,
             WroteData = false
         };
@@ -258,7 +293,12 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
 
     private static string? ReadString(Dictionary<string, object> data, string field)
     {
-        return data.TryGetValue(field, out var value) ? value as string : null;
+        if (!data.TryGetValue(field, out var value) || value is not string text)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(text) ? null : text;
     }
 
     private static double ReadDouble(Dictionary<string, object> data, string field)
@@ -365,6 +405,7 @@ public static class MemoryReviewInboxStateProjection
 
         candidate.ReviewStatus = string.IsNullOrWhiteSpace(state.Status) ? "pending" : state.Status;
         candidate.ReviewedAt = state.ReviewedAt;
+        candidate.MemoryId = state.MemoryId;
         return candidate;
     }
 }

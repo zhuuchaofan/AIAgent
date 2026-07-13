@@ -4,16 +4,17 @@ Date: 2026-07-13
 
 ## Status
 
-This is a readiness checklist only. It does not approve, deploy, or enable
-durable Memory writes.
+This document now records the first approved minimal durable Memory write gate.
+It only covers user-confirmed writes from the Memory Review Inbox.
 
 Current production boundary:
 
 - Home `AI 发现` is preview-only.
-- `/memory/review` is preview-only.
-- Review Inbox keep / hide / source inspection are UI-only affordances.
-- No durable Memory repository is wired to production.
+- `/memory/review` can keep, hide, and explicitly remember retained candidates.
+- Durable Memory write is only allowed after the user clicks `记住`.
+- The write path is limited to `users/{userId}/memories`.
 - No Cloud Run env flag is changed by this document.
+- Memory is not automatically injected into Agent runtime by this gate.
 
 ## Minimum Durable Memory Schema
 
@@ -34,8 +35,9 @@ The first durable Memory write gate should use the smallest auditable record:
 ## Confirmation Rules
 
 - Durable Memory write requires a dedicated "记住" user action.
-- The client may reference a candidate id, but the server must rebuild or load
-  the candidate from server-owned data before writing.
+- The client may reference a candidate id and submit edited `content`, but the
+  server must load the candidate from server-owned Review Inbox state before
+  writing.
 - LLM output cannot set `userId`, Firestore path, status, or timestamps.
 - Merge is not automatic in the first gate. Similar existing memories should
   require a separate review decision.
@@ -51,12 +53,12 @@ The first durable Memory write gate should use the smallest auditable record:
 
 ## Release Gate Checklist
 
-- [ ] Dedicated user approval for durable Memory write gate.
+- [x] Dedicated user approval for durable Memory write gate.
 - [ ] Firestore path and indexes reviewed.
-- [ ] Auth and ownership checks verified.
-- [ ] Local tests for create, duplicate review, archive, and unauthorized access.
-- [ ] Preview-only behavior remains unchanged when the gate is off.
-- [ ] Cloud Run env changes explicitly reviewed and reversible.
+- [x] Auth and ownership checks verified in the API boundary.
+- [x] Local tests for create, duplicate review, guard block, and candidate status.
+- [x] Preview-only insight/review behavior remains unchanged outside `记住`.
+- [x] No Cloud Run env change required.
 - [ ] Production smoke uses a dedicated test account and known cleanup path.
 - [ ] Rollback plan restores preview-only behavior without data loss.
 

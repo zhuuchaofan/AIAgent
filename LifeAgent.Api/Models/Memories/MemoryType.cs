@@ -1,7 +1,7 @@
 namespace LifeAgent.Api.Models.Memories;
 
 /// <summary>
-/// 长期记忆的 12 种核心分类
+/// 长期记忆的核心分类
 /// </summary>
 public enum MemoryType
 {
@@ -39,7 +39,10 @@ public enum MemoryType
     Constraint,
 
     /// <summary>临时的短期关注快照（如出差、特定任务期）</summary>
-    TemporaryContext
+    TemporaryContext,
+
+    /// <summary>用户近期反复出现的生活主题或关注方向</summary>
+    Theme
 }
 
 /// <summary>
@@ -60,7 +63,8 @@ public static class MemoryTypeHelper
         { "location", MemoryType.Location },
         { "routine", MemoryType.Routine },
         { "constraint", MemoryType.Constraint },
-        { "temporary_context", MemoryType.TemporaryContext }
+        { "temporary_context", MemoryType.TemporaryContext },
+        { "theme", MemoryType.Theme }
     };
 
     private static readonly Dictionary<MemoryType, string> EnumToStringMap = new()
@@ -76,7 +80,8 @@ public static class MemoryTypeHelper
         { MemoryType.Location, "location" },
         { MemoryType.Routine, "routine" },
         { MemoryType.Constraint, "constraint" },
-        { MemoryType.TemporaryContext, "temporary_context" }
+        { MemoryType.TemporaryContext, "temporary_context" },
+        { MemoryType.Theme, "theme" }
     };
 
     /// <summary>

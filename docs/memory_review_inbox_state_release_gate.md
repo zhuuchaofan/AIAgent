@@ -21,6 +21,7 @@ Allowed statuses:
 - `pending`
 - `kept`
 - `dismissed`
+- `remembered`
 
 The stored record may include candidate metadata such as title, type, review
 stage, source event ids, and timestamps. This exists so UI actions such as
@@ -46,12 +47,16 @@ This gate does not approve:
 
 Neither action means the system has remembered the fact as long-term Memory.
 
+`记住` is a separate explicit action. It writes a durable Memory only after the
+candidate has already been kept and the user confirms the edited memory text.
+
 ## API Surface
 
 ```text
 GET  /api/memory/review-inbox/preview
 POST /api/memory/review-inbox/{candidateId}/keep
 POST /api/memory/review-inbox/{candidateId}/dismiss
+POST /api/memory/review-inbox/{candidateId}/remember
 ```
 
 The action endpoints rebuild the current server-side candidate list from recent
@@ -67,3 +72,5 @@ wroteMemory = false
 ```
 
 `wroteReviewState = true` only means the Review Inbox status record changed.
+For `remember`, `wroteMemory=true` and `memoryId` identify the created durable
+Memory record.

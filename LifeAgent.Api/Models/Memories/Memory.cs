@@ -69,6 +69,12 @@ public class Memory
     public string Source { get; set; } = "manual_entry";
 
     /// <summary>
+    /// 支撑这条记忆的生活记录 id 列表。
+    /// </summary>
+    [FirestoreProperty("sourceEventIds")]
+    public List<string> SourceEventIds { get; set; } = new();
+
+    /// <summary>
     /// 若由 Agent 提报，记录触发此记忆的 Pending Agent Action ID
     /// </summary>
     [FirestoreProperty("agentActionId")]

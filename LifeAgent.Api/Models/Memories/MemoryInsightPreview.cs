@@ -52,8 +52,15 @@ public sealed class MemoryReviewCandidateItem
     public string Reason { get; set; } = string.Empty;
     public string ReviewStatus { get; set; } = "pending";
     public DateTime? ReviewedAt { get; set; }
+    public string? MemoryId { get; set; }
     public bool PreviewOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
+}
+
+public sealed class MemoryReviewRememberRequest
+{
+    public string Content { get; set; } = string.Empty;
+    public int? Importance { get; set; }
 }
 
 public sealed class MemoryReviewCandidateActionResponse
@@ -63,6 +70,7 @@ public sealed class MemoryReviewCandidateActionResponse
     public bool MemoryWriteEnabled { get; set; } = false;
     public bool WroteMemory { get; set; } = false;
     public bool WroteReviewState { get; set; } = true;
+    public string? MemoryId { get; set; }
     public MemoryReviewCandidateItem Data { get; set; } = new();
 }
 

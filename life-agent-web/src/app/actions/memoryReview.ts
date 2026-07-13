@@ -15,8 +15,9 @@ export interface MemoryReviewCandidate {
   sources: MemoryReviewSource[];
   confidence: number;
   reason: string;
-  reviewStatus?: "pending" | "kept" | "dismissed";
+  reviewStatus?: "pending" | "kept" | "dismissed" | "remembered";
   reviewedAt?: string | null;
+  memoryId?: string | null;
   previewOnly: boolean;
   wroteData: boolean;
 }
@@ -41,6 +42,7 @@ export interface MemoryReviewCandidateActionData {
   memoryWriteEnabled: boolean;
   wroteMemory: boolean;
   wroteReviewState: boolean;
+  memoryId?: string | null;
   data: MemoryReviewCandidate;
 }
 
@@ -92,4 +94,30 @@ export async function keepMemoryReviewCandidate(candidateId: string): Promise<Me
 
 export async function dismissMemoryReviewCandidate(candidateId: string): Promise<MemoryReviewCandidateActionData> {
   return updateMemoryReviewCandidate(candidateId, "dismiss");
+}
+
+export async function rememberMemoryReviewCandidate(
+  candidateId: string,
+  content: string,
+  importance?: number
+): Promise<MemoryReviewCandidateActionData> {
+  const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
+
+  const res = await fetch(`${API_BASE}/api/memory/review-inbox/${encodeURIComponent(candidateId)}/remember`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content, importance }),
+    cache: "no-store",
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || "Failed to remember memory review candidate");
+  }
+
+  return data;
 }

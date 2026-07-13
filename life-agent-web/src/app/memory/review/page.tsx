@@ -7,6 +7,7 @@ import {
   dismissMemoryReviewCandidate,
   getMemoryReviewInboxPreview,
   keepMemoryReviewCandidate,
+  rememberMemoryReviewCandidate,
   type MemoryReviewCandidate
 } from "@/app/actions/memoryReview";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
@@ -30,6 +31,7 @@ export default function MemoryReviewPage() {
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<"pending" | "kept">("pending");
   const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
+  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +67,8 @@ export default function MemoryReviewPage() {
     };
   }, []);
 
-  const pendingCandidates = candidates.filter(candidate => (candidate.reviewStatus ?? "pending") !== "kept");
-  const keptCandidates = candidates.filter(candidate => candidate.reviewStatus === "kept");
+  const pendingCandidates = candidates.filter(candidate => (candidate.reviewStatus ?? "pending") === "pending");
+  const keptCandidates = candidates.filter(candidate => candidate.reviewStatus === "kept" || candidate.reviewStatus === "remembered");
   const visibleCandidates = activeTab === "pending" ? pendingCandidates : keptCandidates;
 
   const toggleSources = (candidateId: string) => {
@@ -89,9 +91,33 @@ export default function MemoryReviewPage() {
       setCandidates(prev => prev.map(candidate => (
         candidate.id === candidateId ? result.data : candidate
       )));
+      setDraftTexts(prev => ({
+        ...prev,
+        [candidateId]: result.data.title
+      }));
       setActiveTab("kept");
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "暂时无法保留这条线索");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const rememberCandidate = async (candidate: MemoryReviewCandidate) => {
+    const draft = (draftTexts[candidate.id] ?? candidate.title).trim();
+    setUpdatingId(candidate.id);
+    setActionError(null);
+    try {
+      const result = await rememberMemoryReviewCandidate(candidate.id, draft, 3);
+      setCandidates(prev => prev.map(item => (
+        item.id === candidate.id ? result.data : item
+      )));
+      setDraftTexts(prev => ({
+        ...prev,
+        [candidate.id]: result.data.title
+      }));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "暂时无法记住这条线索");
     } finally {
       setUpdatingId(null);
     }
@@ -201,6 +227,11 @@ export default function MemoryReviewPage() {
                           已留在这里
                         </span>
                       )}
+                      {candidate.reviewStatus === "remembered" && (
+                        <span className="rounded-md border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
+                          已记住
+                        </span>
+                      )}
                     </div>
                     <h2 className="break-words text-base font-semibold text-zinc-100">{candidate.title}</h2>
                     <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{candidate.detail}</p>
@@ -221,7 +252,7 @@ export default function MemoryReviewPage() {
                   <button
                     type="button"
                     onClick={() => keepCandidate(candidate.id)}
-                    disabled={updatingId === candidate.id || candidate.reviewStatus === "kept"}
+                    disabled={updatingId === candidate.id || candidate.reviewStatus === "kept" || candidate.reviewStatus === "remembered"}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
                   >
                     {updatingId === candidate.id ? (
@@ -229,7 +260,7 @@ export default function MemoryReviewPage() {
                     ) : (
                       <Check className="h-4 w-4" />
                     )}
-                    {candidate.reviewStatus === "kept" ? "已留着" : "先留着"}
+                    {candidate.reviewStatus === "remembered" ? "已记住" : candidate.reviewStatus === "kept" ? "已留着" : "先留着"}
                   </button>
                   {(candidate.sources?.length ?? 0) > 0 && (
                     <button
@@ -243,6 +274,50 @@ export default function MemoryReviewPage() {
                     </button>
                   )}
                 </div>
+
+                {activeTab === "kept" && (
+                  <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+                    <label htmlFor={`memory-draft-${candidate.id}`} className="text-sm font-medium text-zinc-300">
+                      将记住为
+                    </label>
+                    <textarea
+                      id={`memory-draft-${candidate.id}`}
+                      value={draftTexts[candidate.id] ?? candidate.title}
+                      onChange={event => setDraftTexts(prev => ({
+                        ...prev,
+                        [candidate.id]: event.target.value
+                      }))}
+                      disabled={candidate.reviewStatus === "remembered" || updatingId === candidate.id}
+                      rows={3}
+                      maxLength={500}
+                      className="mt-2 min-h-24 w-full resize-y rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-500/60 disabled:cursor-not-allowed disabled:text-zinc-500"
+                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => rememberCandidate(candidate)}
+                        disabled={
+                          updatingId === candidate.id ||
+                          candidate.reviewStatus === "remembered" ||
+                          !(draftTexts[candidate.id] ?? candidate.title).trim()
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {updatingId === candidate.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        {candidate.reviewStatus === "remembered" ? "已记住" : "记住"}
+                      </button>
+                      {candidate.memoryId && (
+                        <span className="text-xs text-zinc-600">
+                          {candidate.memoryId}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {expandedSourceIds.has(candidate.id) && (candidate.sources?.length ?? 0) > 0 && (
                   <div className="mt-4 space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
@@ -262,7 +337,7 @@ export default function MemoryReviewPage() {
               </article>
             ))}
             <p className="px-1 text-xs leading-relaxed text-zinc-600">
-              这些只是待整理线索，还没有写入长期记忆；忽略和先留着会保存在这个收件箱里。
+              待处理和先留着只是收件箱状态；只有点击“记住”后，才会写入长期记忆。
             </p>
           </div>
         )}

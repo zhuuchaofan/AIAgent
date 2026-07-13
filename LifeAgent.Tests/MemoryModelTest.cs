@@ -4,7 +4,7 @@ using Xunit;
 namespace LifeAgent.Tests;
 
 /// <summary>
-/// 验证长期记忆数据模型、12 类 MemoryType 枚举与字符串转换的正确性。
+/// 验证长期记忆数据模型、MemoryType 枚举与字符串转换的正确性。
 /// </summary>
 public class MemoryModelTest
 {
@@ -29,12 +29,11 @@ public class MemoryModelTest
     }
 
     [Fact]
-    public void MemoryTypeHelper_CorrectlyMapsTwelveEnumTypes()
+    public void MemoryTypeHelper_CorrectlyMapsAllEnumTypes()
     {
         var allEnumTypes = Enum.GetValues<MemoryType>();
-        Assert.Equal(12, allEnumTypes.Length);
+        Assert.Equal(13, allEnumTypes.Length);
 
-        // 验证 12 个枚举各自的 snake_case 转换以及还原
         foreach (var type in allEnumTypes)
         {
             var snakeStr = type.ToSnakeCaseString();
@@ -63,6 +62,7 @@ public class MemoryModelTest
     [InlineData("routine", MemoryType.Routine)]
     [InlineData("constraint", MemoryType.Constraint)]
     [InlineData("temporary_context", MemoryType.TemporaryContext)]
+    [InlineData("theme", MemoryType.Theme)]
     public void MemoryTypeHelper_MapsSpecificStringsToCorrectEnums(string inputString, MemoryType expectedType)
     {
         Assert.True(MemoryTypeHelper.IsValid(inputString));
