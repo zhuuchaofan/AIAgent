@@ -64,7 +64,7 @@ export default function LifeChatPage() {
           id: `assistant-${messageIdRef.current}`,
           role: "assistant",
           content: result.response,
-          meta: `基于 ${result.usedEventCount} 条生活记录和 ${result.usedMemoryCount} 条记忆，只读回答。`,
+          meta: "基于最近记录整理",
         },
       ]);
     } catch (err) {
@@ -155,7 +155,7 @@ export default function LifeChatPage() {
                     {message.role === "user" ? "U" : "AI"}
                   </div>
 
-                  <div className="min-w-0 flex-1 space-y-2">
+                  <div className={`min-w-0 space-y-2 ${message.role === "user" ? "" : "flex-1"}`}>
                     <div
                       className={`min-w-0 rounded-2xl p-3.5 ${
                         message.role === "user"

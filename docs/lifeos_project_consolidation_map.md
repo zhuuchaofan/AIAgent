@@ -120,6 +120,8 @@ The web product surfaces are:
 - `/memory`: the user's confirmed durable memories, with archive/forget.
 - `/life/chat`: read-only life Q&A based on recent life records and active
   memories.
+- `/life/review`: read-only recent-life review based on existing insights and
+  recent life records.
 - `/chat`: knowledge-base answers may receive active durable memories as auxiliary personal background, and the UI links to `/memory` when such background exists. Citations still come only from retrieved document Chunks.
 
 Only `remember` creates durable Memory records. Keep/dismiss only persist Review

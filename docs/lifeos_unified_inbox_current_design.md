@@ -130,6 +130,12 @@ The home page has two separate data surfaces:
    - It does not persist chat history, write Memory, create reminders, or
      execute tools.
 
+5. Life review
+   - Source: existing insight preview plus recent life records.
+   - `/life/review` is a read-only product surface.
+   - It does not call a new write path, persist summaries, create reminders,
+     or execute tools.
+
 ## Legacy Paths
 
 These routes still exist for compatibility and older tests:
@@ -176,6 +182,8 @@ These remain non-negotiable:
 - Confirmed Memory can be listed and archived by the user.
 - Life Q&A may use recent life records and active Memory as read-only context.
 - Life Q&A must not write data, create reminders, or execute tools.
+- Life review may summarize existing read-only previews and recent records, but
+  must not persist generated summaries.
 - Knowledge-base Q&A may use active Memory as auxiliary background only; the UI
   may surface that background is available and link to `/memory`.
 - Memory is never a citation source; document citations must still come from

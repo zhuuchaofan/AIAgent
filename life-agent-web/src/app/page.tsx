@@ -67,6 +67,12 @@ function InsightCard({
             问问最近状态
           </Link>
           <Link
+            href="/life/review"
+            className="mt-2 block text-sm text-indigo-300 transition-colors hover:text-indigo-200"
+          >
+            查看最近回顾
+          </Link>
+          <Link
             href="/memory/review"
             className="mt-2 block text-sm text-indigo-300 transition-colors hover:text-indigo-200"
           >

@@ -84,7 +84,7 @@ public class LifeChatServiceTest
         Assert.Contains("2-3 条观察", answerGenerator.LastSystemInstruction);
         Assert.Contains("不超过 40-50 个中文字符", answerGenerator.LastSystemInstruction);
         Assert.Contains("先给结论，不主动展开日期、票务、设备、地点等证据细节", answerGenerator.LastSystemInstruction);
-        Assert.Contains("禁止使用“你最近的状态：”“具体来看”“以下是总结”“工作方面/休闲方面”等报告式开头或标题", answerGenerator.LastSystemInstruction);
+        Assert.Contains("禁止使用“以下是”“下面是”“你最近的状态”“具体来看”“以下是总结”“工作方面/休闲方面”等报告式开头或标题", answerGenerator.LastSystemInstruction);
     }
 
     [Fact]
