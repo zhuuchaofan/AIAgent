@@ -79,6 +79,38 @@ public class MemoryInsightPreviewServiceTest
         Assert.DoesNotContain("工具操作", insight.Text, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void BuildPreview_DoesNotRepeatTitleAndContentInThemeInsight()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent(
+                "evt_project",
+                "哈，最近让 codex 整理项目，一直整理，一直一团糟糕～",
+                "哈，最近让 codex 整理项目，一直整理，一直一团糟糕～")
+        });
+
+        var insight = Assert.Single(preview.Insights);
+        Assert.Equal("theme", insight.Kind);
+        Assert.Equal("你最近在持续整理项目相关的事情。", insight.Text);
+    }
+
+    [Fact]
+    public void BuildPreview_CondensesLongThemeInsightInsteadOfEchoingOriginalRecord()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent(
+                "evt_trip",
+                "西安国家版本馆无人机首飞",
+                "今天和朋友开车一起去西安国家版本馆飞了无人机，第一次飞，很不错，拍了几段视频，虽然毫无章法，但是基本掌握了飞行的基础。")
+        });
+
+        var insight = Assert.Single(preview.Insights);
+        Assert.Equal("你最近在记录出行和新体验。", insight.Text);
+        Assert.DoesNotContain("第一次飞，很不错", insight.Text, StringComparison.Ordinal);
+    }
+
     private static LifeEvent NewEvent(string id, string title, string content)
     {
         return new LifeEvent
