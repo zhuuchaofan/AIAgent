@@ -42,7 +42,7 @@ export function RagChat() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+      content: "你好，我可以帮你查找和总结知识库里的内容。你可以先选择文档范围，也可以直接提问。",
     }
   ]);
   const [inputValue, setInputValue] = useState("");
@@ -66,7 +66,7 @@ export function RagChat() {
           setMessages([
             {
               role: "assistant",
-              content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+              content: "你好，我可以帮你查找和总结知识库里的内容。你可以先选择文档范围，也可以直接提问。",
             },
             ...mappedMessages
           ]);
@@ -74,7 +74,7 @@ export function RagChat() {
           setMessages([
             {
               role: "assistant",
-              content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+              content: "你好，我可以帮你查找和总结知识库里的内容。你可以先选择文档范围，也可以直接提问。",
             }
           ]);
         }
@@ -148,7 +148,7 @@ export function RagChat() {
       setMessages([
         {
           role: "assistant",
-          content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+          content: "你好，我可以帮你查找和总结知识库里的内容。你可以先选择文档范围，也可以直接提问。",
         }
       ]);
       setHistoryError(null);
@@ -158,7 +158,7 @@ export function RagChat() {
       setMessages([
         {
           role: "assistant",
-          content: "您好！我是您的知识库 RAG 问答助手。您可以勾选左侧或上方的文档限定检索范围，然后向我提问您文档库中的内容。",
+          content: "你好，我可以帮你查找和总结知识库里的内容。你可以先选择文档范围，也可以直接提问。",
         }
       ]);
     } finally {
@@ -269,9 +269,9 @@ export function RagChat() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 shrink-0 text-indigo-400" />
-              <h3 className="text-sm font-semibold text-white">RAG 知识库检索对话</h3>
+              <h3 className="text-sm font-semibold text-white">知识库问答</h3>
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-600">回答会参考近期生活记录线索，但不会写入长期记忆。</p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-600">回答主要来自你上传的文档；已记住的个人背景只作辅助参考。</p>
           </div>
           <div className="flex items-center gap-2">
             {selectedDocIds.length > 0 && (
@@ -393,7 +393,7 @@ export function RagChat() {
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/30 p-3.5 rounded-2xl rounded-tl-none text-xs text-zinc-500 min-w-0">
-                正在进行深度向量检索并生成可信回复...
+                正在查找相关文档并整理回答...
               </div>
             </div>
           )}

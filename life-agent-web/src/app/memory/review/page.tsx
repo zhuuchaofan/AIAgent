@@ -29,7 +29,7 @@ function typeLabel(type: MemoryReviewCandidate["type"]): string {
 
 export default function MemoryReviewPage() {
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
-  const [activeTab, setActiveTab] = useState<"pending" | "kept">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "kept" | "remembered">("pending");
   const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
   const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -68,8 +68,13 @@ export default function MemoryReviewPage() {
   }, []);
 
   const pendingCandidates = candidates.filter(candidate => (candidate.reviewStatus ?? "pending") === "pending");
-  const keptCandidates = candidates.filter(candidate => candidate.reviewStatus === "kept" || candidate.reviewStatus === "remembered");
-  const visibleCandidates = activeTab === "pending" ? pendingCandidates : keptCandidates;
+  const keptCandidates = candidates.filter(candidate => candidate.reviewStatus === "kept");
+  const rememberedCandidates = candidates.filter(candidate => candidate.reviewStatus === "remembered");
+  const visibleCandidates = activeTab === "pending"
+    ? pendingCandidates
+    : activeTab === "kept"
+      ? keptCandidates
+      : rememberedCandidates;
 
   const toggleSources = (candidateId: string) => {
     setExpandedSourceIds(prev => {
@@ -116,6 +121,7 @@ export default function MemoryReviewPage() {
         ...prev,
         [candidate.id]: result.data.title
       }));
+      setActiveTab("remembered");
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "暂时无法记住这条线索");
     } finally {
@@ -174,7 +180,8 @@ export default function MemoryReviewPage() {
             <div className="flex rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
               {[
                 { key: "pending" as const, label: `待处理 ${pendingCandidates.length}` },
-                { key: "kept" as const, label: `已留着 ${keptCandidates.length}` }
+                { key: "kept" as const, label: `已留着 ${keptCandidates.length}` },
+                { key: "remembered" as const, label: `已记住 ${rememberedCandidates.length}` }
               ].map(tab => (
                 <button
                   key={tab.key}
@@ -201,7 +208,9 @@ export default function MemoryReviewPage() {
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
                 {activeTab === "pending"
                   ? "暂时没有需要处理的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。"
-                  : "还没有保留下来的线索。你可以先把不确定但有价值的内容留在这里。"}
+                  : activeTab === "kept"
+                    ? "还没有保留下来的线索。你可以先把不确定但有价值的内容留在这里。"
+                    : "还没有真正记住的线索。确认记住后，它们会出现在这里和「我的记忆」里。"}
               </div>
             ) : visibleCandidates.map(candidate => (
               <article
@@ -224,7 +233,7 @@ export default function MemoryReviewPage() {
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
                       {candidate.reviewStatus === "kept" && (
                         <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
-                          已留在这里
+                          之后再决定
                         </span>
                       )}
                       {candidate.reviewStatus === "remembered" && (
@@ -308,14 +317,26 @@ export default function MemoryReviewPage() {
                         ) : (
                           <Check className="h-4 w-4" />
                         )}
-                        {candidate.reviewStatus === "remembered" ? "已记住" : "记住"}
+                        确认记住
                       </button>
-                      {candidate.memoryId && (
-                        <span className="text-xs text-zinc-600">
-                          {candidate.memoryId}
-                        </span>
-                      )}
+                      <span className="text-xs text-zinc-600">
+                        记住后会出现在「我的记忆」里，并在之后的问答和整理中作为背景参考。
+                      </span>
                     </div>
+                  </div>
+                )}
+
+                {activeTab === "remembered" && (
+                  <div className="mt-4 rounded-xl border border-sky-500/15 bg-sky-500/5 p-3">
+                    <p className="text-sm leading-relaxed text-sky-100">
+                      已记住。之后回答和整理时，LifeOS 会把它作为你的个人背景参考。
+                    </p>
+                    <Link
+                      href="/memory"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                    >
+                      查看我的记忆
+                    </Link>
                   </div>
                 )}
 
@@ -337,7 +358,7 @@ export default function MemoryReviewPage() {
               </article>
             ))}
             <p className="px-1 text-xs leading-relaxed text-zinc-600">
-              待处理和先留着只是收件箱状态；只有点击“记住”后，才会写入长期记忆。
+              待处理和先留着只是收件箱状态；只有点击“确认记住”后，才会进入「我的记忆」。
             </p>
           </div>
         )}
