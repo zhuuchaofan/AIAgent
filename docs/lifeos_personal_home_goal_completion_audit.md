@@ -2,6 +2,11 @@
 
 Date: 2026-07-12
 
+> Historical snapshot. Current home behavior and implementation ownership are
+> tracked in `docs/lifeos_unified_inbox_current_design.md` and
+> `docs/lifeos_project_consolidation_map.md`. Some function names and
+> preview-only statements below describe the state at the time of this audit.
+
 ## Goal
 
 Execute the product path:
@@ -27,8 +32,8 @@ mode, and tests. Real writes remain intentionally disabled.
 |---|---|---|
 | Home has one input | Complete | `AgentPreview` renders one primary form. |
 | Copy is `记录生活，或创建一个提醒...` | Complete | Input title and placeholder use the required copy. |
-| Submit creates pending action | Complete | `createPhase80PendingAction` posts to `/api/agent/pending-actions`. |
-| Frontend does not classify input | Complete | `createPhase80PendingAction` accepts only `title` and `summary`; it does not send `actionType`. |
+| Submit creates pending action | Complete | Current web code uses Unified Inbox pending-action server actions that post to `/api/agent/pending-actions`. |
+| Frontend does not classify input | Complete | The frontend sends title, summary, and timezone; it does not send `actionType` for normal home submissions. |
 | Backend routes intent | Complete | `Phase80PersonalHomeIntentRouter` classifies life record, reminder, plan, and explicit unknown tool actions. |
 | Pending card shows type | Complete | UI maps backend `actionType` to `生活记录`, `提醒`, and `计划`. |
 | Confirm remains preview-only by default | Complete | Default `ConfirmAsync` does not call the write executor and keeps persisted execution flags false. |
@@ -86,3 +91,10 @@ The project now has:
 
 Further work should start as a new scoped Beta implementation goal, with an
 explicit release gate before any real writes.
+
+## 2026-07-13 Current-State Note
+
+This audit predates the productized home cleanup. The old web manual ingest
+component, pending action diagnostics page, and unused frontend wrappers for
+legacy Agent Preview endpoints have been removed from the current web product
+surface. Backend compatibility endpoints and safety audit fields remain.

@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LifeOS Web
+
+Next.js frontend for the LifeOS / LifeAgent Unified Inbox.
+
+The current home page is the accepted productized flow:
+
+- Google login
+- Unified Inbox text input
+- Server-side pending action creation
+- Confirm / Cancel decision
+- Confirmed life records appear in the recent records timeline
+- Recent records can be loaded, edited, deleted, and restored after refresh
+
+The home page does not directly write Firestore. All product data access goes through the backend API.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies once, then run the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Server actions use `API_BASE_URL`. If it is not set, local development defaults to:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:5140
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open `http://localhost:3000`.
 
-## Learn More
+## Current Routes
 
-To learn more about Next.js, take a look at the following resources:
+- `/` - productized LifeOS home / Unified Inbox
+- `/knowledge` - document knowledge base
+- `/chat` - RAG chat
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Old home validation UI and manual ingest UI are no longer part of the current product surface. Backend compatibility endpoints remain owned by the API and tests.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Validation
 
-## Deploy on Vercel
+```bash
+npm run lint --prefix life-agent-web
+npm run build --prefix life-agent-web
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+There is currently no frontend `test` script in `package.json`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+Do not deploy from this README directly. Follow the project deployment skill:
+
+```text
+docs/skills/cloud-run-deploy.md
+```
+
+Cloud Run environment variables, production write flags, Firestore Rules, and deployment configuration must not be changed without explicit approval.

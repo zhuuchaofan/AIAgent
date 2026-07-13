@@ -2,6 +2,10 @@
 
 Date: 2026-07-12
 
+> Historical snapshot. Current home behavior and implementation ownership are
+> tracked in `docs/lifeos_unified_inbox_current_design.md` and
+> `docs/lifeos_project_consolidation_map.md`.
+
 ## Summary
 
 v1.3 can be treated as product-complete for the unified Personal Home inbox
@@ -20,8 +24,8 @@ v1.3 homepage scope.
 |---|---|---|
 | Home page keeps one main input | Complete | `AgentPreview` submits through one form and no longer exposes a separate ingest form. |
 | Input copy is `记录生活，或创建一个提醒...` | Complete | Home input title and placeholder use that copy. |
-| Submit creates pending action | Complete | `createPhase80PendingAction` posts to `/api/agent/pending-actions`. |
-| Frontend does not classify normal home input | Complete | `createPhase80PendingAction` accepts only `title` and `summary`; it does not send `actionType`. |
+| Submit creates pending action | Complete | Current web code uses Unified Inbox pending-action server actions that post to `/api/agent/pending-actions`. |
+| Frontend does not classify normal home input | Complete | The frontend sends title, summary, and timezone; it does not send `actionType` for normal home submissions. |
 | Backend intent router classifies input | Complete | `Phase80PersonalHomeIntentRouter` routes life record, reminder, plan, and unknown explicit tool action types. |
 | Pending card shows type | Complete | `AgentPreview` renders `生活记录`, `提醒`, and `计划` labels from backend `actionType`. |
 | Confirm is preview-only | Complete | Confirm marks status as confirmed but keeps `executed=false`, `wroteData=false`, and `realWritePath=false`. |
@@ -83,3 +87,10 @@ Treat the next work as Beta enablement, not homepage polish:
 2. Add tests for `life_events` and `reminders` write success/failure semantics.
 3. Keep Memory candidate-only.
 4. Run the release gate before enabling any production write path.
+
+## 2026-07-13 Current-State Note
+
+This audit predates the productized home cleanup. The old web manual ingest
+component, pending action diagnostics page, and unused frontend wrappers for
+legacy Agent Preview endpoints have been removed from the current web product
+surface. Backend compatibility endpoints and safety audit fields remain.

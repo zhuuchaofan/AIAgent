@@ -50,7 +50,7 @@
 
 | 能力 | 后端 | 前端 | 测试 |
 |------|------|------|------|
-| 自由文本摄入（POST /api/life/ingest） | ✅ LifeEndpoints | ✅ IngestForm | ✅ LlmHelperTest |
+| 自由文本摄入（POST /api/life/ingest） | ✅ LifeEndpoints | 历史 UI 已移除；当前首页使用 Unified Inbox | ✅ LlmHelperTest |
 | LLM 解析（Gemini + Mock） | ✅ GeminiLlmService / MockLlmService | — | ✅ 6 个 Theory 用例 |
 | Schema 校验 | ✅ LifeEventSchemaValidator | — | ✅ LlmHelperTest |
 | 事件列表（游标分页 + tag 过滤） | ✅ LifeEndpoints | ✅ Timeline | — |

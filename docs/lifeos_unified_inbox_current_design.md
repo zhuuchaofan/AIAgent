@@ -119,6 +119,11 @@ POST /api/agent/pending-actions/demo
 
 They are not the LifeOS Unified Inbox mainline.
 
+The old frontend wrappers for `/api/agent/run` and `/api/agent/confirm`, the
+manual `IngestForm` home UI, and the `/debug` pending action diagnostics page
+were removed from the current web product surface after home productization.
+This does not remove the backend compatibility routes or audit fields.
+
 The mainline routes are:
 
 ```text
@@ -153,15 +158,15 @@ The current implementation is now clearer, but still not the final Agent:
 - `Phase80PendingActionRuntime` is still the class name for compatibility.
   A future cleanup should wrap or rename it to `UnifiedInboxRuntime`.
 - Compatibility `/demo` endpoints remain available.
-- UI still exposes technical detail under a collapsible section because the
-  release is still gated and needs audit visibility.
+- Frontend action names now use Unified Inbox wording, but backend class names
+  and some tests still retain Phase 8 / Phase 80 compatibility names.
 
 ## Recommended Next Cleanup
 
 1. Extract a dedicated `UnifiedInboxRuntime` wrapper around
    `Phase80PendingActionRuntime`.
 2. Replace the reused event parser with a dedicated JSON-only intent classifier.
-3. Remove or hide compatibility demo routes after dependent tests and docs are
+3. Remove compatibility demo routes after dependent tests and docs are
    updated.
 4. Add authenticated production smoke covering:
    - journal-like input with future time mention -> life record

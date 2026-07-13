@@ -3,10 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Loader2, PenLine, Send, X } from "lucide-react";
 import {
-  cancelPhase80PendingAction,
-  confirmPhase80PendingAction,
-  createPhase80PendingAction,
-  listPhase80PendingActions,
+  cancelUnifiedInboxPendingAction,
+  confirmUnifiedInboxPendingAction,
+  createUnifiedInboxPendingAction,
+  listUnifiedInboxPendingActions,
 } from "@/app/actions/knowledge";
 
 interface Phase80PendingAction {
@@ -66,7 +66,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
 
   const loadLatestDraft = useCallback(async () => {
     try {
-      const response = await listPhase80PendingActions() as Phase80ListResponse;
+      const response = await listUnifiedInboxPendingActions() as Phase80ListResponse;
       if (!response.success) return;
 
       const latestPending = (response.data ?? []).find(action => action.status === "pending") ?? null;
@@ -93,7 +93,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
     setMessage(null);
 
     try {
-      const response = await createPhase80PendingAction(
+      const response = await createUnifiedInboxPendingAction(
         text,
         text,
         Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -123,8 +123,8 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
 
     try {
       const response = (decision === "save"
-        ? await confirmPhase80PendingAction(draftAction.actionId)
-        : await cancelPhase80PendingAction(draftAction.actionId)) as Phase80ActionResponse;
+        ? await confirmUnifiedInboxPendingAction(draftAction.actionId)
+        : await cancelUnifiedInboxPendingAction(draftAction.actionId)) as Phase80ActionResponse;
 
       if (!response.success && !response.data) {
         setError(response.message || "处理失败，请稍后再试。");

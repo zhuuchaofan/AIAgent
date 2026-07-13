@@ -47,7 +47,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 
 ```text
 life-agent-web/src/components/AgentPreview.tsx
-  -> life-agent-web/src/app/actions/knowledge.ts
+  -> life-agent-web/src/app/actions/knowledge.ts Unified Inbox pending-action actions
   -> POST /api/agent/pending-actions
   -> AgentEndpoints.CreatePhase80PendingActionAsync
   -> Phase80PendingActionRuntime
@@ -104,6 +104,9 @@ Completed cleanup:
 
 - Moved Unified Inbox classifier contracts to `Services/Agent/UnifiedInbox/`.
 - Split `Phase80LifeEventConfirmWriteExecutor` into its own LifeEvents file.
+- Removed the old web manual ingest component, `/debug` pending action
+  diagnostics page, and unused frontend wrappers for legacy agent preview
+  endpoints. Backend compatibility routes and safety audit fields remain.
 
 ## Final Goal Path
 

@@ -161,68 +161,7 @@ export async function clearRagChatHistory(conversationId: string) {
   }
 }
 
-export async function runAgentPreview(message: string, clientTimeZone?: string) {
-  try {
-    const token = await getToken();
-    if (!token) return { success: false, message: "未授权，请重新登录" };
-
-    const res = await fetch(`${API_BASE}/api/agent/run`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        conversationId: "agent_preview_default_session",
-        message,
-        clientTimeZone: clientTimeZone || "Asia/Shanghai",
-      }),
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      return { success: false, message: data.message || `助手调用失败 (${res.status})` };
-    }
-
-    return data;
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return { success: false, message: errMsg || "连接助手服务异常" };
-  }
-}
-
-export async function confirmAgentAction(actionId: string, decision: "confirm" | "cancel") {
-  try {
-    const token = await getToken();
-    if (!token) return { success: false, message: "未授权，请重新登录" };
-
-    const res = await fetch(`${API_BASE}/api/agent/confirm`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        actionId,
-        decision,
-      }),
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      return { success: false, message: data.message || `Agent 确认失败 (${res.status})` };
-    }
-
-    return data;
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return { success: false, message: errMsg || "连接 Agent 确认服务异常" };
-  }
-}
-
-export async function createPhase80PendingAction(title?: string, summary?: string, clientTimeZone?: string) {
+export async function createUnifiedInboxPendingAction(title?: string, summary?: string, clientTimeZone?: string) {
   try {
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
@@ -253,7 +192,7 @@ export async function createPhase80PendingAction(title?: string, summary?: strin
   }
 }
 
-export async function listPhase80PendingActions() {
+export async function listUnifiedInboxPendingActions() {
   try {
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
@@ -277,15 +216,15 @@ export async function listPhase80PendingActions() {
   }
 }
 
-export async function confirmPhase80PendingAction(actionId: string) {
-  return updatePhase80PendingAction(actionId, "confirm");
+export async function confirmUnifiedInboxPendingAction(actionId: string) {
+  return updateUnifiedInboxPendingAction(actionId, "confirm");
 }
 
-export async function cancelPhase80PendingAction(actionId: string) {
-  return updatePhase80PendingAction(actionId, "cancel");
+export async function cancelUnifiedInboxPendingAction(actionId: string) {
+  return updateUnifiedInboxPendingAction(actionId, "cancel");
 }
 
-async function updatePhase80PendingAction(actionId: string, decision: "confirm" | "cancel") {
+async function updateUnifiedInboxPendingAction(actionId: string, decision: "confirm" | "cancel") {
   try {
     const token = await getToken();
     if (!token) return { success: false, message: "未授权，请重新登录" };
@@ -307,30 +246,5 @@ async function updatePhase80PendingAction(actionId: string, decision: "confirm" 
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     return { success: false, message: errMsg || "连接待确认动作服务异常" };
-  }
-}
-
-export async function archivePhase80PendingAction(actionId: string) {
-  try {
-    const token = await getToken();
-    if (!token) return { success: false, message: "未授权，请重新登录" };
-
-    const res = await fetch(`${API_BASE}${PERSONAL_AGENT_PENDING_ACTIONS_PATH}/${actionId}/archive`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      return { ...data, success: false, message: data.message || `隐藏待确认动作失败 (${res.status})` };
-    }
-
-    return data;
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return { success: false, message: errMsg || "连接待确认动作隐藏服务异常" };
   }
 }
