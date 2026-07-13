@@ -143,7 +143,11 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
             yield return Signal(lifeEvent, "project_work", "theme", "你最近在持续整理项目相关的事情。", score);
         }
 
-        if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "新疆", "路上"))
+        if (ContainsAny(text, "新疆"))
+        {
+            yield return Signal(lifeEvent, "xinjiang_travel_plan", "temporary_context", "你近期有去新疆的出行计划。", score + 1.0);
+        }
+        else if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "路上"))
         {
             yield return Signal(lifeEvent, "travel_experience", "theme", "你最近在记录出行和新体验。", score);
         }

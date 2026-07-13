@@ -69,32 +69,90 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
 
         if (ContainsAny(text, "codex", "lifeos", "项目", "整理"))
         {
-            yield return Signal(lifeEvent, "project_work", "theme", "持续整理项目", "最近多次出现项目整理相关记录。");
+            yield return Signal(
+                lifeEvent,
+                "project_work",
+                "theme",
+                "你最近在持续整理 LifeOS 项目。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为长期项目线索。");
         }
 
-        if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "新疆", "路上"))
+        if (ContainsAny(text, "新疆"))
         {
-            yield return Signal(lifeEvent, "travel_experience", "theme", "出行和新体验", "最近记录里出现了出行、路上或新体验。");
+            yield return Signal(
+                lifeEvent,
+                "xinjiang_travel_plan",
+                "temporary_context",
+                "你近期有去新疆的出行计划。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为近期背景线索。");
+        }
+        else if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "路上"))
+        {
+            yield return Signal(
+                lifeEvent,
+                "travel_experience",
+                "theme",
+                "你最近在记录出行和新体验。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为生活主题线索。");
         }
 
         if (ContainsAny(text, "美食", "吃", "饺子", "蒸饺", "支出", "消费"))
         {
-            yield return Signal(lifeEvent, "food_spending", "preference", "饮食和消费感受", "最近记录里出现了饮食体验和消费感受。");
+            yield return Signal(
+                lifeEvent,
+                "food_spending",
+                "preference",
+                "你最近会记录饮食体验和消费感受。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为偏好线索。");
         }
 
         if (ContainsAny(text, "骑车", "骑行", "心率", "运动", "身体"))
         {
-            yield return Signal(lifeEvent, "body_movement", "habit", "运动和身体状态", "最近记录里出现了运动状态或身体感受。");
+            yield return Signal(
+                lifeEvent,
+                "body_movement",
+                "habit",
+                "你会关注运动状态和身体感受。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为习惯线索。");
         }
 
-        if (ContainsAny(text, "kolon", "sports", "户外", "运动服饰", "版型", "价格", "贵", "购买", "值得", "划算"))
+        if (ContainsAny(text, "kolon", "sports", "户外", "运动服饰"))
         {
-            yield return Signal(lifeEvent, "sportswear_price", "preference", "运动服饰和价格权衡", "最近记录里出现了运动服饰关注和价格犹豫。");
+            yield return Signal(
+                lifeEvent,
+                "sportswear_brand_interest",
+                "preference",
+                "你最近在关注户外/运动服饰品牌。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为偏好线索。");
+        }
+
+        if (ContainsAny(text, "版型") && ContainsAny(text, "价格", "贵", "购买", "值得", "划算"))
+        {
+            yield return Signal(
+                lifeEvent,
+                "style_price_hesitation",
+                "preference",
+                "你会在喜欢版型和价格偏高之间犹豫。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为购买偏好线索。");
+        }
+        else if (ContainsAny(text, "价格", "贵", "购买", "值得", "划算"))
+        {
+            yield return Signal(
+                lifeEvent,
+                "purchase_price",
+                "preference",
+                "你会权衡购买价格是否值得。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为消费偏好线索。");
         }
 
         if (ContainsAny(text, "喜欢", "不喜欢", "偏好"))
         {
-            yield return Signal(lifeEvent, "explicit_preference", "preference", "明确表达过的偏好", "最近记录里有明确的喜欢、不喜欢或偏好表达。");
+            yield return Signal(
+                lifeEvent,
+                "explicit_preference",
+                "preference",
+                "你最近明确表达过一个偏好。",
+                "来自最近的生活记录。之后如果你确认，我可以把它作为偏好线索。");
         }
     }
 

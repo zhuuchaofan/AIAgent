@@ -140,9 +140,22 @@ public class MemoryInsightPreviewServiceTest
 
         Assert.Equal(3, preview.Insights.Count);
         Assert.Equal("你最近在关注运动服饰，也在权衡价格。", preview.Insights[0].Text);
-        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在记录出行和新体验。");
+        Assert.Contains(preview.Insights, insight => insight.Text == "你近期有去新疆的出行计划。");
         Assert.Contains(preview.Insights, insight => insight.Text == "你最近在持续整理项目相关的事情。");
         Assert.DoesNotContain(preview.Insights, insight => insight.Text == "你最近在关注运动状态和身体感受。");
+    }
+
+    [Fact]
+    public void BuildPreview_UsesConcreteXinjiangTravelInsight()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_xinjiang", "新疆路上", "下周应该就在去新疆的路上啦。")
+        });
+
+        var insight = Assert.Single(preview.Insights);
+        Assert.Equal("temporary_context", insight.Kind);
+        Assert.Equal("你近期有去新疆的出行计划。", insight.Text);
     }
 
     [Fact]

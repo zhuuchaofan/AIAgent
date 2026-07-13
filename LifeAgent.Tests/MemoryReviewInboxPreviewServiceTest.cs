@@ -26,14 +26,18 @@ public class MemoryReviewInboxPreviewServiceTest
         Assert.False(preview.WroteData);
         Assert.Equal(2, preview.ScannedCount);
         Assert.Contains(preview.Candidates, candidate =>
-            candidate.Id == "review_sportswear_price" &&
+            candidate.Id == "review_sportswear_brand_interest" &&
             candidate.Type == "preference" &&
-            candidate.Title == "运动服饰和价格权衡" &&
+            candidate.Title == "你最近在关注户外/运动服饰品牌。" &&
             candidate.PreviewOnly &&
             !candidate.WroteData);
         Assert.Contains(preview.Candidates, candidate =>
+            candidate.Id == "review_style_price_hesitation" &&
+            candidate.Title == "你会在喜欢版型和价格偏高之间犹豫。");
+        Assert.Contains(preview.Candidates, candidate =>
             candidate.Id == "review_project_work" &&
-            candidate.Type == "theme");
+            candidate.Type == "theme" &&
+            candidate.Title == "你最近在持续整理 LifeOS 项目。");
     }
 
     [Fact]
@@ -49,6 +53,21 @@ public class MemoryReviewInboxPreviewServiceTest
         Assert.Equal("review_project_work", candidate.Id);
         Assert.Equal("最近多次出现", candidate.Reason);
         Assert.Equal(new[] { "evt_project_2", "evt_project_1" }, candidate.SourceEventIds);
+    }
+
+    [Fact]
+    public void BuildPreview_GeneratesSpecificXinjiangTravelPlanCandidate()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_xinjiang", "新疆路上", "下周应该就在去新疆的路上啦。")
+        });
+
+        var candidate = Assert.Single(preview.Candidates);
+        Assert.Equal("review_xinjiang_travel_plan", candidate.Id);
+        Assert.Equal("temporary_context", candidate.Type);
+        Assert.Equal("你近期有去新疆的出行计划。", candidate.Title);
+        Assert.DoesNotContain("出行和新体验", candidate.Title, StringComparison.Ordinal);
     }
 
     [Fact]
