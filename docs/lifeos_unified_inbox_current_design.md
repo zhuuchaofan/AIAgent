@@ -167,10 +167,10 @@ These remain non-negotiable:
 - Memory Review `remember` may write durable Memory only from a kept candidate
   after user confirmation and guard validation.
 - Confirmed Memory can be listed and archived by the user.
-- RAG may use active Memory as background only; citations still come only from
-  retrieved document Chunks.
-- RAG may use Memory context preview as non-cited background only; document
-  citations must still come from retrieved Chunks.
+- Knowledge-base Q&A may use active Memory as auxiliary background only; the UI
+  may surface that background is available and link to `/memory`.
+- Memory is never a citation source; document citations must still come from
+  retrieved Chunks.
 - Reminder durable writes are not enabled.
 - Tool execution is not enabled.
 - Cloud Run env changes require explicit approval.

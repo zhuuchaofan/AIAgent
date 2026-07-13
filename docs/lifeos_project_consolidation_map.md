@@ -113,12 +113,12 @@ The web product surfaces are:
 - Home `AI 发现`: a lightweight preview of repeated themes.
 - `/memory/review`: a candidate inbox where the user can inspect, keep, or hide signals.
 - `/memory`: the user's confirmed durable memories, with archive/forget.
-- `/chat`: RAG answers may receive a read-only life context preview as background, but citations still come only from retrieved document Chunks.
+- `/chat`: knowledge-base answers may receive active durable memories as auxiliary personal background, and the UI links to `/memory` when such background exists. Citations still come only from retrieved document Chunks.
 
 Only `remember` creates durable Memory records. Keep/dismiss only persist Review
 Inbox state so the user's decision survives refresh.
-RAG may use active durable memories as background, but Memory never becomes a
-document citation source.
+Knowledge-base Q&A may use active durable memories as background, but Memory
+never becomes a document citation source.
 Durable Memory write preparation is tracked in
 `docs/memory_durable_write_release_gate_readiness.md`.
 

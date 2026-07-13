@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Send,
   BookOpen,
+  Brain,
   Loader2,
   Info,
   AlertTriangle,
@@ -12,6 +14,7 @@ import {
   Trash2
 } from "lucide-react";
 import { sendRagMessage, getRagChatHistory, clearRagChatHistory } from "@/app/actions/knowledge";
+import { getMemoryItems } from "@/app/actions/memoryItems";
 import { useAuth } from "@/providers/AuthProvider";
 import { Markdown } from "./Markdown";
 import { useDocuments } from "@/providers/DocumentProvider";
@@ -48,6 +51,7 @@ export function RagChat() {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [memoryCount, setMemoryCount] = useState(0);
   const convId = "rag_default_session";
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -98,6 +102,31 @@ export function RagChat() {
     };
 
     initChat();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    const loadMemoryCount = async () => {
+      try {
+        const memories = await getMemoryItems("active");
+        if (!cancelled) {
+          setMemoryCount(memories.length);
+        }
+      } catch (err) {
+        console.warn("Fetch memory count failed:", err);
+        if (!cancelled) {
+          setMemoryCount(0);
+        }
+      }
+    };
+
+    loadMemoryCount();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // 自动滚动到聊天底部
@@ -291,6 +320,20 @@ export function RagChat() {
           </div>
         </div>
 
+        {memoryCount > 0 && (
+          <div className="border-b border-zinc-800/40 bg-zinc-950/40 px-5 py-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <Brain className="h-4 w-4 shrink-0 text-indigo-300" />
+              <span>
+                会把已记住的 {memoryCount} 条个人背景作为辅助参考；引用来源仍只来自知识库文档。
+              </span>
+              <Link href="/memory" className="text-indigo-300 transition-colors hover:text-indigo-200">
+                管理我的记忆
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* 消息历史滚动区 */}
         <div className="flex-1 p-5 overflow-y-auto space-y-5 min-h-[380px] max-h-[480px] min-w-0">
           {historyError && (
@@ -410,7 +453,7 @@ export function RagChat() {
             <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <h4 className="text-sm font-semibold text-white mb-2">清除当前对话记录</h4>
               <p className="text-xs text-zinc-400 leading-relaxed mb-5">
-                此操作将清除当前 RAG 对话窗口中的所有历史消息。<br />
+                此操作将清除当前知识库问答窗口中的所有历史消息。<br />
                 <span className="text-zinc-500">（不会删除已上传的文档和知识库文件）</span>
               </p>
               <div className="flex gap-2 justify-end">
