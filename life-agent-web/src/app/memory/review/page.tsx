@@ -160,7 +160,7 @@ export default function MemoryReviewPage() {
             <div>
               <h1 className="text-2xl font-semibold text-zinc-100">可能值得记住的事</h1>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                我会先把线索放在这里，真正记住之前仍需要你确认。
+                我会先把线索放在这里；只有你确认后，它们才会进入「我的记忆」。
               </p>
             </div>
           </div>
@@ -179,8 +179,8 @@ export default function MemoryReviewPage() {
           <div className="space-y-4">
             <div className="flex rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
               {[
-                { key: "pending" as const, label: `待处理 ${pendingCandidates.length}` },
-                { key: "kept" as const, label: `已留着 ${keptCandidates.length}` },
+                { key: "pending" as const, label: `待确认 ${pendingCandidates.length}` },
+                { key: "kept" as const, label: `先留着 ${keptCandidates.length}` },
                 { key: "remembered" as const, label: `已记住 ${rememberedCandidates.length}` }
               ].map(tab => (
                 <button
@@ -209,7 +209,7 @@ export default function MemoryReviewPage() {
                 {activeTab === "pending"
                   ? "暂时没有需要处理的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。"
                   : activeTab === "kept"
-                    ? "还没有保留下来的线索。你可以先把不确定但有价值的内容留在这里。"
+                    ? "还没有先留着的线索。你可以把不确定但有价值的内容先放在这里，之后再决定是否记住。"
                     : "还没有真正记住的线索。确认记住后，它们会出现在这里和「我的记忆」里。"}
               </div>
             ) : visibleCandidates.map(candidate => (
@@ -233,7 +233,7 @@ export default function MemoryReviewPage() {
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
                       {candidate.reviewStatus === "kept" && (
                         <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
-                          之后再决定
+                          先留着
                         </span>
                       )}
                       {candidate.reviewStatus === "remembered" && (
@@ -287,7 +287,7 @@ export default function MemoryReviewPage() {
                 {activeTab === "kept" && (
                   <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
                     <label htmlFor={`memory-draft-${candidate.id}`} className="text-sm font-medium text-zinc-300">
-                      将记住为
+                      确认前，可以改成你真正想让 LifeOS 记住的话
                     </label>
                     <textarea
                       id={`memory-draft-${candidate.id}`}
@@ -320,7 +320,7 @@ export default function MemoryReviewPage() {
                         确认记住
                       </button>
                       <span className="text-xs text-zinc-600">
-                        记住后会出现在「我的记忆」里，并在之后的问答和整理中作为背景参考。
+                        记住后会出现在「我的记忆」里，并在生活问答和最近回顾中作为背景参考。
                       </span>
                     </div>
                   </div>
@@ -358,7 +358,7 @@ export default function MemoryReviewPage() {
               </article>
             ))}
             <p className="px-1 text-xs leading-relaxed text-zinc-600">
-              待处理和先留着只是收件箱状态；只有点击“确认记住”后，才会进入「我的记忆」。
+              待确认和先留着只是候选状态；只有点击“确认记住”后，才会进入「我的记忆」。
             </p>
           </div>
         )}

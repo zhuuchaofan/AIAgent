@@ -64,7 +64,9 @@ export default function LifeChatPage() {
           id: `assistant-${messageIdRef.current}`,
           role: "assistant",
           content: result.response,
-          meta: "基于最近记录整理",
+          meta: result.usedMemoryCount > 0
+            ? `基于最近记录和 ${result.usedMemoryCount} 条已记住内容整理`
+            : "基于最近记录整理",
         },
       ]);
     } catch (err) {
@@ -105,7 +107,7 @@ export default function LifeChatPage() {
             <div>
               <h1 className="text-2xl font-semibold text-zinc-100">生活问答</h1>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                基于最近生活记录和已记住内容回答，不会写入或执行任何操作。
+                基于最近生活记录和你确认过的记忆回答，不会写入或执行任何操作。
               </p>
             </div>
           </div>

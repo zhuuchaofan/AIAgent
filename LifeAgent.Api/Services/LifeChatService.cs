@@ -227,8 +227,6 @@ public class LifeChatService : ILifeChatService
 
     private static bool IsExpiredMemory(Memory memory)
     {
-        return string.Equals(memory.Type, MemoryType.TemporaryContext.ToSnakeCaseString(), StringComparison.OrdinalIgnoreCase) &&
-               memory.ExpiresAt.HasValue &&
-               memory.ExpiresAt.Value <= DateTime.UtcNow;
+        return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
     }
 }

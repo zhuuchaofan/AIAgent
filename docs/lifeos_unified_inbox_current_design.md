@@ -127,6 +127,8 @@ The home page has two separate data surfaces:
    - Source: recent `life_events` plus active durable Memory.
    - `POST /api/life/chat` answers questions about the user's life in
      read-only mode.
+   - The web UI may tell the user when active remembered content was used as
+     background.
    - It does not persist chat history, write Memory, create reminders, or
      execute tools.
 
@@ -188,6 +190,9 @@ These remain non-negotiable:
 - Confirmed Memory can be listed and archived by the user.
 - Life Q&A may use recent life records and active Memory as read-only context.
 - Life Q&A must not write data, create reminders, or execute tools.
+- Life Q&A must exclude archived and expired Memory from ordinary context.
+- Life Q&A may show product-level memory usage feedback, but should not expose
+  Memory as citations or implementation details.
 - Life review may summarize recent records and active Memory, but must not
   persist generated summaries.
 - Life review evidence expansion may show supporting life records, but not

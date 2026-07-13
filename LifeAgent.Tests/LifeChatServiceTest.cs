@@ -119,6 +119,65 @@ public class LifeChatServiceTest
         Assert.Contains("整理 LifeOS 项目", response.Response);
     }
 
+    [Fact]
+    public async Task AnswerAsync_IgnoresExpiredAndArchivedMemories()
+    {
+        var answerGenerator = new InspectableAnswerGenerator
+        {
+            AnswerToReturn = "最近主要是在整理项目。"
+        };
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Preference.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我喜欢骑行。",
+            Importance = 3,
+            ExpiresAt = DateTime.UtcNow.AddDays(-1)
+        });
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Preference.ToSnakeCaseString(),
+            Status = MemoryStatus.Archived.ToSnakeCaseString(),
+            Content = "这条已经忘记。",
+            Importance = 3
+        });
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我最近在整理 LifeOS 项目。",
+            Importance = 4,
+            ExpiresAt = DateTime.UtcNow.AddDays(7)
+        });
+
+        var service = Service(
+            new[]
+            {
+                new LifeEvent
+                {
+                    Id = "evt_1",
+                    UserId = "user_a",
+                    Title = "整理 LifeOS 项目",
+                    Content = "最近在整理项目。",
+                    CreatedAt = DateTime.UtcNow,
+                    OccurredAt = DateTime.UtcNow
+                }
+            },
+            memoryRepository,
+            answerGenerator);
+
+        var response = await service.AnswerAsync("user_a", new LifeChatRequest
+        {
+            Message = "我最近在做什么？"
+        });
+
+        Assert.Equal(1, response.UsedMemoryCount);
+        Assert.DoesNotContain("我喜欢骑行。", answerGenerator.LastUserPrompt);
+        Assert.DoesNotContain("这条已经忘记。", answerGenerator.LastUserPrompt);
+        Assert.Contains("我最近在整理 LifeOS 项目。", answerGenerator.LastUserPrompt);
+    }
+
     private static LifeChatService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,

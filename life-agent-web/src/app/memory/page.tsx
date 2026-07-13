@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Brain, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Brain, Loader2, MessageCircle, RefreshCw, Trash2 } from "lucide-react";
 import { archiveMemoryItem, getMemoryItems, type MemoryItem } from "@/app/actions/memoryItems";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
@@ -116,6 +116,20 @@ export default function MemoryPage() {
 
         <p className="mb-4 text-sm text-zinc-500">{memoryCountText}</p>
 
+        <div className="mb-5 rounded-2xl border border-indigo-500/15 bg-indigo-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-300">
+              <MessageCircle className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-zinc-200">这些记忆会在哪里用到</p>
+              <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+                生活问答和最近回顾会把它们当作你的个人背景参考，但不会把它们当作文档引用，也不会自动执行操作。
+              </p>
+            </div>
+          </div>
+        </div>
+
         {error && (
           <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
             {error}
@@ -130,6 +144,9 @@ export default function MemoryPage() {
         ) : memories.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
             还没有记住的事。你可以先在「可能值得记住的事」里把线索留住，再确认记住。
+            <Link href="/memory/review" className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100">
+              去看看候选
+            </Link>
           </div>
         ) : (
           <div className="space-y-4">
@@ -153,6 +170,16 @@ export default function MemoryPage() {
                     <p className="break-words text-base font-medium leading-relaxed text-zinc-100">
                       {memory.content}
                     </p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
+                        <MessageCircle className="h-3 w-3" />
+                        用于生活问答
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
+                        <RefreshCw className="h-3 w-3" />
+                        用于最近回顾
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
