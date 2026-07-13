@@ -1,19 +1,33 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { BookOpen, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
-import { ReminderWidget } from "@/components/ReminderWidget";
-import { DailySummaryCard } from "@/components/DailySummaryCard";
-import { Loader2 } from "lucide-react";
-import { KnowledgeBase } from "@/components/KnowledgeBase";
-import { RagChat } from "@/components/RagChat";
 import { AgentPreview } from "@/components/AgentPreview";
+
+function InsightCard() {
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">AI 发现</h2>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+            记录多一点后，我会帮你整理今天的线索、反复出现的主题和值得回看的片段。
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState<"assistant" | "knowledge" | "chat">("assistant");
 
   const handleLogin = async () => {
     try {
@@ -33,8 +47,8 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
       </div>
     );
   }
@@ -42,112 +56,67 @@ export default function Home() {
   const isLoggedIn = !!user;
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-300 p-6 md:p-12 font-sans selection:bg-indigo-500/30">
-      <div className="max-w-6xl mx-auto">
-        <header className="flex justify-between items-center mb-8 border-b border-zinc-800/50 pb-6">
-          <div>
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
-              LifeOS Personal Home
-            </h1>
-            <p className="text-zinc-500 text-sm mt-1">记录今天需要处理的事，确认下一步行动。</p>
+    <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 selection:bg-indigo-500/30 md:px-10 md:py-10">
+      <div className="mx-auto max-w-3xl">
+        <header className="mb-8 border-b border-zinc-800/50 pb-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-2xl font-bold text-transparent">
+                LifeOS
+              </h1>
+              <p className="mt-2 text-sm text-zinc-500">一本会思考的生活记录本。</p>
+            </div>
+
+            {isLoggedIn && (
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
+              >
+                <LogOut className="h-4 w-4" />
+                退出
+              </button>
+            )}
           </div>
-          
-          {isLoggedIn ? (
-            <button onClick={handleLogout} className="text-sm text-zinc-400 hover:text-white transition-colors">
-              退出登录
-            </button>
-          ) : null}
+
+          {isLoggedIn && (
+            <nav className="mt-5 flex flex-wrap gap-2 text-xs">
+              <Link
+                href="/knowledge"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                资料库
+              </Link>
+              <Link
+                href="/chat"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                问答
+              </Link>
+            </nav>
+          )}
         </header>
 
         {!isLoggedIn ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center mb-6">
-              <svg className="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10">
+              <BookOpen className="h-8 w-8 text-indigo-400" />
             </div>
-            <h2 className="text-2xl font-semibold text-white mb-2">欢迎回来</h2>
-            <p className="text-zinc-500 mb-8 max-w-sm">安全登录以记录您的生活并回顾生活记录。</p>
+            <h2 className="mb-2 text-2xl font-semibold text-white">欢迎回来</h2>
+            <p className="mb-8 max-w-sm text-zinc-500">登录后记录生活，并在之后重新找到它。</p>
             <button
               onClick={handleLogin}
-              className="bg-white hover:bg-zinc-100 text-zinc-900 px-6 py-3 rounded-xl font-medium transition-colors"
+              className="rounded-xl bg-white px-6 py-3 font-medium text-zinc-900 transition-colors hover:bg-zinc-100"
             >
               使用 Google 登录
             </button>
-            <p className="text-xs text-zinc-600 mt-4">
-              （在未配置 Firebase 的开发模式下，此按钮作为模拟登录使用）
-            </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="flex border-b border-zinc-800/40 pb-px mb-6 lg:mb-8 gap-2 lg:gap-6 text-sm font-semibold select-none">
-              <button
-                onClick={() => setActiveTab("assistant")}
-                className={`flex-1 lg:flex-none pb-3 lg:pb-4 text-center lg:text-left transition-all duration-300 relative ${
-                  activeTab === "assistant"
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                生活收件箱
-                {activeTab === "assistant" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("knowledge")}
-                className={`flex-1 lg:flex-none pb-3 lg:pb-4 text-center lg:text-left transition-all duration-300 relative ${
-                  activeTab === "knowledge"
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                知识库管理
-                {activeTab === "knowledge" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("chat")}
-                className={`flex-1 lg:flex-none pb-3 lg:pb-4 text-center lg:text-left transition-all duration-300 relative ${
-                  activeTab === "chat"
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                知识库问答
-                {activeTab === "chat" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-in fade-in duration-300"></span>
-                )}
-              </button>
-            </div>
-
-            <div>
-              {activeTab === "assistant" && (
-                <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                  <div className="lg:col-span-2 space-y-6">
-                    <AgentPreview onLifeRecordWritten={() => setRefreshTrigger(t => t + 1)} />
-                    <Timeline refreshTrigger={refreshTrigger} />
-                  </div>
-                  <div className="lg:col-span-1 space-y-6">
-                    <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={() => setRefreshTrigger(t => t + 1)} />
-                    <DailySummaryCard refreshTrigger={refreshTrigger} />
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "knowledge" && (
-                <div className="animate-in fade-in duration-500">
-                  <KnowledgeBase />
-                </div>
-              )}
-
-              {activeTab === "chat" && (
-                <div className="animate-in fade-in duration-500 space-y-6">
-                  <RagChat />
-                </div>
-              )}
-            </div>
+          <div className="space-y-8">
+            <AgentPreview onLifeRecordWritten={() => setRefreshTrigger(t => t + 1)} />
+            <Timeline refreshTrigger={refreshTrigger} />
+            <InsightCard />
           </div>
         )}
       </div>
