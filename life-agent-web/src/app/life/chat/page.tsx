@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Brain, Loader2, Send } from "lucide-react";
 import { askLifeChat } from "@/app/actions/lifeChat";
 import { Markdown } from "@/components/Markdown";
@@ -18,8 +18,14 @@ const initialMessages: Message[] = [
   {
     id: "welcome",
     role: "assistant",
-    content: "可以问我：我最近在关注什么？最近状态怎么样？哪些事情反复出现了？",
+    content: "可以问我最近的状态、反复出现的事情，或某件事的背景。我会尽量用简短的方式帮你回顾。",
   },
+];
+
+const quickQuestions = [
+  "我最近在关注什么？",
+  "我最近状态怎么样？",
+  "最近有哪些反复出现的事情？",
 ];
 
 export default function LifeChatPage() {
@@ -28,16 +34,17 @@ export default function LifeChatPage() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const messageIdRef = useRef(0);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const message = input.trim();
+  const sendMessage = async (text: string) => {
+    const message = text.trim();
     if (!message || isSending) return;
 
+    messageIdRef.current += 1;
     const userMessage: Message = {
-      id: `user-${Date.now()}`,
+      id: `user-${messageIdRef.current}`,
       role: "user",
       content: message,
     };
@@ -50,10 +57,11 @@ export default function LifeChatPage() {
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
       const result = await askLifeChat(message, timeZone);
+      messageIdRef.current += 1;
       setMessages(prev => [
         ...prev,
         {
-          id: `assistant-${Date.now()}`,
+          id: `assistant-${messageIdRef.current}`,
           role: "assistant",
           content: result.response,
           meta: `基于 ${result.usedEventCount} 条生活记录和 ${result.usedMemoryCount} 条记忆，只读回答。`,
@@ -64,6 +72,11 @@ export default function LifeChatPage() {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await sendMessage(input);
   };
 
   if (loading) {
@@ -111,6 +124,20 @@ export default function LifeChatPage() {
         ) : (
           <section className="relative flex min-h-[500px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/10 shadow-2xl">
             <div className="flex-1 space-y-5 overflow-y-auto p-5 min-h-[380px] min-w-0">
+              <div className="flex flex-wrap gap-2 pl-11">
+                {quickQuestions.map(question => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => sendMessage(question)}
+                    disabled={isSending}
+                    className="rounded-full border border-zinc-800 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-indigo-500/40 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+
               {messages.map(message => (
                 <div
                   key={message.id}

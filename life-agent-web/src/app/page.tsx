@@ -64,7 +64,7 @@ function InsightCard({
             href="/life/chat"
             className="mt-4 inline-flex text-sm text-indigo-300 transition-colors hover:text-indigo-200"
           >
-            问问我的生活
+            问问最近状态
           </Link>
           <Link
             href="/memory/review"

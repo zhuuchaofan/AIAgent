@@ -81,6 +81,8 @@ public class LifeChatServiceTest
         Assert.Contains("今天骑车回来，心率不高。", answerGenerator.LastUserPrompt);
         Assert.Contains("我近期有去新疆的出行计划。", answerGenerator.LastUserPrompt);
         Assert.Contains("只读生活问答助手", answerGenerator.LastSystemInstruction);
+        Assert.Contains("3 点以内", answerGenerator.LastSystemInstruction);
+        Assert.Contains("不要使用“工作方面/休闲方面/总结如下”等报告式标题", answerGenerator.LastSystemInstruction);
     }
 
     [Fact]
