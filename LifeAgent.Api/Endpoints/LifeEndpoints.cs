@@ -108,6 +108,22 @@ public static class LifeEndpoints
             });
         }).RequireRateLimiting("high-cost");
 
+        // POST /api/life/chat
+        group.MapPost("/chat", async (
+            LifeChatRequest request,
+            HttpContext ctx,
+            ILifeChatService lifeChatService) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            var result = await lifeChatService.AnswerAsync(userId, request);
+            return Results.Ok(result);
+        }).RequireRateLimiting("high-cost");
+
         // GET /api/life/events
         group.MapGet("/events", async (
             HttpContext ctx,

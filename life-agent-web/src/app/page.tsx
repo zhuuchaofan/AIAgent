@@ -61,8 +61,14 @@ function InsightCard({
             </ul>
           )}
           <Link
-            href="/memory/review"
+            href="/life/chat"
             className="mt-4 inline-flex text-sm text-indigo-300 transition-colors hover:text-indigo-200"
+          >
+            问问我的生活
+          </Link>
+          <Link
+            href="/memory/review"
+            className="mt-2 block text-sm text-indigo-300 transition-colors hover:text-indigo-200"
           >
             {reviewLinkText}
           </Link>
@@ -195,7 +201,14 @@ export default function Home() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
-                问答
+                资料问答
+              </Link>
+              <Link
+                href="/life/chat"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                生活问答
               </Link>
               <Link
                 href="/memory"
