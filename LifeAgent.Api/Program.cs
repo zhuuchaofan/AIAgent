@@ -55,6 +55,7 @@ builder.Services.AddScoped<IMemoryInsightPreviewService, MemoryInsightPreviewSer
 builder.Services.AddScoped<IMemoryReviewInboxPreviewService, MemoryReviewInboxPreviewService>();
 builder.Services.AddScoped<IMemoryReviewStateStore, FirestoreMemoryReviewStateStore>();
 builder.Services.AddScoped<IMemoryRepository, FirestoreMemoryRepository>();
+builder.Services.AddScoped<IMemoryRetrievalService, InMemoryMemoryRetrievalService>();
 builder.Services.AddScoped<IMemoryReviewRememberService, MemoryReviewRememberService>();
 builder.Services.AddScoped<IMemoryContextPreviewService, MemoryContextPreviewService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -91,8 +92,7 @@ builder.Services.AddScoped<IMemoryContextProvider>(sp =>
         return new NoopMemoryContextProvider();
     }
 
-    var retrieval = new InMemoryMemoryRetrievalService(new InMemoryMemoryRepository());
-    return new ReadOnlyMemoryContextProvider(retrieval, options);
+    return new ReadOnlyMemoryContextProvider(sp.GetRequiredService<IMemoryRetrievalService>(), options);
 });
 builder.Services.AddSingleton<IAgentWriteFeatureGate, AgentWriteFeatureGate>();
 builder.Services.AddScoped<AgentLifeEventConfirmationWriteCoordinator>();

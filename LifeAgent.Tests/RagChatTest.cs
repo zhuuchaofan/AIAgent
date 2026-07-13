@@ -12,6 +12,7 @@ using Microsoft.Extensions.Hosting;
 using Xunit;
 using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Models;
+using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Memories;
 
@@ -166,7 +167,7 @@ public class RagChatTest
     }
 
     [Fact]
-    public async Task ProcessChatAsync_WithMemoryContextPreview_AddsReadOnlyContextToPrompt()
+    public async Task ProcessChatAsync_WithDurableMemory_AddsReadOnlyContextToPrompt()
     {
         var userId = "user_123";
         var session = new ChatSession { Id = "conv_memory", Title = "Test Title" };
@@ -193,11 +194,17 @@ public class RagChatTest
             }
         });
 
-        var lifeEventService = new FakeLifeEventService(new[]
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync(userId, new Memory
         {
-            NewLifeEvent("evt_bike_1", "骑车", "今天骑车，心率不高。", minutesAgo: 20),
-            NewLifeEvent("evt_bike_2", "运动", "继续记录运动和身体状态。", minutesAgo: 10)
+            Type = "habit",
+            Status = "active",
+            Content = "我会关注运动状态和身体感受。",
+            Importance = 3,
+            Confidence = 0.86,
+            Source = "test"
         });
+        var memoryRetrieval = new InMemoryMemoryRetrievalService(memoryRepository);
         var service = new RagChatService(
             _sessionRepo,
             _embeddingService,
@@ -205,8 +212,7 @@ public class RagChatTest
             _answerGenerator,
             _ragOptions,
             NullLogger<RagChatService>.Instance,
-            new MemoryContextPreviewService(new MemoryReviewInboxPreviewService()),
-            lifeEventService);
+            memoryRetrieval);
 
         _answerGenerator.AnswerToReturn = "资料建议保留恢复日 [1]。";
 
@@ -214,9 +220,9 @@ public class RagChatTest
 
         Assert.Equal("资料建议保留恢复日 [1]。", result.Response);
         Assert.NotNull(_answerGenerator.LastUserPrompt);
-        Assert.Contains("【只读生活线索 Context Preview】", _answerGenerator.LastUserPrompt);
-        Assert.Contains("你会关注运动状态和身体感受。", _answerGenerator.LastUserPrompt);
-        Assert.Contains("不得替代 Chunks", _answerGenerator.LastUserPrompt);
+        Assert.Contains("【用户长期记忆背景】", _answerGenerator.LastUserPrompt);
+        Assert.Contains("我会关注运动状态和身体感受。", _answerGenerator.LastUserPrompt);
+        Assert.Contains("不要把它们当作资料库引用来源", _answerGenerator.LastUserPrompt);
     }
 
     [Fact]

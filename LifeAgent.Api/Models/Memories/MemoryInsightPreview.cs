@@ -104,3 +104,48 @@ public sealed class MemoryContextPreviewItem
     public string ReviewStage { get; set; } = "observing";
     public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
 }
+
+public sealed class MemoryItemsResponse
+{
+    public bool Success { get; set; } = true;
+    public IReadOnlyList<MemoryItemDto> Data { get; set; } = Array.Empty<MemoryItemDto>();
+}
+
+public sealed class MemoryItemResponse
+{
+    public bool Success { get; set; } = true;
+    public MemoryItemDto Data { get; set; } = new();
+}
+
+public sealed class MemoryItemDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public int Importance { get; set; }
+    public double Confidence { get; set; }
+    public string Source { get; set; } = string.Empty;
+    public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+
+    public static MemoryItemDto FromMemory(Memory memory)
+    {
+        return new MemoryItemDto
+        {
+            Id = memory.Id,
+            Type = memory.Type,
+            Content = memory.Content,
+            Importance = memory.Importance,
+            Confidence = memory.Confidence,
+            Source = memory.Source,
+            SourceEventIds = memory.SourceEventIds,
+            Status = memory.Status,
+            CreatedAt = memory.CreatedAt,
+            UpdatedAt = memory.UpdatedAt,
+            ExpiresAt = memory.ExpiresAt
+        };
+    }
+}

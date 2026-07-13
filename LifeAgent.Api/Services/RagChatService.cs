@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Google.Cloud.Firestore;
 using LifeAgent.Api.Models;
+using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Memories;
 
 namespace LifeAgent.Api.Services;
@@ -18,8 +19,7 @@ public class RagChatService : IRagChatService
     private readonly IRagAnswerGenerator _answerGenerator;
     private readonly RagOptions _ragOptions;
     private readonly ILogger<RagChatService> _logger;
-    private readonly IMemoryContextPreviewService? _memoryContextPreviewService;
-    private readonly ILifeEventService? _lifeEventService;
+    private readonly IMemoryRetrievalService? _memoryRetrievalService;
 
     public RagChatService(
         IChatSessionRepository sessionRepository,
@@ -28,8 +28,7 @@ public class RagChatService : IRagChatService
         IRagAnswerGenerator answerGenerator,
         IOptions<RagOptions> ragOptions,
         ILogger<RagChatService> logger,
-        IMemoryContextPreviewService? memoryContextPreviewService = null,
-        ILifeEventService? lifeEventService = null)
+        IMemoryRetrievalService? memoryRetrievalService = null)
     {
         _sessionRepository = sessionRepository;
         _embeddingService = embeddingService;
@@ -37,8 +36,7 @@ public class RagChatService : IRagChatService
         _answerGenerator = answerGenerator;
         _ragOptions = ragOptions.Value;
         _logger = logger;
-        _memoryContextPreviewService = memoryContextPreviewService;
-        _lifeEventService = lifeEventService;
+        _memoryRetrievalService = memoryRetrievalService;
     }
 
     public async Task<RagChatResponse> ProcessChatAsync(string userId, RagChatRequest request)
@@ -285,26 +283,40 @@ public class RagChatService : IRagChatService
 
     private async Task<string> BuildMemoryContextSectionAsync(string userId)
     {
-        if (_memoryContextPreviewService is null || _lifeEventService is null)
+        if (_memoryRetrievalService is null)
         {
             return string.Empty;
         }
 
         try
         {
-            var events = await _lifeEventService.ListEventsAsync(
-                userId,
-                type: "all",
-                limit: 20,
-                cursor: null,
-                tag: null);
+            var results = await _memoryRetrievalService.RetrieveAsync(new MemoryRetrievalRequest
+            {
+                UserId = userId,
+                Query = string.Empty,
+                Limit = 3,
+                Statuses = new[] { MemoryStatus.Active.ToSnakeCaseString() },
+                IncludeArchived = false
+            });
 
-            var context = _memoryContextPreviewService.BuildPreview(userId, events.Data);
-            return MemoryContextPreviewService.BuildPromptSection(context);
+            var lines = results
+                .Take(3)
+                .Select(result => $"- [{result.MemoryType}] {result.Content}")
+                .ToArray();
+
+            if (lines.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            return "【用户长期记忆背景】\n" +
+                   "以下内容来自用户明确确认的长期记忆，只能作为个性化背景参考；不要把它们当作资料库引用来源，也不要为它们生成 citation。\n" +
+                   string.Join(Environment.NewLine, lines) +
+                   Environment.NewLine + Environment.NewLine;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[RAG Process] Memory context preview unavailable. Continuing without memory context.");
+            _logger.LogWarning(ex, "[RAG Process] Durable memory context unavailable. Continuing without memory context.");
             return string.Empty;
         }
     }

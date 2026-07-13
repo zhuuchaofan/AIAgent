@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import { BookOpen, Brain, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
 import { getMemoryInsightPreview, type MemoryInsight } from "@/app/actions/memoryInsights";
 import { getMemoryReviewInboxPreview } from "@/app/actions/memoryReview";
+import { getMemoryItems } from "@/app/actions/memoryItems";
 
 function InsightCard({
   insights,
   reviewCandidateCount,
+  memoryCount,
   isLoading,
   error,
 }: {
   insights: MemoryInsight[];
   reviewCandidateCount: number;
+  memoryCount: number;
   isLoading: boolean;
   error: string | null;
 }) {
@@ -63,6 +66,12 @@ function InsightCard({
           >
             {reviewLinkText}
           </Link>
+          <Link
+            href="/memory"
+            className="mt-2 block text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+          >
+            已记住 {memoryCount} 条
+          </Link>
         </div>
       </div>
     </section>
@@ -75,6 +84,7 @@ export default function Home() {
   const [insightRefreshTrigger, setInsightRefreshTrigger] = useState(0);
   const [insights, setInsights] = useState<MemoryInsight[]>([]);
   const [reviewCandidateCount, setReviewCandidateCount] = useState(0);
+  const [memoryCount, setMemoryCount] = useState(0);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [insightError, setInsightError] = useState<string | null>(null);
 
@@ -91,19 +101,22 @@ export default function Home() {
       setIsLoadingInsights(true);
       setInsightError(null);
       try {
-        const [preview, reviewPreview] = await Promise.all([
+        const [preview, reviewPreview, memoryItems] = await Promise.all([
           getMemoryInsightPreview(20),
           getMemoryReviewInboxPreview(20),
+          getMemoryItems("active"),
         ]);
         if (!cancelled) {
           setInsights(preview.insights ?? []);
           setReviewCandidateCount(reviewPreview.candidates?.length ?? 0);
+          setMemoryCount(memoryItems.length);
         }
       } catch (error) {
         if (!cancelled) {
           setInsightError(error instanceof Error ? error.message : "AI 发现暂时不可用");
           setInsights([]);
           setReviewCandidateCount(0);
+          setMemoryCount(0);
         }
       } finally {
         if (!cancelled) {
@@ -184,6 +197,13 @@ export default function Home() {
                 <MessageCircle className="h-3.5 w-3.5" />
                 问答
               </Link>
+              <Link
+                href="/memory"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              >
+                <Brain className="h-3.5 w-3.5" />
+                记忆
+              </Link>
             </nav>
           )}
         </header>
@@ -214,6 +234,7 @@ export default function Home() {
             <InsightCard
               insights={insights}
               reviewCandidateCount={reviewCandidateCount}
+              memoryCount={memoryCount}
               isLoading={isLoadingInsights}
               error={insightError}
             />

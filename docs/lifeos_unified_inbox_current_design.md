@@ -115,6 +115,8 @@ The home page has two separate data surfaces:
      Review Inbox status to `users/{userId}/memory_review_items`.
    - `POST /api/memory/review-inbox/{candidateId}/remember` writes an edited,
      user-confirmed durable Memory from a kept candidate.
+   - `GET /api/memory/items` powers `/memory`, the user's confirmed memories.
+   - `POST /api/memory/items/{memoryId}/archive` powers first-version forget.
    - `GET /api/memory/context/preview` exposes read-only context for product
      validation and RAG background use.
    - Review Inbox actions such as keep, inspect source, and hide are product
@@ -164,6 +166,9 @@ These remain non-negotiable:
   not a durable Memory write.
 - Memory Review `remember` may write durable Memory only from a kept candidate
   after user confirmation and guard validation.
+- Confirmed Memory can be listed and archived by the user.
+- RAG may use active Memory as background only; citations still come only from
+  retrieved document Chunks.
 - RAG may use Memory context preview as non-cited background only; document
   citations must still come from retrieved Chunks.
 - Reminder durable writes are not enabled.

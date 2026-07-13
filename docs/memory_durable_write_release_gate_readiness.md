@@ -11,6 +11,7 @@ Current production boundary:
 
 - Home `AI 发现` is preview-only.
 - `/memory/review` can keep, hide, and explicitly remember retained candidates.
+- `/memory` lists confirmed memories and can archive them.
 - Durable Memory write is only allowed after the user clicks `记住`.
 - The write path is limited to `users/{userId}/memories`.
 - No Cloud Run env flag is changed by this document.
@@ -54,7 +55,7 @@ The first durable Memory write gate should use the smallest auditable record:
 ## Release Gate Checklist
 
 - [x] Dedicated user approval for durable Memory write gate.
-- [ ] Firestore path and indexes reviewed.
+- [x] Firestore path reviewed for direct document and simple user-subcollection reads.
 - [x] Auth and ownership checks verified in the API boundary.
 - [x] Local tests for create, duplicate review, guard block, and candidate status.
 - [x] Preview-only insight/review behavior remains unchanged outside `记住`.

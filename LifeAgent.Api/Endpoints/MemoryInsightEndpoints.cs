@@ -67,6 +67,73 @@ public static class MemoryInsightEndpoints
             });
         }).RequireRateLimiting("auth-user");
 
+        group.MapGet("/items", async (
+            HttpContext ctx,
+            IMemoryRepository memoryRepository,
+            string status = "active",
+            string? type = null) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            if (!MemoryStatusHelper.IsValid(status))
+            {
+                throw new InvalidInputException("不支持的记忆状态。");
+            }
+
+            if (!string.IsNullOrWhiteSpace(type) && !MemoryTypeHelper.IsValid(type))
+            {
+                throw new InvalidInputException("不支持的记忆类型。");
+            }
+
+            var memories = await memoryRepository.ListByUserAsync(userId, type, status);
+            var data = memories
+                .Where(memory => !IsExpiredMemory(memory))
+                .OrderByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+                .ThenBy(memory => memory.Id, StringComparer.Ordinal)
+                .Select(MemoryItemDto.FromMemory)
+                .ToArray();
+
+            return Results.Ok(new MemoryItemsResponse
+            {
+                Success = true,
+                Data = data
+            });
+        }).RequireRateLimiting("auth-user");
+
+        group.MapPost("/items/{memoryId}/archive", async (
+            string memoryId,
+            HttpContext ctx,
+            IMemoryRepository memoryRepository) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            if (string.IsNullOrWhiteSpace(memoryId))
+            {
+                throw new InvalidInputException("记忆 id 不能为空。");
+            }
+
+            var existing = await memoryRepository.GetAsync(userId, memoryId);
+            if (existing == null)
+            {
+                throw new InvalidInputException("这条记忆不存在或不属于当前用户。");
+            }
+
+            var memory = await memoryRepository.ArchiveAsync(userId, memoryId);
+            return Results.Ok(new MemoryItemResponse
+            {
+                Success = true,
+                Data = MemoryItemDto.FromMemory(memory)
+            });
+        }).RequireRateLimiting("auth-user");
+
         group.MapPost("/review-inbox/{candidateId}/keep", async (
             string candidateId,
             HttpContext ctx,
@@ -244,5 +311,12 @@ public static class MemoryInsightEndpoints
         }
 
         return candidate;
+    }
+
+    private static bool IsExpiredMemory(Memory memory)
+    {
+        return string.Equals(memory.Type, MemoryType.TemporaryContext.ToSnakeCaseString(), StringComparison.OrdinalIgnoreCase) &&
+               memory.ExpiresAt.HasValue &&
+               memory.ExpiresAt.Value <= DateTime.UtcNow;
     }
 }
