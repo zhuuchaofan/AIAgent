@@ -236,7 +236,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
     try {
       const res = await createPhase80PendingAction(
         message,
-        `用户输入：${message}。生活记录确认后写入 life_events；提醒与工具操作仍不执行。`,
+        message,
         Intl.DateTimeFormat().resolvedOptions().timeZone
       ) as Phase80ActionResponse;
       if (!res.success || !res.data) {
@@ -247,7 +247,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
       setResult(null);
       setInputValue("");
       setPhase80Actions(prev => [res.data!, ...prev.filter(action => action.actionId !== res.data!.actionId)]);
-      setPhase80Message(res.message || "已根据输入生成待确认动作");
+      setPhase80Message(null);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setPhase80Message(errMsg.includes("401") ? "当前登录状态无法提交，请重新登录后再试。" : (errMsg || "提交失败，请稍后再试。"));
@@ -350,7 +350,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs space-y-3">
             <div>
               <div className="text-zinc-100 font-semibold">记录生活，或创建一个提醒...</div>
-              <div className="text-zinc-500 mt-1">生活记录确认后会写入最近生活记录；提醒与工具操作仍不执行。</div>
+              <div className="text-zinc-500 mt-1">先确认，再写入；提醒与工具操作仍不执行。</div>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
@@ -386,12 +386,12 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                 <div className="text-zinc-200 font-semibold">待确认事项</div>
                 <div className="text-zinc-500 mt-1">当前待确认数量：{pendingActions.length}</div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex">
                 <button
                   type="button"
                   onClick={loadPhase80Actions}
                   disabled={phase80Refreshing}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2 shrink-0"
+                  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800/80 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5 shrink-0"
                 >
                   {phase80Refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   刷新
@@ -399,9 +399,9 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
               </div>
             </div>
 
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-100 leading-relaxed flex items-start gap-2">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-emerald-100 leading-relaxed flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>仅生活记录允许 Confirm 后写入 life_events；Memory 保持 candidate-only，Reminder 和 Tool Execution 保持关闭。</span>
+              <span>仅生活记录确认后写入；Memory、提醒和工具仍保持关闭。</span>
             </div>
 
             <details
@@ -445,7 +445,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
               </div>
             </details>
 
-            {phase80Message && (
+            {phase80Message && pendingActions.length === 0 && (
               <div className="rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3 text-zinc-300">
                 {phase80Message}
               </div>
@@ -458,6 +458,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                   const confirmKey = `confirm:${action.actionId}`;
                   const cancelKey = `cancel:${action.actionId}`;
                   const archiveKey = `archive:${action.actionId}`;
+                  const showSummary = action.summary.trim() && action.summary.trim() !== action.title.trim();
 
                   return (
                     <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-3">
@@ -471,7 +472,9 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
                         <span className="text-zinc-200 font-medium">最近一条待确认事项</span>
                       </div>
                       <div className="text-zinc-100 font-medium">{action.title}</div>
-                      <div className="text-zinc-400 leading-relaxed">{action.summary}</div>
+                      {showSummary && (
+                        <div className="text-zinc-400 leading-relaxed">{action.summary}</div>
+                      )}
                       <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/50 p-3 text-zinc-400 leading-relaxed">
                         {actionPreviewSafetyNote(action.actionType)}
                       </div>
@@ -535,26 +538,25 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
               {historyActions.length > 0 ? (
                 <div className="mt-3 space-y-2">
                   {historyActions.map(action => (
-                    <div key={action.actionId} className="border border-zinc-800/70 rounded-xl p-3 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <div key={action.actionId} className="border border-zinc-800/70 rounded-xl px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className={`px-2 py-0.5 rounded border font-mono ${phase80StatusClass(action.status)}`}>
                           {phase80StatusLabel(action)}
                         </span>
                         <span className={`px-2 py-0.5 rounded border ${actionTypeClass(action.actionType)}`}>
                           {actionTypeLabel(action.actionType)}
                         </span>
-                        <span className="text-zinc-200 font-medium">{action.title}</span>
+                        <span className="text-zinc-200 font-medium min-w-0 flex-1 break-words">{action.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleArchivePhase80Action(action.actionId)}
+                          disabled={!!phase80Updating}
+                          className="text-zinc-500 hover:text-zinc-200 transition-colors disabled:opacity-40 flex items-center gap-1"
+                        >
+                          {phase80Updating === `archive:${action.actionId}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                          隐藏
+                        </button>
                       </div>
-                      <div className="text-zinc-500">{action.summary}</div>
-                      <button
-                        type="button"
-                        onClick={() => handleArchivePhase80Action(action.actionId)}
-                        disabled={!!phase80Updating}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800/80 px-3 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                      >
-                        {phase80Updating === `archive:${action.actionId}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                        隐藏
-                      </button>
                     </div>
                   ))}
                 </div>

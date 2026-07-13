@@ -451,7 +451,7 @@ public class Phase80PendingActionRuntimeMvpTest
             ActionId: "action_123",
             ActionType: Phase80PendingActionRuntime.LifeRecordPreview,
             Title: "今天跑步三公里",
-            Summary: "用户输入：今天跑步三公里",
+            Summary: "用户输入：今天跑步三公里。生活记录确认后写入 life_events；提醒与工具操作仍不执行。",
             Plan: lifePlan));
         var reminderResult = await executor.ExecuteAsync(new Phase80ConfirmExecutionRequest(
             UserId: "user_a",
@@ -469,6 +469,7 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.Equal("user_a", writer.Writes[0].UserId);
         Assert.Equal("evt_action_123", writer.Writes[0].EventId);
         Assert.Equal("life", writer.Writes[0].Event.Type);
+        Assert.Equal("今天跑步三公里", writer.Writes[0].Event.Content);
         Assert.Equal("agent_confirmed", writer.Writes[0].Event.Source);
         Assert.Equal("agent", writer.Writes[0].Event.CreatedBy);
         Assert.Equal("action_123", writer.Writes[0].Event.AgentActionId);

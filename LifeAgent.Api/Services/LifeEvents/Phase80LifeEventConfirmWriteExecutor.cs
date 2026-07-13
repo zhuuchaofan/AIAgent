@@ -46,7 +46,7 @@ public sealed class Phase80LifeEventConfirmWriteExecutor : IPhase80ConfirmWriteE
         {
             Type = "life",
             Title = request.Title,
-            Content = request.Summary
+            Content = CleanLifeRecordContent(request.Summary)
         };
         var lifeEvent = AgentLifeEventFactory.Create(request.UserId, request.ActionId, createRequest);
         await _writer.WriteAsync(request.UserId, lifeEvent.Id, lifeEvent, cancellationToken);
@@ -60,5 +60,23 @@ public sealed class Phase80LifeEventConfirmWriteExecutor : IPhase80ConfirmWriteE
             RealWritePath: true,
             ExecutorId: "phase80_life_event_confirm_write_executor",
             Reason: "life_event_written_after_confirm");
+    }
+
+    private static string CleanLifeRecordContent(string value)
+    {
+        var content = value.Trim();
+        const string userInputPrefix = "用户输入：";
+        if (content.StartsWith(userInputPrefix, StringComparison.Ordinal))
+        {
+            content = content[userInputPrefix.Length..].Trim();
+        }
+
+        var safetyNoteIndex = content.IndexOf("。生活记录", StringComparison.Ordinal);
+        if (safetyNoteIndex >= 0)
+        {
+            content = content[..safetyNoteIndex].Trim();
+        }
+
+        return content.TrimEnd('。', ' ');
     }
 }

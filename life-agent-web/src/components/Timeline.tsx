@@ -150,7 +150,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
           <Calendar className="w-5 h-5 text-indigo-400" />
           最近生活记录
@@ -158,7 +158,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
       </div>
 
       {/* 标签过滤栏 */}
-      <details className="mb-6 bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl">
+      <details className="mb-4 bg-zinc-900/40 border border-zinc-800 p-3 rounded-2xl">
         <summary className="cursor-pointer select-none text-xs text-zinc-400 font-medium flex items-center gap-1">
           <Tag className="w-3.5 h-3.5 text-zinc-400" />
           标签筛选
@@ -203,7 +203,7 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
           {visibleEvents.map((evt) => (
             <div
               key={evt.id}
-              className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl hover:border-zinc-700 transition-colors relative group"
+              className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl hover:border-zinc-700 transition-colors relative group"
             >
               {editingId === evt.id ? (
                 /* 编辑状态表单 */
@@ -301,13 +301,33 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
               ) : (
                 /* 正常展示状态 */
                 <>
-                  <div className="flex justify-between items-start mb-2 pr-16">
-                    <h3 className="font-medium text-zinc-100 text-base">{evt.title}</h3>
-                    <span className="text-xs text-zinc-500 font-mono">
-                      {format(new Date(evt.occurredAt), "PPp")}
-                    </span>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-medium text-zinc-100 text-base leading-snug break-words">{evt.title}</h3>
+                      <span className="block text-xs text-zinc-500 font-mono mt-1">
+                        {format(new Date(evt.occurredAt), "PPp")}
+                      </span>
+                    </div>
+                    <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 shrink-0">
+                      <button
+                        onClick={() => startEdit(evt)}
+                        title="编辑记录"
+                        aria-label="编辑记录"
+                        className="p-1.5 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-800 rounded-md transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(evt.id)}
+                        title="删除记录"
+                        aria-label="删除记录"
+                        className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm text-zinc-400 whitespace-pre-wrap mb-4">{evt.content}</p>
+                  <p className="text-sm text-zinc-400 whitespace-pre-wrap mb-4 leading-relaxed break-words">{evt.content}</p>
 
                   <div className="flex flex-wrap gap-2">
                     <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-xs rounded-md font-medium border border-zinc-700">
@@ -325,24 +345,6 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                         #{tag}
                       </button>
                     ))}
-                  </div>
-
-                  {/* 操作栏（卡片 Hover 时显式呈现，移动端常驻） */}
-                  <div className="absolute right-4 top-4 flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => startEdit(evt)}
-                      title="编辑记录"
-                      className="p-1.5 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-800 rounded-md transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(evt.id)}
-                      title="删除记录"
-                      className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </>
               )}
