@@ -162,6 +162,8 @@ Completed cleanup:
 - Removed the old web manual ingest component, `/debug` pending action
   diagnostics page, and unused frontend wrappers for legacy agent preview
   endpoints. Backend compatibility routes and safety audit fields remain.
+- Split the knowledge-base Q&A UI into smaller `rag-chat` components while
+  keeping `/chat` scoped to document Q&A plus non-cited Memory background.
 
 ## Final Goal Path
 
