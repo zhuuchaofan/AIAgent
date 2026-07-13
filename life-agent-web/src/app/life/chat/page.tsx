@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { ArrowLeft, Brain, Loader2, Send } from "lucide-react";
 import { askLifeChat } from "@/app/actions/lifeChat";
+import { Markdown } from "@/components/Markdown";
 import { useAuth } from "@/providers/AuthProvider";
 
 type Message = {
@@ -108,33 +109,60 @@ export default function LifeChatPage() {
             </button>
           </div>
         ) : (
-          <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/30">
-            <div className="flex-1 space-y-4 overflow-y-auto p-4 md:p-5">
+          <section className="relative flex min-h-[500px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/10 shadow-2xl">
+            <div className="flex-1 space-y-5 overflow-y-auto p-5 min-h-[380px] min-w-0">
               {messages.map(message => (
-                <article
+                <div
                   key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex max-w-[85%] min-w-0 gap-3 ${
+                    message.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
+                  }`}
                 >
                   <div
-                    className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed md:max-w-[78%] ${
+                    className={`flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-full text-xs font-bold ${
                       message.role === "user"
-                        ? "bg-indigo-500 text-white"
-                        : "border border-zinc-800 bg-zinc-950/50 text-zinc-200"
+                        ? "bg-zinc-800 text-zinc-300"
+                        : "border border-indigo-500/20 bg-indigo-500/10 text-indigo-400"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                    {message.meta && (
-                      <p className="mt-3 border-t border-zinc-800 pt-2 text-xs text-zinc-500">
+                    {message.role === "user" ? "U" : "AI"}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div
+                      className={`min-w-0 rounded-2xl p-3.5 ${
+                        message.role === "user"
+                          ? "rounded-tr-none bg-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
+                          : "rounded-tl-none border border-zinc-800/50 bg-zinc-900/60"
+                      }`}
+                    >
+                      {message.role === "user" ? (
+                        <p className="break-words text-sm leading-relaxed text-white [overflow-wrap:anywhere]">
+                          {message.content}
+                        </p>
+                      ) : (
+                        <Markdown content={message.content} />
+                      )}
+                    </div>
+
+                    {message.role === "assistant" && message.meta && (
+                      <p className="px-1 text-[10px] text-zinc-600">
                         {message.meta}
                       </p>
                     )}
                   </div>
-                </article>
+                </div>
               ))}
               {isSending && (
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  正在整理你的生活记录...
+                <div className="mr-auto flex max-w-[80%] min-w-0 animate-pulse items-center gap-3">
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-indigo-500/20 bg-indigo-500/10 text-xs font-bold text-indigo-400"
+                  >
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  </div>
+                  <div className="min-w-0 rounded-2xl rounded-tl-none border border-zinc-800/30 bg-zinc-900/40 p-3.5 text-xs text-zinc-500">
+                    正在整理你的生活记录...
+                  </div>
                 </div>
               )}
             </div>
@@ -145,25 +173,24 @@ export default function LifeChatPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="border-t border-zinc-800 p-4 md:p-5">
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={input}
-                  onChange={event => setInput(event.target.value)}
-                  placeholder="问问最近的状态、反复出现的主题，或某件事的背景..."
-                  rows={2}
-                  className="min-h-12 flex-1 resize-none rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-500/50"
-                />
-                <button
-                  type="submit"
-                  disabled={!canSend}
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-500 text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
-                  aria-label="发送问题"
-                  title="发送问题"
-                >
-                  {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                </button>
-              </div>
+            <form onSubmit={handleSubmit} className="flex gap-2 border-t border-zinc-800/40 bg-zinc-900/20 p-4">
+              <input
+                type="text"
+                value={input}
+                onChange={event => setInput(event.target.value)}
+                disabled={isSending}
+                placeholder="问问最近的状态、反复出现的主题，或某件事的背景..."
+                className="flex-1 rounded-xl border border-zinc-800/80 bg-zinc-950 px-4 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-500 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!canSend}
+                className="flex shrink-0 items-center justify-center rounded-xl bg-indigo-600 p-2.5 text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="发送问题"
+                title="发送问题"
+              >
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
             </form>
           </section>
         )}
