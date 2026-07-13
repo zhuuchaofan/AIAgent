@@ -23,9 +23,9 @@ const initialMessages: Message[] = [
 ];
 
 const quickQuestions = [
-  "我最近在关注什么？",
-  "我最近状态怎么样？",
-  "最近有哪些反复出现的事情？",
+  "最近状态",
+  "反复出现",
+  "近期计划",
 ];
 
 export default function LifeChatPage() {
