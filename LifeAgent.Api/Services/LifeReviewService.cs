@@ -54,6 +54,9 @@ public class LifeReviewService : ILifeReviewService
 
         request ??= new LifeReviewRequest();
         var limit = Math.Clamp(request.Limit ?? DefaultMaxEvents, 1, AbsoluteMaxEvents);
+        var period = NormalizePeriod(request.Period);
+        var timeZone = ResolveTimeZone(request.ClientTimeZone);
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
 
         var eventsResult = await _lifeEventService.ListEventsAsync(
             userId,
@@ -64,6 +67,7 @@ public class LifeReviewService : ILifeReviewService
 
         var events = eventsResult.Data
             .Where(item => !item.IsDeleted)
+            .Where(item => IsInPeriod(item, period, timeZone, localNow))
             .OrderByDescending(item => item.OccurredAt == default ? item.CreatedAt : item.OccurredAt)
             .Take(limit)
             .ToList();
@@ -80,23 +84,23 @@ public class LifeReviewService : ILifeReviewService
 
         if (events.Count == 0 && memories.Count == 0)
         {
-            return BuildResponse(BuildEmptyCards(), events, memories.Count);
+            return BuildResponse(BuildEmptyCards(period), events, memories.Count, period);
         }
 
         try
         {
             var raw = await _answerGenerator.GenerateAnswerAsync(
                 BuildSystemPrompt(),
-                BuildUserPrompt(request, events, memories),
+                BuildUserPrompt(request, events, memories, period),
                 new List<ChatMessage>());
 
             var cards = ParseCards(raw, events);
-            return BuildResponse(cards.Count > 0 ? cards : BuildFallbackCards(events), events, memories.Count);
+            return BuildResponse(cards.Count > 0 ? cards : BuildFallbackCards(events, period), events, memories.Count, period);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Life review generation failed for user {UserId}", userId);
-            return BuildResponse(BuildFallbackCards(events), events, memories.Count);
+            return BuildResponse(BuildFallbackCards(events, period), events, memories.Count, period);
         }
     }
 
@@ -130,7 +134,8 @@ public class LifeReviewService : ILifeReviewService
     private static string BuildUserPrompt(
         LifeReviewRequest request,
         IReadOnlyList<LifeEvent> events,
-        IReadOnlyList<Memory> memories)
+        IReadOnlyList<Memory> memories,
+        string period)
     {
         var timeZone = string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "Asia/Shanghai" : request.ClientTimeZone.Trim();
         var userTime = GetUserLocalTime(timeZone);
@@ -140,6 +145,7 @@ public class LifeReviewService : ILifeReviewService
         builder.AppendLine($"系统当前 UTC 时间: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
         builder.AppendLine($"用户本地时区: {timeZone}");
         builder.AppendLine($"用户当前本地时间: {userTime:yyyy-MM-dd HH:mm:ss}");
+        builder.AppendLine($"本次回顾窗口: {ToWindowLabel(period)}");
         builder.AppendLine();
 
         builder.AppendLine("【最近生活记录】");
@@ -228,11 +234,11 @@ public class LifeReviewService : ILifeReviewService
         }
     }
 
-    private static IReadOnlyList<LifeReviewCard> BuildFallbackCards(IReadOnlyList<LifeEvent> events)
+    private static IReadOnlyList<LifeReviewCard> BuildFallbackCards(IReadOnlyList<LifeEvent> events, string period)
     {
         if (events.Count == 0)
         {
-            return BuildEmptyCards();
+            return BuildEmptyCards(period);
         }
 
         var latest = events.First();
@@ -272,7 +278,7 @@ public class LifeReviewService : ILifeReviewService
         };
     }
 
-    private static IReadOnlyList<LifeReviewCard> BuildEmptyCards()
+    private static IReadOnlyList<LifeReviewCard> BuildEmptyCards(string period)
     {
         return new[]
         {
@@ -280,7 +286,12 @@ public class LifeReviewService : ILifeReviewService
             {
                 Id = "recent_state",
                 Title = CardTitles["recent_state"],
-                Text = "记录多一点后，我会帮你整理最近的变化。"
+                Text = period switch
+                {
+                    "today" => "今天还没有足够记录可以回顾。",
+                    "week" => "本周记录还不够多，暂时先继续积累。",
+                    _ => "记录多一点后，我会帮你整理最近的变化。"
+                }
             }
         };
     }
@@ -288,10 +299,13 @@ public class LifeReviewService : ILifeReviewService
     private static LifeReviewResponse BuildResponse(
         IReadOnlyList<LifeReviewCard> cards,
         IReadOnlyList<LifeEvent> events,
-        int usedMemoryCount)
+        int usedMemoryCount,
+        string period)
     {
         return new LifeReviewResponse
         {
+            Period = period,
+            WindowLabel = ToWindowLabel(period),
             Cards = cards,
             SourceEvents = events.Select(ToSourceEvent).ToList(),
             UsedEventCount = events.Count,
@@ -300,6 +314,62 @@ public class LifeReviewService : ILifeReviewService
             WroteData = false,
             Executed = false
         };
+    }
+
+    private static string NormalizePeriod(string? period)
+    {
+        return period?.Trim().ToLowerInvariant() switch
+        {
+            "today" => "today",
+            "week" => "week",
+            _ => "recent"
+        };
+    }
+
+    private static string ToWindowLabel(string period)
+    {
+        return period switch
+        {
+            "today" => "今天",
+            "week" => "本周",
+            _ => "最近"
+        };
+    }
+
+    private static TimeZoneInfo ResolveTimeZone(string? timeZone)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(
+                string.IsNullOrWhiteSpace(timeZone) ? "Asia/Shanghai" : timeZone.Trim());
+        }
+        catch
+        {
+            return TimeZoneInfo.Utc;
+        }
+    }
+
+    private static bool IsInPeriod(LifeEvent item, string period, TimeZoneInfo timeZone, DateTime localNow)
+    {
+        if (period == "recent")
+        {
+            return true;
+        }
+
+        var occurredAt = item.OccurredAt == default ? item.CreatedAt : item.OccurredAt;
+        var utc = occurredAt.Kind == DateTimeKind.Utc
+            ? occurredAt
+            : DateTime.SpecifyKind(occurredAt, DateTimeKind.Utc);
+        var localOccurredAt = TimeZoneInfo.ConvertTimeFromUtc(utc, timeZone);
+
+        if (period == "today")
+        {
+            return localOccurredAt.Date == localNow.Date;
+        }
+
+        var daysFromMonday = ((int)localNow.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        var weekStart = localNow.Date.AddDays(-daysFromMonday);
+        return localOccurredAt >= weekStart;
     }
 
     private static LifeReviewSourceEvent ToSourceEvent(LifeEvent item)

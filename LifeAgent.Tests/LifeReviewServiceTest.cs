@@ -140,6 +140,61 @@ public class LifeReviewServiceTest
         Assert.Equal(new[] { "evt_1" }, response.Cards[0].SourceEventIds);
     }
 
+    [Fact]
+    public async Task BuildReviewAsync_TodayPeriodOnlyUsesTodayEvents()
+    {
+        var answerGenerator = new InspectableAnswerGenerator
+        {
+            AnswerToReturn = """
+                {
+                  "cards": [
+                    {
+                      "id": "recent_state",
+                      "text": "今天主要记录了骑车状态。",
+                      "sourceEventIds": ["evt_today", "evt_old"]
+                    }
+                  ]
+                }
+                """
+        };
+        var service = Service(
+            new[]
+            {
+                new LifeEvent
+                {
+                    Id = "evt_today",
+                    UserId = "user_a",
+                    Title = "今天骑车",
+                    Content = "今天骑车回来，心率不高。",
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-30),
+                    OccurredAt = DateTime.UtcNow.AddMinutes(-30)
+                },
+                new LifeEvent
+                {
+                    Id = "evt_old",
+                    UserId = "user_a",
+                    Title = "很久以前的记录",
+                    Content = "这条不应该进入今天回顾。",
+                    CreatedAt = DateTime.UtcNow.AddDays(-10),
+                    OccurredAt = DateTime.UtcNow.AddDays(-10)
+                }
+            },
+            new InMemoryMemoryRepository(),
+            answerGenerator);
+
+        var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest
+        {
+            Period = "today",
+            ClientTimeZone = "UTC"
+        });
+
+        Assert.Equal("today", response.Period);
+        Assert.Equal("今天", response.WindowLabel);
+        Assert.Equal(1, response.UsedEventCount);
+        Assert.Equal(new[] { "evt_today" }, response.Cards[0].SourceEventIds);
+        Assert.DoesNotContain("evt_old", answerGenerator.LastUserPrompt);
+    }
+
     private static LifeReviewService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,

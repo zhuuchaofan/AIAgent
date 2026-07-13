@@ -4,11 +4,14 @@ public class LifeReviewRequest
 {
     public string? ClientTimeZone { get; set; }
     public int? Limit { get; set; }
+    public string? Period { get; set; }
 }
 
 public class LifeReviewResponse
 {
     public bool Success { get; set; } = true;
+    public string Period { get; set; } = "recent";
+    public string WindowLabel { get; set; } = "最近";
     public IReadOnlyList<LifeReviewCard> Cards { get; set; } = Array.Empty<LifeReviewCard>();
     public IReadOnlyList<LifeReviewSourceEvent> SourceEvents { get; set; } = Array.Empty<LifeReviewSourceEvent>();
     public int UsedEventCount { get; set; }
@@ -32,4 +35,12 @@ public class LifeReviewSourceEvent
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string OccurredAt { get; set; } = string.Empty;
+}
+
+public class LifeReviewKeepRequest
+{
+    public string CardId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
 }

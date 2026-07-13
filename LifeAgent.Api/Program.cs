@@ -39,6 +39,7 @@ builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentO
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
 builder.Services.AddScoped<ILifeChatService, LifeChatService>();
 builder.Services.AddScoped<ILifeReviewService, LifeReviewService>();
+builder.Services.AddScoped<ILifeReviewMemoryCandidateService, LifeReviewMemoryCandidateService>();
 builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddScoped<IDailySummaryService, DailySummaryService>();
 builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>();

@@ -12,7 +12,9 @@ import {
 } from "lucide-react";
 import {
   getLifeReview,
+  keepLifeReviewCard,
   type LifeReviewCard,
+  type LifeReviewPeriod,
   type LifeReviewSourceEvent,
 } from "@/app/actions/lifeReview";
 import { useAuth } from "@/providers/AuthProvider";
@@ -23,8 +25,13 @@ export default function LifeReviewPage() {
   const [cards, setCards] = useState<LifeReviewCard[]>([]);
   const [sourceEvents, setSourceEvents] = useState<LifeReviewSourceEvent[]>([]);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [activePeriod, setActivePeriod] = useState<LifeReviewPeriod>("recent");
+  const [keptCardIds, setKeptCardIds] = useState<Record<string, boolean>>({});
+  const [keepingCardId, setKeepingCardId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -35,7 +42,7 @@ export default function LifeReviewPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const review = await getLifeReview(Intl.DateTimeFormat().resolvedOptions().timeZone, 30);
+        const review = await getLifeReview(Intl.DateTimeFormat().resolvedOptions().timeZone, 30, activePeriod);
 
         if (!cancelled) {
           setCards(review.cards ?? []);
@@ -60,7 +67,7 @@ export default function LifeReviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, activePeriod]);
 
   const sourceEventMap = useMemo(() => {
     return new Map(sourceEvents.map(event => [event.id, event]));
@@ -74,6 +81,32 @@ export default function LifeReviewPage() {
       [cardId]: !current[cardId],
     }));
   };
+
+  const keepCard = async (card: LifeReviewCard) => {
+    if (card.sourceEventIds.length === 0) return;
+
+    setKeepingCardId(card.id);
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      await keepLifeReviewCard(card);
+      setKeptCardIds(current => ({
+        ...current,
+        [card.id]: true,
+      }));
+      setActionMessage("已放到可能值得记住的事里。");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "暂时不能放入记忆候选");
+    } finally {
+      setKeepingCardId(null);
+    }
+  };
+
+  const periodOptions: Array<{ key: LifeReviewPeriod; label: string }> = [
+    { key: "recent", label: "最近" },
+    { key: "today", label: "今天" },
+    { key: "week", label: "本周" },
+  ];
 
   if (loading) {
     return (
@@ -105,6 +138,24 @@ export default function LifeReviewPage() {
               </p>
             </div>
           </div>
+          {user && (
+            <div className="mt-6 grid grid-cols-3 rounded-2xl border border-zinc-800 bg-zinc-950/30 p-1">
+              {periodOptions.map(option => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setActivePeriod(option.key)}
+                  className={`rounded-xl px-3 py-2 text-sm transition-colors ${
+                    activePeriod === option.key
+                      ? "bg-zinc-800 text-zinc-100"
+                      : "text-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </header>
 
         {!user ? (
@@ -128,11 +179,28 @@ export default function LifeReviewPage() {
           </div>
         ) : (
           <div className="space-y-5">
+            {(actionMessage || actionError) && (
+              <div className={`rounded-2xl border p-4 text-sm ${
+                actionError
+                  ? "border-red-500/20 bg-red-500/5 text-red-200"
+                  : "border-indigo-500/20 bg-indigo-500/5 text-indigo-200"
+              }`}>
+                {actionError || actionMessage}
+                {actionMessage && (
+                  <Link href="/memory/review" className="ml-2 underline underline-offset-4">
+                    去查看
+                  </Link>
+                )}
+              </div>
+            )}
             {cards.map(item => {
               const sources = item.sourceEventIds
                 .map(id => sourceEventMap.get(id))
                 .filter((event): event is LifeReviewSourceEvent => Boolean(event));
               const isExpanded = Boolean(expandedCards[item.id]);
+              const canKeep = sources.length > 0;
+              const isKept = Boolean(keptCardIds[item.id]);
+              const isKeeping = keepingCardId === item.id;
 
               return (
                 <section key={item.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-5">
@@ -143,8 +211,8 @@ export default function LifeReviewPage() {
                   <p className="break-words text-sm leading-relaxed text-zinc-400">
                     {item.text}
                   </p>
-                  {sources.length > 0 && (
-                    <div className="mt-4">
+                  {canKeep && (
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => toggleExpanded(item.id)}
@@ -158,25 +226,33 @@ export default function LifeReviewPage() {
                         )}
                         查看依据
                       </button>
-                      {isExpanded && (
-                        <div className="mt-3 space-y-2">
-                          {sources.map(source => (
-                            <article key={source.id} className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-3">
-                              <p className="break-words text-sm font-medium leading-relaxed text-zinc-200">
-                                {source.title || source.content}
-                              </p>
-                              <p className="mt-1 text-xs text-zinc-600">
-                                {formatShortChineseDateTime(source.occurredAt)}
-                              </p>
-                              {source.content && source.content !== source.title && (
-                                <p className="mt-2 break-words text-xs leading-relaxed text-zinc-500">
-                                  {source.content}
-                                </p>
-                              )}
-                            </article>
-                          ))}
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => keepCard(item)}
+                        disabled={isKept || isKeeping}
+                        className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 px-3 py-2 text-xs text-indigo-200 transition-colors hover:border-indigo-400/50 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-500"
+                      >
+                        {isKeeping ? "处理中..." : isKept ? "已放入候选" : "值得记住"}
+                      </button>
+                    </div>
+                  )}
+                  {isExpanded && sources.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {sources.map(source => (
+                        <article key={source.id} className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-3">
+                          <p className="break-words text-sm font-medium leading-relaxed text-zinc-200">
+                            {source.title || source.content}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-600">
+                            {formatShortChineseDateTime(source.occurredAt)}
+                          </p>
+                          {source.content && source.content !== source.title && (
+                            <p className="mt-2 break-words text-xs leading-relaxed text-zinc-500">
+                              {source.content}
+                            </p>
+                          )}
+                        </article>
+                      ))}
                     </div>
                   )}
                 </section>

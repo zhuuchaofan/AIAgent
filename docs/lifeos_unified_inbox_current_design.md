@@ -134,8 +134,11 @@ The home page has two separate data surfaces:
    - Source: recent `life_events` plus active durable Memory.
    - `POST /api/life/review` returns structured review cards and source event
      references in read-only mode.
+   - Review requests support `recent`, `today`, and `week` windows.
    - `/life/review` may let the user expand a card to inspect supporting life
      records.
+   - `POST /api/life/review/cards/keep` may place a review card into Memory
+     Review Inbox as a kept candidate.
    - It does not persist generated summaries, write Memory, create reminders,
      or execute tools.
 
@@ -189,6 +192,9 @@ These remain non-negotiable:
   persist generated summaries.
 - Life review evidence expansion may show supporting life records, but not
   prompts, raw JSON, backend flags, or hidden implementation details.
+- Life review "worth remembering" may write Memory Review state only under
+  `memory_review_items`; durable Memory still requires explicit review and
+  remember confirmation.
 - Knowledge-base Q&A may use active Memory as auxiliary background only; the UI
   may surface that background is available and link to `/memory`.
 - Memory is never a citation source; document citations must still come from

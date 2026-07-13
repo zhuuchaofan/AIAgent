@@ -1,4 +1,5 @@
 using LifeAgent.Api.Models;
+using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Models.Exceptions;
 using static LifeAgent.Api.Services.DailyQuotaService;
@@ -139,6 +140,23 @@ public static class LifeEndpoints
             var result = await lifeReviewService.BuildReviewAsync(userId, request);
             return Results.Ok(result);
         }).RequireRateLimiting("high-cost");
+
+        // POST /api/life/review/cards/keep
+        group.MapPost("/review/cards/keep", async (
+            LifeReviewKeepRequest request,
+            HttpContext ctx,
+            ILifeReviewMemoryCandidateService lifeReviewMemoryCandidateService) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            MemoryReviewCandidateActionResponse result =
+                await lifeReviewMemoryCandidateService.KeepFromReviewCardAsync(userId, request);
+            return Results.Ok(result);
+        }).RequireRateLimiting("auth-user");
 
         // GET /api/life/events
         group.MapGet("/events", async (
