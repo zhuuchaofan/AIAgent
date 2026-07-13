@@ -124,6 +124,22 @@ public static class LifeEndpoints
             return Results.Ok(result);
         }).RequireRateLimiting("high-cost");
 
+        // POST /api/life/review
+        group.MapPost("/review", async (
+            LifeReviewRequest request,
+            HttpContext ctx,
+            ILifeReviewService lifeReviewService) =>
+        {
+            var userId = ctx.Items["userId"] as string;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new UnauthorizedException();
+            }
+
+            var result = await lifeReviewService.BuildReviewAsync(userId, request);
+            return Results.Ok(result);
+        }).RequireRateLimiting("high-cost");
+
         // GET /api/life/events
         group.MapGet("/events", async (
             HttpContext ctx,

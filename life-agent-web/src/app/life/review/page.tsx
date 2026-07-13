@@ -2,20 +2,27 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Loader2, Sparkles } from "lucide-react";
-import { getEvents, type LifeEvent } from "@/app/actions/events";
-import { getMemoryInsightPreview, type MemoryInsight } from "@/app/actions/memoryInsights";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
+import {
+  getLifeReview,
+  type LifeReviewCard,
+  type LifeReviewSourceEvent,
+} from "@/app/actions/lifeReview";
 import { useAuth } from "@/providers/AuthProvider";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
-function insightByKind(insights: MemoryInsight[], kinds: MemoryInsight["kind"][]) {
-  return insights.find(insight => kinds.includes(insight.kind))?.text;
-}
-
 export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
-  const [events, setEvents] = useState<LifeEvent[]>([]);
-  const [insights, setInsights] = useState<MemoryInsight[]>([]);
+  const [cards, setCards] = useState<LifeReviewCard[]>([]);
+  const [sourceEvents, setSourceEvents] = useState<LifeReviewSourceEvent[]>([]);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,20 +35,18 @@ export default function LifeReviewPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const [eventResult, insightResult] = await Promise.all([
-          getEvents(undefined, undefined, 12),
-          getMemoryInsightPreview(20),
-        ]);
+        const review = await getLifeReview(Intl.DateTimeFormat().resolvedOptions().timeZone, 30);
 
         if (!cancelled) {
-          setEvents(eventResult.data ?? []);
-          setInsights(insightResult.insights ?? []);
+          setCards(review.cards ?? []);
+          setSourceEvents(review.sourceEvents ?? []);
+          setExpandedCards({});
         }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "暂时无法整理最近回顾");
-          setEvents([]);
-          setInsights([]);
+          setCards([]);
+          setSourceEvents([]);
         }
       } finally {
         if (!cancelled) {
@@ -57,22 +62,18 @@ export default function LifeReviewPage() {
     };
   }, [user]);
 
-  const reviewItems = useMemo(() => {
-    return [
-      {
-        title: "最近状态",
-        text: insightByKind(insights, ["temporary_context", "goal"]) || "最近记录还在积累中，暂时先展示下面的具体记录。",
-      },
-      {
-        title: "反复出现",
-        text: insightByKind(insights, ["theme", "habit"]) || "暂时还看不出稳定重复的主题。",
-      },
-      {
-        title: "可能值得留意",
-        text: insightByKind(insights, ["preference"]) || "继续记录后，我会把更稳定的偏好和变化放在这里。",
-      },
-    ];
-  }, [insights]);
+  const sourceEventMap = useMemo(() => {
+    return new Map(sourceEvents.map(event => [event.id, event]));
+  }, [sourceEvents]);
+
+  const recentEvents = sourceEvents.slice(0, 5);
+
+  const toggleExpanded = (cardId: string) => {
+    setExpandedCards(current => ({
+      ...current,
+      [cardId]: !current[cardId],
+    }));
+  };
 
   if (loading) {
     return (
@@ -127,31 +128,74 @@ export default function LifeReviewPage() {
           </div>
         ) : (
           <div className="space-y-5">
-            {reviewItems.map(item => (
-              <section key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-5">
-                <div className="mb-3 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-indigo-300" />
-                  <h2 className="text-base font-semibold text-zinc-100">{item.title}</h2>
-                </div>
-                <p className="break-words text-sm leading-relaxed text-zinc-400">
-                  {item.text}
-                </p>
-              </section>
-            ))}
+            {cards.map(item => {
+              const sources = item.sourceEventIds
+                .map(id => sourceEventMap.get(id))
+                .filter((event): event is LifeReviewSourceEvent => Boolean(event));
+              const isExpanded = Boolean(expandedCards[item.id]);
+
+              return (
+                <section key={item.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-indigo-300" />
+                    <h2 className="text-base font-semibold text-zinc-100">{item.title}</h2>
+                  </div>
+                  <p className="break-words text-sm leading-relaxed text-zinc-400">
+                    {item.text}
+                  </p>
+                  {sources.length > 0 && (
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(item.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 px-3 py-2 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        )}
+                        查看依据
+                      </button>
+                      {isExpanded && (
+                        <div className="mt-3 space-y-2">
+                          {sources.map(source => (
+                            <article key={source.id} className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-3">
+                              <p className="break-words text-sm font-medium leading-relaxed text-zinc-200">
+                                {source.title || source.content}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-600">
+                                {formatShortChineseDateTime(source.occurredAt)}
+                              </p>
+                              {source.content && source.content !== source.title && (
+                                <p className="mt-2 break-words text-xs leading-relaxed text-zinc-500">
+                                  {source.content}
+                                </p>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
 
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-5">
               <h2 className="mb-3 text-base font-semibold text-zinc-100">最近记录</h2>
-              {events.length === 0 ? (
+              {recentEvents.length === 0 ? (
                 <p className="text-sm text-zinc-500">记录多一点后，我会帮你整理最近的变化。</p>
               ) : (
                 <div className="space-y-3">
-                  {events.slice(0, 5).map(event => (
+                  {recentEvents.map(event => (
                     <article key={event.id} className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-3">
                       <p className="break-words text-sm font-medium leading-relaxed text-zinc-200">
                         {event.title || event.content}
                       </p>
                       <p className="mt-1 text-xs text-zinc-600">
-                        {formatShortChineseDateTime(event.occurredAt || event.createdAt || "")}
+                        {formatShortChineseDateTime(event.occurredAt)}
                       </p>
                     </article>
                   ))}

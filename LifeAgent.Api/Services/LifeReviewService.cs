@@ -1,0 +1,381 @@
+using System.Text;
+using System.Text.Json;
+using LifeAgent.Api.Models;
+using LifeAgent.Api.Models.Memories;
+using LifeAgent.Api.Services.Memories;
+
+namespace LifeAgent.Api.Services;
+
+public class LifeReviewService : ILifeReviewService
+{
+    private const int DefaultMaxEvents = 30;
+    private const int AbsoluteMaxEvents = 50;
+    private const int MaxMemories = 12;
+
+    private static readonly string[] CardOrder =
+    {
+        "recent_state",
+        "repeated_themes",
+        "upcoming_plans",
+        "worth_noticing"
+    };
+
+    private static readonly Dictionary<string, string> CardTitles = new()
+    {
+        ["recent_state"] = "最近状态",
+        ["repeated_themes"] = "反复出现",
+        ["upcoming_plans"] = "近期计划",
+        ["worth_noticing"] = "可能值得留意"
+    };
+
+    private readonly ILifeEventService _lifeEventService;
+    private readonly IMemoryRepository _memoryRepository;
+    private readonly IRagAnswerGenerator _answerGenerator;
+    private readonly ILogger<LifeReviewService> _logger;
+
+    public LifeReviewService(
+        ILifeEventService lifeEventService,
+        IMemoryRepository memoryRepository,
+        IRagAnswerGenerator answerGenerator,
+        ILogger<LifeReviewService> logger)
+    {
+        _lifeEventService = lifeEventService;
+        _memoryRepository = memoryRepository;
+        _answerGenerator = answerGenerator;
+        _logger = logger;
+    }
+
+    public async Task<LifeReviewResponse> BuildReviewAsync(string userId, LifeReviewRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new ArgumentException("User ID cannot be null or empty.", nameof(userId));
+        }
+
+        request ??= new LifeReviewRequest();
+        var limit = Math.Clamp(request.Limit ?? DefaultMaxEvents, 1, AbsoluteMaxEvents);
+
+        var eventsResult = await _lifeEventService.ListEventsAsync(
+            userId,
+            type: "all",
+            limit: limit,
+            cursor: null,
+            tag: null);
+
+        var events = eventsResult.Data
+            .Where(item => !item.IsDeleted)
+            .OrderByDescending(item => item.OccurredAt == default ? item.CreatedAt : item.OccurredAt)
+            .Take(limit)
+            .ToList();
+
+        var memories = (await _memoryRepository.ListByUserAsync(
+                userId,
+                type: null,
+                status: MemoryStatus.Active.ToSnakeCaseString()))
+            .Where(memory => !IsExpiredMemory(memory))
+            .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+            .Take(MaxMemories)
+            .ToList();
+
+        if (events.Count == 0 && memories.Count == 0)
+        {
+            return BuildResponse(BuildEmptyCards(), events, memories.Count);
+        }
+
+        try
+        {
+            var raw = await _answerGenerator.GenerateAnswerAsync(
+                BuildSystemPrompt(),
+                BuildUserPrompt(request, events, memories),
+                new List<ChatMessage>());
+
+            var cards = ParseCards(raw, events);
+            return BuildResponse(cards.Count > 0 ? cards : BuildFallbackCards(events), events, memories.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Life review generation failed for user {UserId}", userId);
+            return BuildResponse(BuildFallbackCards(events), events, memories.Count);
+        }
+    }
+
+    private static string BuildSystemPrompt()
+    {
+        return """
+            你是 LifeOS 的只读生活回顾整理器。你的任务是把用户最近的生活记录和已记住内容整理成简短、具体、可回头看的回顾卡片。
+
+            规则：
+            - 只能依据提供的【最近生活记录】和【已记住内容】。
+            - 不要编造没有依据的事实；看不出来时要保守说明。
+            - 不要创建提醒、不要执行工具、不要承诺已经写入任何数据。
+            - 不要暴露 life_events、Memory、Runtime、Firestore、RAG、JSON、prompt 等底层实现词。
+            - 输出简体中文，语气自然克制，像一本会思考的生活记录本。
+            - 每张卡的 text 不超过 55 个中文字符。
+            - sourceEventIds 只能引用输入中存在的 event id；没有依据则返回空数组。
+            - 必须只返回 JSON，不要 Markdown，不要解释。
+
+            JSON 格式：
+            {
+              "cards": [
+                { "id": "recent_state", "text": "...", "sourceEventIds": ["..."] },
+                { "id": "repeated_themes", "text": "...", "sourceEventIds": ["..."] },
+                { "id": "upcoming_plans", "text": "...", "sourceEventIds": ["..."] },
+                { "id": "worth_noticing", "text": "...", "sourceEventIds": ["..."] }
+              ]
+            }
+            """;
+    }
+
+    private static string BuildUserPrompt(
+        LifeReviewRequest request,
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory> memories)
+    {
+        var timeZone = string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "Asia/Shanghai" : request.ClientTimeZone.Trim();
+        var userTime = GetUserLocalTime(timeZone);
+        var builder = new StringBuilder();
+
+        builder.AppendLine("【系统参考信息】");
+        builder.AppendLine($"系统当前 UTC 时间: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+        builder.AppendLine($"用户本地时区: {timeZone}");
+        builder.AppendLine($"用户当前本地时间: {userTime:yyyy-MM-dd HH:mm:ss}");
+        builder.AppendLine();
+
+        builder.AppendLine("【最近生活记录】");
+        for (var i = 0; i < events.Count; i++)
+        {
+            var item = events[i];
+            var occurredAt = item.OccurredAt == default ? item.CreatedAt : item.OccurredAt;
+            builder.AppendLine($"{i + 1}. id: {item.Id}");
+            builder.AppendLine($"   时间: {occurredAt:yyyy-MM-dd HH:mm}");
+            builder.AppendLine($"   标题: {TrimForPrompt(item.Title, 120)}");
+            builder.AppendLine($"   内容: {TrimForPrompt(item.Content, 360)}");
+            builder.AppendLine($"   标签: {(item.Tags.Count > 0 ? string.Join(", ", item.Tags) : "无")}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("【已记住内容】");
+        if (memories.Count == 0)
+        {
+            builder.AppendLine("暂无。");
+        }
+        else
+        {
+            for (var i = 0; i < memories.Count; i++)
+            {
+                var memory = memories[i];
+                builder.AppendLine($"{i + 1}. 类型: {memory.Type}");
+                builder.AppendLine($"   内容: {TrimForPrompt(memory.Content, 240)}");
+                builder.AppendLine($"   重要度: {memory.Importance}");
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static IReadOnlyList<LifeReviewCard> ParseCards(string raw, IReadOnlyList<LifeEvent> events)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return Array.Empty<LifeReviewCard>();
+        }
+
+        var json = ExtractJson(raw);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<LifeReviewCard>();
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<GeneratedReview>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (parsed?.Cards == null || parsed.Cards.Count == 0)
+            {
+                return Array.Empty<LifeReviewCard>();
+            }
+
+            var validEventIds = events
+                .Select(item => item.Id)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+
+            return parsed.Cards
+                .Where(card => CardTitles.ContainsKey(card.Id ?? string.Empty))
+                .GroupBy(card => card.Id!, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .OrderBy(card => Array.IndexOf(CardOrder, card.Id))
+                .Select(card => new LifeReviewCard
+                {
+                    Id = card.Id!,
+                    Title = CardTitles[card.Id!],
+                    Text = TrimForDisplay(card.Text, "继续记录后，我会把更稳定的变化放在这里。", 90),
+                    SourceEventIds = (card.SourceEventIds ?? new List<string>())
+                        .Where(validEventIds.Contains)
+                        .Distinct()
+                        .Take(5)
+                        .ToList()
+                })
+                .ToList();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<LifeReviewCard>();
+        }
+    }
+
+    private static IReadOnlyList<LifeReviewCard> BuildFallbackCards(IReadOnlyList<LifeEvent> events)
+    {
+        if (events.Count == 0)
+        {
+            return BuildEmptyCards();
+        }
+
+        var latest = events.First();
+        var latestTitle = string.IsNullOrWhiteSpace(latest.Title) ? latest.Content : latest.Title;
+        var latestId = string.IsNullOrWhiteSpace(latest.Id) ? Array.Empty<string>() : new[] { latest.Id };
+
+        return new[]
+        {
+            new LifeReviewCard
+            {
+                Id = "recent_state",
+                Title = CardTitles["recent_state"],
+                Text = $"最近最新的一条记录是：{TrimForDisplay(latestTitle, "一条新的生活记录", 42)}",
+                SourceEventIds = latestId
+            },
+            new LifeReviewCard
+            {
+                Id = "repeated_themes",
+                Title = CardTitles["repeated_themes"],
+                Text = "暂时还看不出稳定重复的主题。",
+                SourceEventIds = Array.Empty<string>()
+            },
+            new LifeReviewCard
+            {
+                Id = "upcoming_plans",
+                Title = CardTitles["upcoming_plans"],
+                Text = "暂时没有足够依据整理近期计划。",
+                SourceEventIds = Array.Empty<string>()
+            },
+            new LifeReviewCard
+            {
+                Id = "worth_noticing",
+                Title = CardTitles["worth_noticing"],
+                Text = "继续记录后，我会把更稳定的变化放在这里。",
+                SourceEventIds = Array.Empty<string>()
+            }
+        };
+    }
+
+    private static IReadOnlyList<LifeReviewCard> BuildEmptyCards()
+    {
+        return new[]
+        {
+            new LifeReviewCard
+            {
+                Id = "recent_state",
+                Title = CardTitles["recent_state"],
+                Text = "记录多一点后，我会帮你整理最近的变化。"
+            }
+        };
+    }
+
+    private static LifeReviewResponse BuildResponse(
+        IReadOnlyList<LifeReviewCard> cards,
+        IReadOnlyList<LifeEvent> events,
+        int usedMemoryCount)
+    {
+        return new LifeReviewResponse
+        {
+            Cards = cards,
+            SourceEvents = events.Select(ToSourceEvent).ToList(),
+            UsedEventCount = events.Count,
+            UsedMemoryCount = usedMemoryCount,
+            ReadOnly = true,
+            WroteData = false,
+            Executed = false
+        };
+    }
+
+    private static LifeReviewSourceEvent ToSourceEvent(LifeEvent item)
+    {
+        var occurredAt = item.OccurredAt == default ? item.CreatedAt : item.OccurredAt;
+        return new LifeReviewSourceEvent
+        {
+            Id = item.Id,
+            Title = TrimForDisplay(item.Title, item.Content, 120),
+            Content = TrimForDisplay(item.Content, item.Title, 260),
+            OccurredAt = occurredAt.ToString("O")
+        };
+    }
+
+    private static string? ExtractJson(string raw)
+    {
+        var trimmed = raw.Trim();
+        if (trimmed.StartsWith('{') && trimmed.EndsWith('}'))
+        {
+            return trimmed;
+        }
+
+        var start = trimmed.IndexOf('{');
+        var end = trimmed.LastIndexOf('}');
+        return start >= 0 && end > start ? trimmed[start..(end + 1)] : null;
+    }
+
+    private static DateTime GetUserLocalTime(string timeZone)
+    {
+        try
+        {
+            var timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+            return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZoneInfo);
+        }
+        catch
+        {
+            return DateTime.UtcNow;
+        }
+    }
+
+    private static bool IsExpiredMemory(Memory memory)
+    {
+        return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
+    }
+
+    private static string TrimForPrompt(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "无";
+        }
+
+        var normalized = value.Trim();
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength] + "...";
+    }
+
+    private static string TrimForDisplay(string? value, string? fallback, int maxLength)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? fallback?.Trim() : value.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return string.Empty;
+        }
+
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength] + "...";
+    }
+
+    private sealed class GeneratedReview
+    {
+        public List<GeneratedReviewCard> Cards { get; set; } = new();
+    }
+
+    private sealed class GeneratedReviewCard
+    {
+        public string? Id { get; set; }
+        public string? Text { get; set; }
+        public List<string>? SourceEventIds { get; set; }
+    }
+}
