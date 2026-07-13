@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getReminders, updateReminder } from "@/app/actions/reminders";
-import { format } from "date-fns";
 import { Loader2, Bell, Clock, Check, X, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
+import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
 interface Reminder {
   id: string;
@@ -92,7 +92,6 @@ export function ReminderWidget({
         <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
           {reminders.map((reminder) => {
             const isOverdue = reminder.displayStatus === "overdue";
-            const dueTime = new Date(reminder.dueAt);
 
             return (
               <div
@@ -124,7 +123,7 @@ export function ReminderWidget({
                 <div className="flex justify-between items-center mt-2">
                   <div className="flex items-center gap-1 text-[11px] text-zinc-500 font-mono">
                     <Clock className="w-3.5 h-3.5" />
-                    {format(dueTime, "PPp")}
+                    {formatShortChineseDateTime(reminder.dueAt)}
                   </div>
 
                   <div className="flex gap-1">

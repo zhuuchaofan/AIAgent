@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getEvents, updateEvent, deleteEvent, type LifeEvent } from "@/app/actions/events";
-import { format } from "date-fns";
 import { Loader2, Calendar, Trash2, Edit3, Save, X, Tag } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
+import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
 function getTypeText(type: string): string {
   switch(type) {
@@ -325,7 +325,7 @@ export function Timeline({
                     <div className="min-w-0 flex-1">
                       <h3 className="font-medium text-zinc-100 text-base leading-snug break-words">{displayRecord.title}</h3>
                       <span className="block text-xs text-zinc-500 font-mono mt-1">
-                        {format(new Date(evt.occurredAt), "PPp")}
+                        {formatShortChineseDateTime(evt.occurredAt)}
                       </span>
                     </div>
                     <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 shrink-0">
