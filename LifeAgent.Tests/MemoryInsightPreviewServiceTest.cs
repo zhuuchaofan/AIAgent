@@ -29,7 +29,7 @@ public class MemoryInsightPreviewServiceTest
     }
 
     [Fact]
-    public void BuildPreview_MapsHabitGoalAndPreferenceToUserReadableInsights()
+    public void BuildPreview_AggregatesSimilarRecordsIntoUserReadableInsights()
     {
         var preview = _service.BuildPreview("user_a", new[]
         {
@@ -38,15 +38,12 @@ public class MemoryInsightPreviewServiceTest
             NewEvent("evt_goal", "目标", "我的目标是本月完成 LifeOS Memory Engine")
         });
 
-        Assert.Equal(3, preview.Insights.Count);
+        Assert.Equal(2, preview.Insights.Count);
         Assert.Contains(preview.Insights, insight =>
-            insight.Kind == "preference" &&
+            insight.Kind == "theme" &&
             insight.Text == "你最近在关注运动状态和身体感受。");
         Assert.Contains(preview.Insights, insight =>
-            insight.Kind == "habit" &&
-            insight.Text == "你最近在持续整理项目相关的事情。");
-        Assert.Contains(preview.Insights, insight =>
-            insight.Kind == "goal" &&
+            insight.Kind == "theme" &&
             insight.Text == "你最近在持续整理项目相关的事情。");
     }
 
@@ -96,6 +93,39 @@ public class MemoryInsightPreviewServiceTest
     }
 
     [Fact]
+    public void BuildPreview_MergesMultipleRecordsForSameTheme()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_project_1", "整理 LifeOS", "今天继续整理项目结构。", minutesAgo: 30),
+            NewEvent("evt_project_2", "Codex 协助", "让 codex 继续整理项目文档。", minutesAgo: 20),
+            NewEvent("evt_project_3", "项目收口", "晚上又整理了一轮 LifeOS。", minutesAgo: 10)
+        });
+
+        var insight = Assert.Single(preview.Insights);
+        Assert.Equal("你最近在持续整理项目相关的事情。", insight.Text);
+        Assert.Equal(new[] { "evt_project_3", "evt_project_2", "evt_project_1" }, insight.SourceEventIds);
+    }
+
+    [Fact]
+    public void BuildPreview_ReturnsAtMostThreeAggregatedInsights()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_project_1", "整理项目", "今天整理 LifeOS 项目。", minutesAgo: 50),
+            NewEvent("evt_project_2", "继续整理", "继续让 codex 整理项目。", minutesAgo: 40),
+            NewEvent("evt_trip", "出行", "今天在新疆路上记录新的体验。", minutesAgo: 30),
+            NewEvent("evt_food", "美食", "晚上吃了饺子，也有一点支出。", minutesAgo: 20),
+            NewEvent("evt_bike", "骑行", "今天骑车，心率不高。", minutesAgo: 10),
+            NewEvent("evt_price", "价格", "像版型很好看，但是价格很贵。", minutesAgo: 5)
+        });
+
+        Assert.Equal(3, preview.Insights.Count);
+        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在持续整理项目相关的事情。");
+        Assert.Contains(preview.Insights, insight => insight.Text == "你最近在权衡购买和价格。");
+    }
+
+    [Fact]
     public void BuildPreview_CondensesLongThemeInsightInsteadOfEchoingOriginalRecord()
     {
         var preview = _service.BuildPreview("user_a", new[]
@@ -128,7 +158,20 @@ public class MemoryInsightPreviewServiceTest
         Assert.DoesNotContain("晚上果然还是不能出去", insight.Text, StringComparison.Ordinal);
     }
 
-    private static LifeEvent NewEvent(string id, string title, string content)
+    [Fact]
+    public void BuildPreview_FallsBackToMemoryExtractionForShortUnmatchedPreference()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_coffee", "偏好", "我喜欢 morning coffee")
+        });
+
+        var insight = Assert.Single(preview.Insights);
+        Assert.Equal("preference", insight.Kind);
+        Assert.Contains("morning coffee", insight.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static LifeEvent NewEvent(string id, string title, string content, int minutesAgo = 0)
     {
         return new LifeEvent
         {
@@ -136,7 +179,7 @@ public class MemoryInsightPreviewServiceTest
             Type = "life",
             Title = title,
             Content = content,
-            OccurredAt = DateTime.UtcNow,
+            OccurredAt = DateTime.UtcNow.AddMinutes(-minutesAgo),
             Tags = new List<string> { "生活日常" },
             Importance = 1
         };

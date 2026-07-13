@@ -8,6 +8,7 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
 {
     private const int MaxInsightCount = 3;
     private const int MaxInsightTextLength = 72;
+    private const double AggregatedInsightConfidence = 0.84;
     private readonly IMemoryExtractionService _memoryExtractionService;
 
     public MemoryInsightPreviewService(IMemoryExtractionService memoryExtractionService)
@@ -22,6 +23,35 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
             throw new ArgumentException("userId is required for memory insight preview.", nameof(userId));
         }
 
+        var aggregatedInsights = BuildAggregatedInsights(events);
+
+        var fallbackInsights = BuildFallbackInsights(userId, events)
+            .Where(insight => aggregatedInsights.All(existing =>
+                !string.Equals(
+                    NormalizeForDedupe(existing.Text),
+                    NormalizeForDedupe(insight.Text),
+                    StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var insights = aggregatedInsights
+            .Concat(fallbackInsights)
+            .Take(MaxInsightCount)
+            .ToList();
+
+        return new MemoryInsightPreviewData
+        {
+            ScannedCount = events.Count,
+            PreviewOnly = true,
+            WroteData = false,
+            MemoryWriteEnabled = false,
+            Insights = insights
+        };
+    }
+
+    private IReadOnlyList<MemoryInsightPreviewItem> BuildFallbackInsights(
+        string userId,
+        IReadOnlyList<LifeEvent> events)
+    {
         var timelineItems = events
             .Select(e => new TimelineMemoryExtractionInput
             {
@@ -55,14 +85,87 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
             .Take(MaxInsightCount)
             .ToList();
 
-        return new MemoryInsightPreviewData
+        return insights;
+    }
+
+    private static IReadOnlyList<MemoryInsightPreviewItem> BuildAggregatedInsights(IReadOnlyList<LifeEvent> events)
+    {
+        return events
+            .SelectMany(BuildSignals)
+            .GroupBy(signal => signal.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var ordered = group
+                    .OrderByDescending(signal => signal.OccurredAt)
+                    .ThenBy(signal => signal.SourceEventId, StringComparer.Ordinal)
+                    .ToList();
+
+                return new
+                {
+                    Signal = ordered[0],
+                    Count = ordered.Count,
+                    SourceIds = ordered
+                        .Select(signal => signal.SourceEventId)
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray()
+                };
+            })
+            .OrderByDescending(group => group.Count)
+            .ThenByDescending(group => group.Signal.OccurredAt)
+            .Take(MaxInsightCount)
+            .Select(group => new MemoryInsightPreviewItem
+            {
+                Kind = group.Signal.Kind,
+                Text = group.Signal.Text,
+                Confidence = AggregatedInsightConfidence,
+                SourceEventIds = group.SourceIds
+            })
+            .ToList();
+    }
+
+    private static IEnumerable<InsightSignal> BuildSignals(LifeEvent lifeEvent)
+    {
+        var text = BuildExtractionText(lifeEvent);
+        if (string.IsNullOrWhiteSpace(text))
         {
-            ScannedCount = events.Count,
-            PreviewOnly = true,
-            WroteData = false,
-            MemoryWriteEnabled = false,
-            Insights = insights
-        };
+            yield break;
+        }
+
+        if (ContainsAny(text, "codex", "lifeos", "项目", "整理"))
+        {
+            yield return Signal(lifeEvent, "project_work", "theme", "你最近在持续整理项目相关的事情。");
+        }
+
+        if (ContainsAny(text, "无人机", "西安", "国家版本馆", "飞行", "出行", "新疆", "路上"))
+        {
+            yield return Signal(lifeEvent, "travel_experience", "theme", "你最近在记录出行和新体验。");
+        }
+
+        if (ContainsAny(text, "美食", "吃", "饺子", "蒸饺", "支出", "消费"))
+        {
+            yield return Signal(lifeEvent, "food_spending", "preference", "你最近在记录饮食和消费感受。");
+        }
+
+        if (ContainsAny(text, "骑车", "骑行", "心率", "运动", "身体"))
+        {
+            yield return Signal(lifeEvent, "body_movement", "theme", "你最近在关注运动状态和身体感受。");
+        }
+
+        if (ContainsAny(text, "价格", "贵", "购买", "值得", "划算", "版型"))
+        {
+            yield return Signal(lifeEvent, "purchase_price", "preference", "你最近在权衡购买和价格。");
+        }
+    }
+
+    private static InsightSignal Signal(LifeEvent lifeEvent, string key, string kind, string text)
+    {
+        return new InsightSignal(
+            key,
+            kind,
+            text,
+            lifeEvent.Id,
+            lifeEvent.OccurredAt);
     }
 
     private static MemoryInsightPreviewItem ToInsight(MemoryExtractionResult result)
@@ -269,4 +372,11 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
     {
         return markers.Any(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase));
     }
+
+    private sealed record InsightSignal(
+        string Key,
+        string Kind,
+        string Text,
+        string SourceEventId,
+        DateTime OccurredAt);
 }
