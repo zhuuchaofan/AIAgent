@@ -104,10 +104,10 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
 
         return kind switch
         {
-            "preference" => $"我注意到一个可能的偏好或边界：{content}",
-            "habit" => $"这可能是一个正在形成的习惯：{content}",
-            "goal" => $"这看起来像一个目标或计划：{content}",
-            "temporary_context" => $"这可能是近期需要参考的背景：{content}",
+            "preference" => InferPreferenceText(content),
+            "habit" => InferHabitText(content),
+            "goal" => InferGoalText(content),
+            "temporary_context" => InferTemporaryContextText(content),
             _ => InferThemeText(content)
         };
     }
@@ -147,6 +147,61 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
 
     private static string InferThemeText(string content)
     {
+        var semanticText = InferSemanticShortText(content);
+        if (!string.IsNullOrWhiteSpace(semanticText))
+        {
+            return semanticText;
+        }
+
+        return $"最近有个主题值得回看：{content}";
+    }
+
+    private static string InferPreferenceText(string content)
+    {
+        var semanticText = InferSemanticShortText(content);
+        if (!string.IsNullOrWhiteSpace(semanticText))
+        {
+            return semanticText;
+        }
+
+        return $"我注意到一个可能的偏好或边界：{content}";
+    }
+
+    private static string InferHabitText(string content)
+    {
+        var semanticText = InferSemanticShortText(content);
+        if (!string.IsNullOrWhiteSpace(semanticText))
+        {
+            return semanticText;
+        }
+
+        return $"这可能是一个正在形成的习惯：{content}";
+    }
+
+    private static string InferGoalText(string content)
+    {
+        var semanticText = InferSemanticShortText(content);
+        if (!string.IsNullOrWhiteSpace(semanticText))
+        {
+            return semanticText;
+        }
+
+        return $"这看起来像一个目标或计划：{content}";
+    }
+
+    private static string InferTemporaryContextText(string content)
+    {
+        var semanticText = InferSemanticShortText(content);
+        if (!string.IsNullOrWhiteSpace(semanticText))
+        {
+            return semanticText;
+        }
+
+        return $"这可能是近期需要参考的背景：{content}";
+    }
+
+    private static string? InferSemanticShortText(string content)
+    {
         if (ContainsAny(content, "codex", "lifeos", "项目", "整理"))
         {
             return "你最近在持续整理项目相关的事情。";
@@ -167,7 +222,7 @@ public sealed class MemoryInsightPreviewService : IMemoryInsightPreviewService
             return "你最近在关注运动状态和身体感受。";
         }
 
-        return $"最近有个主题值得回看：{content}";
+        return null;
     }
 
     private static string CleanText(string text)

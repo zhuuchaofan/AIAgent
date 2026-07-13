@@ -41,13 +41,13 @@ public class MemoryInsightPreviewServiceTest
         Assert.Equal(3, preview.Insights.Count);
         Assert.Contains(preview.Insights, insight =>
             insight.Kind == "preference" &&
-            insight.Text.Contains("可能的偏好", StringComparison.Ordinal));
+            insight.Text == "你最近在关注运动状态和身体感受。");
         Assert.Contains(preview.Insights, insight =>
             insight.Kind == "habit" &&
-            insight.Text.Contains("正在形成的习惯", StringComparison.Ordinal));
+            insight.Text == "你最近在持续整理项目相关的事情。");
         Assert.Contains(preview.Insights, insight =>
             insight.Kind == "goal" &&
-            insight.Text.Contains("目标或计划", StringComparison.Ordinal));
+            insight.Text == "你最近在持续整理项目相关的事情。");
     }
 
     [Fact]
@@ -109,6 +109,23 @@ public class MemoryInsightPreviewServiceTest
         var insight = Assert.Single(preview.Insights);
         Assert.Equal("你最近在记录出行和新体验。", insight.Text);
         Assert.DoesNotContain("第一次飞，很不错", insight.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildPreview_CondensesLongPreferenceInsightInsteadOfEchoingOriginalRecord()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent(
+                "evt_food_spend",
+                "美食之夜，略有支出",
+                "晚上果然还是不能出去，开玩笑的，不仅仅吃了个饺子，还吃了个蒸饺，味道也不错，还去品忆香买了好多吃的，又是一个支出的晚上。")
+        });
+
+        var insight = Assert.Single(preview.Insights);
+        Assert.Equal("preference", insight.Kind);
+        Assert.Equal("你最近在记录饮食和消费感受。", insight.Text);
+        Assert.DoesNotContain("晚上果然还是不能出去", insight.Text, StringComparison.Ordinal);
     }
 
     private static LifeEvent NewEvent(string id, string title, string content)
