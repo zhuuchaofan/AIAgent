@@ -45,9 +45,22 @@ function actionTypeLabel(actionType: string): string {
 
 function actionTypeDescription(actionType: string): string {
   if (actionType === LIFE_RECORD_PREVIEW) return "保存后会出现在最近生活记录里。";
-  if (actionType === REMINDER_PREVIEW) return "我识别到这是一个提醒。提醒功能还在准备中，暂时不会自动创建提醒。";
-  if (actionType === PLAN_PREVIEW) return "我识别到这是一个计划。计划功能还在准备中，先帮你留在这里确认。";
+  if (actionType === REMINDER_PREVIEW) return "我先帮你把这条提醒线索留住，暂时不会自动提醒。";
+  if (actionType === PLAN_PREVIEW) return "我先帮你把这个计划线索留住。";
   return "我会先把它作为一条待保存内容处理。";
+}
+
+function cleanActionText(value?: string): string {
+  if (!value) return "";
+
+  return value
+    .replace(/^用户输入：\s*/u, "")
+    .replace(/。?\s*生活记录确认后写入\s*life_events[；;，,、\s\S]*$/u, "")
+    .replace(/。?\s*确认后会写入\s*life_events[；;，,、\s\S]*$/u, "")
+    .replace(/。?\s*提醒与工具操作仍不执行[。.]?\s*$/u, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[。.\s]+$/u, "");
 }
 
 export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: () => void }) {
@@ -59,10 +72,19 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
   const [error, setError] = useState<string | null>(null);
 
   const isLifeRecord = draftAction?.actionType === LIFE_RECORD_PREVIEW;
-  const showSummary = useMemo(() => {
-    if (!draftAction) return false;
-    return draftAction.summary.trim() !== "" && draftAction.summary.trim() !== draftAction.title.trim();
+  const displayDraft = useMemo(() => {
+    if (!draftAction) return null;
+
+    return {
+      title: cleanActionText(draftAction.title) || "待保存内容",
+      summary: cleanActionText(draftAction.summary),
+    };
   }, [draftAction]);
+
+  const showSummary = useMemo(() => {
+    if (!displayDraft) return false;
+    return displayDraft.summary.trim() !== "" && displayDraft.summary.trim() !== displayDraft.title.trim();
+  }, [displayDraft]);
 
   const loadLatestDraft = useCallback(async () => {
     try {
@@ -146,7 +168,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
 
       setDraftAction(null);
       setMessage(draftAction.actionType === REMINDER_PREVIEW
-        ? "已收到提醒线索；暂时不会自动创建提醒。"
+        ? "已留下提醒线索。"
         : "已保存这条线索。");
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -197,9 +219,9 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
               {actionTypeLabel(draftAction.actionType)}
             </span>
           </div>
-          <div className="mt-3 break-words text-base font-medium leading-relaxed text-zinc-100">{draftAction.title}</div>
+          <div className="mt-3 break-words text-base font-medium leading-relaxed text-zinc-100">{displayDraft?.title}</div>
           {showSummary && (
-            <div className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{draftAction.summary}</div>
+            <div className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{displayDraft?.summary}</div>
           )}
           <div className="mt-3 text-sm leading-relaxed text-zinc-500">{actionTypeDescription(draftAction.actionType)}</div>
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">

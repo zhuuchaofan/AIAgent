@@ -1,13 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { BookOpen, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
+import type { LifeEvent } from "@/app/actions/events";
 
-function InsightCard() {
+const GENERIC_TAGS = new Set(["生活日常", "未分类", "life"]);
+
+function getInsightText(events: LifeEvent[]): string {
+  if (events.length === 0) {
+    return "写下第一条记录后，我会开始帮你整理最近的生活线索。";
+  }
+
+  const tags = events
+    .flatMap(event => event.tags ?? [])
+    .map(tag => tag.trim())
+    .filter(tag => tag && !GENERIC_TAGS.has(tag));
+
+  const topTags = Array.from(new Set(tags)).slice(0, 3);
+  if (topTags.length > 0) {
+    return `最近常出现：${topTags.map(tag => `#${tag}`).join("、")}。先继续记录，我会帮你把线索串起来。`;
+  }
+
+  if (events.length < 3) {
+    return "最近记录还不多。再写几条后，我会帮你看见反复出现的主题。";
+  }
+
+  return `最近已经留下 ${events.length} 条片段。先把日常记下来，之后我会帮你整理值得回看的线索。`;
+}
+
+function InsightCard({ events }: { events: LifeEvent[] }) {
+  const insightText = useMemo(() => getInsightText(events), [events]);
+
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
       <div className="flex items-start gap-3">
@@ -17,7 +44,7 @@ function InsightCard() {
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">AI 发现</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-            记录多一点后，我会帮你整理今天的线索、反复出现的主题和值得回看的片段。
+            {insightText}
           </p>
         </div>
       </div>
@@ -28,6 +55,11 @@ function InsightCard() {
 export default function Home() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [recentEvents, setRecentEvents] = useState<LifeEvent[]>([]);
+
+  const handleRecentEventsChange = useCallback((events: LifeEvent[]) => {
+    setRecentEvents(events);
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -115,8 +147,8 @@ export default function Home() {
         ) : (
           <div className="space-y-8">
             <AgentPreview onLifeRecordWritten={() => setRefreshTrigger(t => t + 1)} />
-            <Timeline refreshTrigger={refreshTrigger} />
-            <InsightCard />
+            <Timeline refreshTrigger={refreshTrigger} onRecentEventsChange={handleRecentEventsChange} />
+            <InsightCard events={recentEvents} />
           </div>
         )}
       </div>

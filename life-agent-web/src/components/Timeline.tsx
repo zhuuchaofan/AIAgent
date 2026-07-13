@@ -16,7 +16,41 @@ function getTypeText(type: string): string {
   }
 }
 
-export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
+function cleanRecordText(value?: string): string {
+  if (!value) return "";
+
+  return value
+    .replace(/^用户输入：\s*/u, "")
+    .replace(/。?\s*生活记录确认后写入\s*life_events[；;，,、\s\S]*$/u, "")
+    .replace(/。?\s*确认后会写入\s*life_events[；;，,、\s\S]*$/u, "")
+    .replace(/。?\s*提醒与工具操作仍不执行[。.]?\s*$/u, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[。.\s]+$/u, "");
+}
+
+function normalizeComparableText(value: string): string {
+  return value.replace(/[，,。.!！?？\s]/gu, "").toLowerCase();
+}
+
+function getDisplayRecord(evt: LifeEvent) {
+  const title = cleanRecordText(evt.title);
+  const content = cleanRecordText(evt.content);
+  const displayTitle = title || content || "未命名记录";
+  const displayContent = normalizeComparableText(content) === normalizeComparableText(displayTitle)
+    ? ""
+    : content;
+
+  return { title: displayTitle, content: displayContent };
+}
+
+export function Timeline({
+  refreshTrigger,
+  onRecentEventsChange,
+}: {
+  refreshTrigger: number;
+  onRecentEventsChange?: (events: LifeEvent[]) => void;
+}) {
   const { user } = useAuth();
   const [events, setEvents] = useState<LifeEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -31,7 +65,6 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
   const [editContent, setEditContent] = useState("");
   const [editTags, setEditTags] = useState("");
   const [editImportance, setEditImportance] = useState(3);
-  const [editStructuredData, setEditStructuredData] = useState("");
   const [editType, setEditType] = useState("unknown");
 
   const fetchEvents = useCallback(async (cursor?: string, tag?: string | null) => {
@@ -83,7 +116,6 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
     setEditContent(evt.content || "");
     setEditTags(evt.tags?.join(", ") || "");
     setEditImportance(evt.importance || 3);
-    setEditStructuredData(JSON.stringify(evt.structuredData || {}, null, 2));
     setEditType(evt.type || "unknown");
   };
 
@@ -94,20 +126,11 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
-      let parsedStructuredData = {};
-      try {
-        parsedStructuredData = JSON.parse(editStructuredData);
-      } catch {
-        alert("结构化数据 (Structured Data) 格式不合法，请输入正确的 JSON");
-        return;
-      }
-
       const payload = {
         title: editTitle,
         content: editContent,
         tags: parsedTags,
         importance: editImportance,
-        structuredData: parsedStructuredData,
         type: editType,
       };
 
@@ -122,7 +145,6 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                 content: editContent,
                 tags: parsedTags,
                 importance: editImportance,
-                structuredData: parsedStructuredData,
                 type: editType,
               }
             : e
@@ -147,6 +169,10 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
 
   const visibleEvents = showAllRecords ? events : events.slice(0, 3);
   const hasMoreLocalRecords = events.length > 3 && !showAllRecords;
+
+  useEffect(() => {
+    onRecentEventsChange?.(events.slice(0, 3));
+  }, [events, onRecentEventsChange]);
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -271,16 +297,6 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-1">结构化数据 (JSON)</label>
-                    <textarea
-                      value={editStructuredData}
-                      onChange={(e) => setEditStructuredData(e.target.value)}
-                      rows={3}
-                      className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-zinc-100 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       onClick={() => setEditingId(null)}
@@ -300,10 +316,14 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                 </div>
               ) : (
                 /* 正常展示状态 */
+                (() => {
+                  const displayRecord = getDisplayRecord(evt);
+
+                  return (
                 <>
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-medium text-zinc-100 text-base leading-snug break-words">{evt.title}</h3>
+                      <h3 className="font-medium text-zinc-100 text-base leading-snug break-words">{displayRecord.title}</h3>
                       <span className="block text-xs text-zinc-500 font-mono mt-1">
                         {format(new Date(evt.occurredAt), "PPp")}
                       </span>
@@ -327,14 +347,13 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                       </button>
                     </div>
                   </div>
-                  <p className="text-sm text-zinc-400 whitespace-pre-wrap mb-4 leading-relaxed break-words">{evt.content}</p>
+                  {displayRecord.content && (
+                    <p className="text-sm text-zinc-400 whitespace-pre-wrap mb-4 leading-relaxed break-words">{displayRecord.content}</p>
+                  )}
 
                   <div className="flex flex-wrap gap-2">
-                    <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-xs rounded-md font-medium border border-zinc-700">
+                    <span className="px-2 py-0.5 bg-zinc-800/70 text-zinc-400 text-xs rounded-md font-medium border border-zinc-800">
                       {getTypeText(evt.type)}
-                    </span>
-                    <span className="px-2 py-0.5 bg-zinc-800/80 text-zinc-400 text-xs rounded-md font-medium border border-zinc-850">
-                      重要度: {evt.importance}
                     </span>
                     {evt.tags?.map((tag: string) => (
                       <button
@@ -347,6 +366,8 @@ export function Timeline({ refreshTrigger }: { refreshTrigger: number }) {
                     ))}
                   </div>
                 </>
+                  );
+                })()
               )}
             </div>
           ))}
