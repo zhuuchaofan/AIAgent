@@ -107,6 +107,13 @@ The home page has two separate data surfaces:
    - Does not show reminder preview confirmations unless a future reminder
      write path is approved and implemented.
 
+3. Memory preview surfaces
+   - Source: recent `life_events` only.
+   - `GET /api/memory/insights/preview` powers the Home `AI 发现` card.
+   - `GET /api/memory/review-inbox/preview` powers `/memory/review`.
+   - Review Inbox actions such as keep, inspect source, and hide are product
+     UI affordances only; they do not persist durable Memory records.
+
 ## Legacy Paths
 
 These routes still exist for compatibility and older tests:
@@ -144,6 +151,8 @@ These remain non-negotiable:
 - Confirm checks owner, status, expiry, policy, and executor readiness.
 - Only allowlisted executors may write.
 - Memory durable writes are not enabled.
+- Memory review candidates are preview-only and may include source summaries
+  from recent life records.
 - Reminder durable writes are not enabled.
 - Tool execution is not enabled.
 - Cloud Run env changes require explicit approval.

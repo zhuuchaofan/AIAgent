@@ -7,6 +7,8 @@ namespace LifeAgent.Api.Services.Memories;
 public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewService
 {
     private const int MaxCandidateCount = 8;
+    private const int MaxSourceCount = 3;
+    private const int MaxSourceSnippetLength = 96;
     private const double CandidateConfidence = 0.82;
 
     public MemoryReviewInboxPreviewData BuildPreview(string userId, IReadOnlyList<LifeEvent> events)
@@ -26,9 +28,15 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                     .ThenBy(signal => signal.SourceEventId, StringComparer.Ordinal)
                     .ToList();
                 var signal = ordered[0];
-                var sourceIds = ordered
-                    .Select(item => item.SourceEventId)
-                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                var sources = ordered
+                    .Select(item => BuildSource(item.LifeEvent))
+                    .Where(source => !string.IsNullOrWhiteSpace(source.EventId))
+                    .DistinctBy(source => source.EventId, StringComparer.OrdinalIgnoreCase)
+                    .Take(MaxSourceCount)
+                    .ToArray();
+
+                var sourceIds = sources
+                    .Select(item => item.EventId)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
 
@@ -39,6 +47,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                     Title = signal.Title,
                     Detail = signal.Detail,
                     SourceEventIds = sourceIds,
+                    Sources = sources,
                     Confidence = CandidateConfidence,
                     Reason = ordered.Count > 1 ? "最近多次出现" : "最近记录中出现",
                     PreviewOnly = true,
@@ -158,16 +167,62 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
 
     private static ReviewSignal Signal(LifeEvent lifeEvent, string key, string type, string title, string detail)
     {
-        return new ReviewSignal(key, type, title, detail, lifeEvent.Id, lifeEvent.OccurredAt);
+        return new ReviewSignal(key, type, title, detail, lifeEvent);
     }
 
     private static string BuildText(LifeEvent lifeEvent)
     {
         var raw = $"{lifeEvent.Title}。{lifeEvent.Content}";
-        return Regex
-            .Replace(raw, @"\s+", " ")
+        return CleanText(raw, int.MaxValue);
+    }
+
+    private static MemoryReviewSourceItem BuildSource(LifeEvent lifeEvent)
+    {
+        var title = CleanText(lifeEvent.Title, MaxSourceSnippetLength);
+        var content = CleanText(lifeEvent.Content, MaxSourceSnippetLength);
+        var snippet = string.IsNullOrWhiteSpace(content) || string.Equals(title, content, StringComparison.OrdinalIgnoreCase)
+            ? title
+            : content;
+
+        return new MemoryReviewSourceItem
+        {
+            EventId = lifeEvent.Id,
+            Title = string.IsNullOrWhiteSpace(title) ? "生活记录" : title,
+            Snippet = snippet,
+            OccurredAt = lifeEvent.OccurredAt
+        };
+    }
+
+    private static string CleanText(string text, int maxLength)
+    {
+        var cleaned = Regex
+            .Replace(text ?? string.Empty, @"\s+", " ")
             .Replace("用户输入：", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("用户输入:", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Trim();
+
+        var technicalMarkers = new[]
+        {
+            "生活记录确认后写入 life_events",
+            "提醒与工具操作仍不执行",
+            "确认后会写入 life_events"
+        };
+
+        foreach (var marker in technicalMarkers)
+        {
+            var index = cleaned.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                cleaned = cleaned[..index].Trim(' ', '。', '，', ',', ';', '；');
+            }
+        }
+
+        if (cleaned.Length <= maxLength)
+        {
+            return cleaned;
+        }
+
+        return cleaned[..maxLength].TrimEnd() + "...";
     }
 
     private static bool ContainsAny(string text, params string[] markers)
@@ -180,6 +235,9 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
         string Type,
         string Title,
         string Detail,
-        string SourceEventId,
-        DateTime OccurredAt);
+        LifeEvent LifeEvent)
+    {
+        public string SourceEventId => LifeEvent.Id;
+        public DateTime OccurredAt => LifeEvent.OccurredAt;
+    }
 }

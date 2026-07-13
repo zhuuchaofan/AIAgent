@@ -39,7 +39,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
 | Phase 5 Agent Write MVP | Live for LifeEvent only | `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, `Phase80LifeEventConfirmWriteExecutor`, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`. |
 | Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Other write targets remain No-Go. |
-| Phase 6 Memory Engine | Skeleton / next | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons | `docs/phase6_*` | Memory proposals/retrieval skeletons exist. Durable Memory write is not enabled. |
+| Phase 6 Memory Engine | Preview / next | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*/preview` | `docs/phase6_*` | Home AI insights and Memory Review Inbox can surface candidate-only memory signals. Durable Memory write is not enabled. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
 | Phase 8/9 Pending Action | Historical foundation now absorbed | `IPendingActionStore`, `FirestorePendingActionStore`, `Phase80PendingActionRuntime` | `docs/phase8_*`, `docs/phase9_*` | Docs are historical unless explicitly updated. Current truth is Unified Inbox doc. |
 
@@ -66,6 +66,29 @@ life-agent-web/src/components/AgentPreview.tsx
 | Memory | candidate-only | yes when preview path produces it | no | none |
 | Plan | yes | yes | no | none |
 | Tool / external action | possible as high-risk candidate | no execution | no | none |
+
+## Current Memory Preview Surface
+
+Phase 6 currently exposes product-facing preview surfaces only:
+
+```text
+GET /api/memory/insights/preview
+  -> read recent life_events
+  -> return up to 3 user-facing AI insights
+  -> no Memory write
+
+GET /api/memory/review-inbox/preview
+  -> read recent life_events
+  -> return candidate memory signals with source summaries
+  -> no Memory write
+```
+
+The web product surfaces are:
+
+- Home `AI 发现`: a lightweight preview of repeated themes.
+- `/memory/review`: a candidate inbox where the user can inspect, keep, or locally hide signals.
+
+These actions do not create, update, archive, or merge durable Memory records.
 
 ## Docs Policy Going Forward
 

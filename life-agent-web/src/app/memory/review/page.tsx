@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Brain, Loader2, X } from "lucide-react";
+import { ArrowLeft, Brain, Check, ChevronDown, Loader2, X } from "lucide-react";
 import { getMemoryReviewInboxPreview, type MemoryReviewCandidate } from "@/app/actions/memoryReview";
+import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
 function typeLabel(type: MemoryReviewCandidate["type"]): string {
   switch (type) {
@@ -23,6 +24,8 @@ function typeLabel(type: MemoryReviewCandidate["type"]): string {
 export default function MemoryReviewPage() {
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [keptIds, setKeptIds] = useState<Set<string>>(new Set());
+  const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +60,18 @@ export default function MemoryReviewPage() {
   }, []);
 
   const visibleCandidates = candidates.filter(candidate => !hiddenIds.has(candidate.id));
+
+  const toggleSources = (candidateId: string) => {
+    setExpandedSourceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(candidateId)) {
+        next.delete(candidateId);
+      } else {
+        next.add(candidateId);
+      }
+      return next;
+    });
+  };
 
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 selection:bg-indigo-500/30 md:px-10 md:py-10">
@@ -102,13 +117,18 @@ export default function MemoryReviewPage() {
                 key={candidate.id}
                 className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-300">
                         {typeLabel(candidate.type)}
                       </span>
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
+                      {keptIds.has(candidate.id) && (
+                        <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                          已留在这里
+                        </span>
+                      )}
                     </div>
                     <h2 className="break-words text-base font-semibold text-zinc-100">{candidate.title}</h2>
                     <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{candidate.detail}</p>
@@ -123,8 +143,49 @@ export default function MemoryReviewPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setKeptIds(prev => new Set(prev).add(candidate.id))}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                  >
+                    <Check className="h-4 w-4" />
+                    先留着
+                  </button>
+                  {(candidate.sources?.length ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSources(candidate.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                      aria-expanded={expandedSourceIds.has(candidate.id)}
+                    >
+                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedSourceIds.has(candidate.id) ? "rotate-180" : ""}`} />
+                      查看来源
+                    </button>
+                  )}
+                </div>
+
+                {expandedSourceIds.has(candidate.id) && (candidate.sources?.length ?? 0) > 0 && (
+                  <div className="mt-4 space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+                    {candidate.sources.map(source => (
+                      <div key={source.eventId} className="border-b border-zinc-800/70 pb-2 last:border-b-0 last:pb-0">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="break-words text-sm font-medium text-zinc-200">{source.title}</span>
+                          <span className="text-xs text-zinc-600">{formatShortChineseDateTime(source.occurredAt)}</span>
+                        </div>
+                        {source.snippet && (
+                          <p className="mt-1 break-words text-sm leading-relaxed text-zinc-500">{source.snippet}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </article>
             ))}
+            <p className="px-1 text-xs leading-relaxed text-zinc-600">
+              这些只是线索，确认记住功能还未开启；忽略和先留着只影响当前页面显示。
+            </p>
           </div>
         )}
       </div>

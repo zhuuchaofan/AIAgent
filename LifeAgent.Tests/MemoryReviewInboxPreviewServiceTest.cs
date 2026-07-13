@@ -38,6 +38,15 @@ public class MemoryReviewInboxPreviewServiceTest
             candidate.Id == "review_project_work" &&
             candidate.Type == "theme" &&
             candidate.Title == "你最近在持续整理 LifeOS 项目。");
+        Assert.All(preview.Candidates, candidate =>
+        {
+            Assert.NotEmpty(candidate.Sources);
+            Assert.All(candidate.Sources, source =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(source.EventId));
+                Assert.DoesNotContain("life_events", source.Snippet, StringComparison.OrdinalIgnoreCase);
+            });
+        });
     }
 
     [Fact]
@@ -53,6 +62,29 @@ public class MemoryReviewInboxPreviewServiceTest
         Assert.Equal("review_project_work", candidate.Id);
         Assert.Equal("最近多次出现", candidate.Reason);
         Assert.Equal(new[] { "evt_project_2", "evt_project_1" }, candidate.SourceEventIds);
+        Assert.Equal(new[] { "evt_project_2", "evt_project_1" }, candidate.Sources.Select(source => source.EventId));
+    }
+
+    [Fact]
+    public void BuildPreview_LimitsSourceSummariesAndCleansTechnicalText()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent(
+                "evt_project_1",
+                "用户输入：整理 LifeOS",
+                "今天继续整理项目结构。生活记录确认后写入 life_events；提醒与工具操作仍不执行。",
+                minutesAgo: 30),
+            NewEvent("evt_project_2", "Codex 协助", "让 codex 继续整理项目文档。", minutesAgo: 20),
+            NewEvent("evt_project_3", "项目收口", "晚上又整理了一轮 LifeOS。", minutesAgo: 10),
+            NewEvent("evt_project_4", "继续整理", "又处理了一些项目细节。", minutesAgo: 5)
+        });
+
+        var candidate = Assert.Single(preview.Candidates);
+        Assert.Equal(3, candidate.Sources.Count);
+        Assert.DoesNotContain(candidate.Sources, source =>
+            source.Snippet.Contains("life_events", StringComparison.OrdinalIgnoreCase) ||
+            source.Title.Contains("用户输入", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

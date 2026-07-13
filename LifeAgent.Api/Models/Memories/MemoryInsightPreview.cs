@@ -44,8 +44,17 @@ public sealed class MemoryReviewCandidateItem
     public string Title { get; set; } = string.Empty;
     public string Detail { get; set; } = string.Empty;
     public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<MemoryReviewSourceItem> Sources { get; set; } = Array.Empty<MemoryReviewSourceItem>();
     public double Confidence { get; set; }
     public string Reason { get; set; } = string.Empty;
     public bool PreviewOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
+}
+
+public sealed class MemoryReviewSourceItem
+{
+    public string EventId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Snippet { get; set; } = string.Empty;
+    public DateTime OccurredAt { get; set; }
 }

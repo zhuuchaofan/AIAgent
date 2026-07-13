@@ -7,16 +7,23 @@ import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
 import { getMemoryInsightPreview, type MemoryInsight } from "@/app/actions/memoryInsights";
+import { getMemoryReviewInboxPreview } from "@/app/actions/memoryReview";
 
 function InsightCard({
   insights,
+  reviewCandidateCount,
   isLoading,
   error,
 }: {
   insights: MemoryInsight[];
+  reviewCandidateCount: number;
   isLoading: boolean;
   error: string | null;
 }) {
+  const reviewLinkText = reviewCandidateCount > 0
+    ? `查看 ${reviewCandidateCount} 条可能值得记住的事`
+    : "查看可能值得记住的事";
+
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
       <div className="flex items-start gap-3">
@@ -54,7 +61,7 @@ function InsightCard({
             href="/memory/review"
             className="mt-4 inline-flex text-sm text-indigo-300 transition-colors hover:text-indigo-200"
           >
-            查看可能值得记住的事
+            {reviewLinkText}
           </Link>
         </div>
       </div>
@@ -67,6 +74,7 @@ export default function Home() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [insightRefreshTrigger, setInsightRefreshTrigger] = useState(0);
   const [insights, setInsights] = useState<MemoryInsight[]>([]);
+  const [reviewCandidateCount, setReviewCandidateCount] = useState(0);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [insightError, setInsightError] = useState<string | null>(null);
 
@@ -83,14 +91,19 @@ export default function Home() {
       setIsLoadingInsights(true);
       setInsightError(null);
       try {
-        const preview = await getMemoryInsightPreview(20);
+        const [preview, reviewPreview] = await Promise.all([
+          getMemoryInsightPreview(20),
+          getMemoryReviewInboxPreview(20),
+        ]);
         if (!cancelled) {
           setInsights(preview.insights ?? []);
+          setReviewCandidateCount(reviewPreview.candidates?.length ?? 0);
         }
       } catch (error) {
         if (!cancelled) {
           setInsightError(error instanceof Error ? error.message : "AI 发现暂时不可用");
           setInsights([]);
+          setReviewCandidateCount(0);
         }
       } finally {
         if (!cancelled) {
@@ -200,6 +213,7 @@ export default function Home() {
             <Timeline refreshTrigger={refreshTrigger} onRecentEventsChange={handleRecentEventsChange} />
             <InsightCard
               insights={insights}
+              reviewCandidateCount={reviewCandidateCount}
               isLoading={isLoadingInsights}
               error={insightError}
             />

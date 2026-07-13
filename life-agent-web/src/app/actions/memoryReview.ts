@@ -10,10 +10,18 @@ export interface MemoryReviewCandidate {
   title: string;
   detail: string;
   sourceEventIds: string[];
+  sources: MemoryReviewSource[];
   confidence: number;
   reason: string;
   previewOnly: boolean;
   wroteData: boolean;
+}
+
+export interface MemoryReviewSource {
+  eventId: string;
+  title: string;
+  snippet: string;
+  occurredAt: string;
 }
 
 export interface MemoryReviewInboxPreviewData {
