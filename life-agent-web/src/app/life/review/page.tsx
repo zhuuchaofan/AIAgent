@@ -8,14 +8,6 @@ import { getMemoryInsightPreview, type MemoryInsight } from "@/app/actions/memor
 import { useAuth } from "@/providers/AuthProvider";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
-function fallbackText(events: LifeEvent[]): string {
-  if (events.length === 0) {
-    return "记录多一点后，我会帮你整理最近的变化。";
-  }
-
-  return events[0]?.title || events[0]?.content || "最近有新的生活记录。";
-}
-
 function insightByKind(insights: MemoryInsight[], kinds: MemoryInsight["kind"][]) {
   return insights.find(insight => kinds.includes(insight.kind))?.text;
 }
@@ -66,22 +58,21 @@ export default function LifeReviewPage() {
   }, [user]);
 
   const reviewItems = useMemo(() => {
-    const recentTitles = events.slice(0, 3).map(event => event.title || event.content).filter(Boolean);
     return [
       {
         title: "最近状态",
-        text: insightByKind(insights, ["temporary_context", "goal"]) || fallbackText(events),
+        text: insightByKind(insights, ["temporary_context", "goal"]) || "最近记录还在积累中，暂时先展示下面的具体记录。",
       },
       {
         title: "反复出现",
-        text: insightByKind(insights, ["theme", "habit"]) || (recentTitles.length > 0 ? recentTitles.join("、") : "暂时还看不出稳定重复的主题。"),
+        text: insightByKind(insights, ["theme", "habit"]) || "暂时还看不出稳定重复的主题。",
       },
       {
         title: "可能值得留意",
         text: insightByKind(insights, ["preference"]) || "继续记录后，我会把更稳定的偏好和变化放在这里。",
       },
     ];
-  }, [events, insights]);
+  }, [insights]);
 
   if (loading) {
     return (
