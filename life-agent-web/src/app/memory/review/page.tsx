@@ -160,7 +160,7 @@ export default function MemoryReviewPage() {
             <div>
               <h1 className="text-2xl font-semibold text-zinc-100">可能值得记住的事</h1>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                我会先把线索放在这里；只有你确认后，它们才会进入「我的记忆」。
+                我会先把线索放在这里；你可以先留着观察，确认后才会进入「我的记忆」。
               </p>
             </div>
           </div>
@@ -180,7 +180,7 @@ export default function MemoryReviewPage() {
             <div className="flex rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
               {[
                 { key: "pending" as const, label: `待确认 ${pendingCandidates.length}` },
-                { key: "kept" as const, label: `先留着 ${keptCandidates.length}` },
+                { key: "kept" as const, label: `观察中 ${keptCandidates.length}` },
                 { key: "remembered" as const, label: `已记住 ${rememberedCandidates.length}` }
               ].map(tab => (
                 <button
@@ -207,9 +207,9 @@ export default function MemoryReviewPage() {
             {visibleCandidates.length === 0 ? (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
                 {activeTab === "pending"
-                  ? "暂时没有需要处理的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。"
+                  ? "暂时没有需要你判断的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。"
                   : activeTab === "kept"
-                    ? "还没有先留着的线索。你可以把不确定但有价值的内容先放在这里，之后再决定是否记住。"
+                    ? "还没有观察中的线索。遇到不确定但有价值的内容，可以先留着，之后再决定是否记住。"
                     : "还没有真正记住的线索。确认记住后，它们会出现在这里和「我的记忆」里。"}
               </div>
             ) : visibleCandidates.map(candidate => (
@@ -269,7 +269,7 @@ export default function MemoryReviewPage() {
                     ) : (
                       <Check className="h-4 w-4" />
                     )}
-                    {candidate.reviewStatus === "remembered" ? "已记住" : candidate.reviewStatus === "kept" ? "已留着" : "先留着"}
+                    {candidate.reviewStatus === "remembered" ? "已记住" : candidate.reviewStatus === "kept" ? "观察中" : "先留着"}
                   </button>
                   {(candidate.sources?.length ?? 0) > 0 && (
                     <button
@@ -287,8 +287,11 @@ export default function MemoryReviewPage() {
                 {activeTab === "kept" && (
                   <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
                     <label htmlFor={`memory-draft-${candidate.id}`} className="text-sm font-medium text-zinc-300">
-                      确认前，可以改成你真正想让 LifeOS 记住的话
+                      确认前，可以改成你真正想让 LifeOS 记住的话。
                     </label>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                      观察中不会进入长期记忆；点击确认记住后，才会用于之后的回答和回顾。
+                    </p>
                     <textarea
                       id={`memory-draft-${candidate.id}`}
                       value={draftTexts[candidate.id] ?? candidate.title}
@@ -358,7 +361,7 @@ export default function MemoryReviewPage() {
               </article>
             ))}
             <p className="px-1 text-xs leading-relaxed text-zinc-600">
-              待确认和先留着只是候选状态；只有点击“确认记住”后，才会进入「我的记忆」。
+              待确认和观察中只是候选状态；只有点击“确认记住”后，才会进入「我的记忆」。
             </p>
           </div>
         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Brain, Loader2, Send } from "lucide-react";
 import { askLifeChat } from "@/app/actions/lifeChat";
 import { Markdown } from "@/components/Markdown";
@@ -25,6 +25,8 @@ const initialMessages: Message[] = [
 const quickQuestions = [
   "最近状态",
   "反复出现",
+  "我最近有什么变化",
+  "结合我的记忆看最近状态",
   "近期计划",
   "近期提醒",
 ];
@@ -52,6 +54,17 @@ export default function LifeChatPage() {
   const messageIdRef = useRef(0);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get("q")?.trim();
+    if (query) {
+      const frameId = window.requestAnimationFrame(() => {
+        setInput(query);
+      });
+      return () => window.cancelAnimationFrame(frameId);
+    }
+  }, []);
 
   const sendMessage = async (text: string) => {
     const message = text.trim();

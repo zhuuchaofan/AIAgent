@@ -19,6 +19,10 @@ function typeLabel(type: string): string {
   return typeOptions.find(option => option.value === type)?.label ?? "记忆";
 }
 
+function buildMemoryQuestion(memory: MemoryItem): string {
+  return `结合这条记忆，帮我看看最近状态：${memory.content}`;
+}
+
 export default function MemoryPage() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [activeType, setActiveType] = useState("all");
@@ -124,7 +128,7 @@ export default function MemoryPage() {
             <div className="min-w-0">
               <p className="text-sm font-medium text-zinc-200">这些记忆会在哪里用到</p>
               <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-                生活问答和最近回顾会把它们当作你的个人背景参考，但不会把它们当作文档引用，也不会自动执行操作。
+                生活问答、最近回顾和资料问答会把它们当作你的个人背景参考，但不会把它们当作文档引用，也不会自动执行操作。
               </p>
             </div>
           </div>
@@ -179,6 +183,19 @@ export default function MemoryPage() {
                         <RefreshCw className="h-3 w-3" />
                         用于最近回顾
                       </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
+                        <Brain className="h-3 w-3" />
+                        用于资料问答背景
+                      </span>
+                    </div>
+                    <div className="mt-4">
+                      <Link
+                        href={`/life/chat?q=${encodeURIComponent(buildMemoryQuestion(memory))}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200 transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/15"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        围绕这条记忆提问
+                      </Link>
                     </div>
                   </div>
                   <button
