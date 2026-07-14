@@ -14,6 +14,7 @@ Authoritative companion docs:
 - `docs/skills/lifeos-phase-assessment.md`
 - `docs/skills/_shared/phase-map.md`
 - `docs/lifeos_unified_inbox_current_design.md`
+- `docs/lifeos_authenticated_production_smoke_checklist.md`
 - `docs/memory_durable_write_release_gate_readiness.md`
 - `docs/memory_review_inbox_state_release_gate.md`
 - `docs/skills/cloud-run-deploy.md`
@@ -172,7 +173,8 @@ Durable Memory write preparation is tracked in
 
 These are cleanup tasks, not prerequisites for current production operation:
 
-1. Add authenticated production smoke for:
+1. Run authenticated production smoke using
+   `docs/lifeos_authenticated_production_smoke_checklist.md`:
    - journal text with future time mention -> life record
    - explicit reminder command -> reminder preview
    - life record Confirm -> appears in recent life records
@@ -185,6 +187,8 @@ Completed cleanup:
 
 - Removed `/api/agent/pending-actions/demo` compatibility aliases from the
   current API surface and moved endpoint tests onto Unified Inbox naming.
+- Added the current authenticated production smoke checklist for Beta
+  validation before any new write Release Gate.
 - Added `IUnifiedInboxRuntime` / `UnifiedInboxRuntime` as the product-named
   runtime entrypoint while retaining `Phase80PendingActionRuntime` as the
   compatibility core.
