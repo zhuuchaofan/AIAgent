@@ -28,14 +28,14 @@ Keep AI agents aligned with LifeOS phase-based development and prevent conflatin
 |---|---|---|
 | Phase 3 RAG | Complete | Knowledge access layer: document upload, chunking, embeddings, vector retrieval, RAG answer, citations, history. |
 | Phase 4 Agent MVP | Complete | Agent Preview, read tools, controlled Agent runner, pending action confirmation lifecycle. |
-| Phase 5 Agent Write MVP | LifeEvent minimal write live | Unified Inbox can create a server-side pending action and Confirm `life_record_preview` into `life_events`. |
+| Phase 5 Agent Write MVP | LifeEvent and gated Reminder minimal writes live | Unified Inbox can create a server-side pending action and Confirm `life_record_preview` into `life_events`; confirmed reminders can write `reminders` only when the reminder write gate is enabled and a due time exists. |
 | Unified Inbox | Current product mainline | Home input -> intent classifier -> pending action -> confirm gate -> allowlisted executor. See `docs/lifeos_unified_inbox_current_design.md`. |
-| Release Gate | LifeEvent minimal gate passed; Memory Review minimal write approved locally | Reminder writes, automatic Memory writes, external tools, MCP, and Cloud Run env changes remain separately approved gates. |
+| Release Gate | LifeEvent and Reminder minimal gates passed; Memory Review minimal write approved locally | Reminder delivery/scheduling, automatic Memory writes, external tools, MCP, and Cloud Run env changes remain separately approved gates. |
 | Phase 6 Memory Engine | Current development context | Long-term Memory taxonomy, preview proposals, Review Inbox state persistence, explicit remember action, memory management, retrieval skeletons, merge/conflict/pollution guard. Automatic Memory write and tool-style runtime integration require separate approval. |
 
 ## Release Gate boundary
 
-Release Gate work is not a normal development Phase. The minimal `life_events` write gate for Unified Inbox has been approved and deployed. The minimal Memory Review `remember` gate may write durable Memory only after explicit user confirmation. New write targets still require a gate: reminders, automatic Memory writes, external tools, MCP, Cloud Run env changes, production Firestore rules changes, and new side-effect integrations.
+Release Gate work is not a normal development Phase. The minimal `life_events` write gate for Unified Inbox has been approved and deployed. The minimal reminder write gate may write `reminders` only after explicit user confirmation and concrete due-time parsing. The minimal Memory Review `remember` gate may write durable Memory only after explicit user confirmation. New side-effect targets still require a gate: reminder delivery/scheduling, automatic Memory writes, external tools, MCP, Cloud Run env changes, production Firestore rules changes, and new integrations.
 
 Development can prepare code, docs, tests, and preview-only validation. It cannot silently cross into real production writes.
 
@@ -43,7 +43,7 @@ Development can prepare code, docs, tests, and preview-only validation. It canno
 
 - Do not rename or redefine Phases ad hoc.
 - Do not call Phase 3 RAG "Agent化".
-- Do not treat LifeEvent minimal write enablement as permission to open Reminder, Memory, Tool, MCP, or external writes.
+- Do not treat LifeEvent or Reminder minimal write enablement as permission to open reminder delivery, automatic Memory, Tool, MCP, or external writes.
 - Do not place real-write canary inside Phase 6 implementation.
 - Do not mark design-only Memory work as implemented durable Memory.
 

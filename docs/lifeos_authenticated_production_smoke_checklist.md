@@ -128,7 +128,7 @@ Web revision:
 Tester account:
 
 Life record Confirm:
-Explicit reminder preview-only:
+Explicit reminder write:
 Future-time journal:
 Memory Review / Remember:
 Life Q&A read-only:

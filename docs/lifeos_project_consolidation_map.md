@@ -1,6 +1,6 @@
 # LifeOS Project Consolidation Map
 
-Date: 2026-07-12
+Date: 2026-07-14
 
 ## Purpose
 
@@ -15,6 +15,7 @@ Authoritative companion docs:
 - `docs/skills/_shared/phase-map.md`
 - `docs/lifeos_unified_inbox_current_design.md`
 - `docs/lifeos_authenticated_production_smoke_checklist.md`
+- `docs/lifeos_reminder_delivery_gate.md`
 - `docs/memory_durable_write_release_gate_readiness.md`
 - `docs/memory_review_inbox_state_release_gate.md`
 - `docs/skills/cloud-run-deploy.md`
@@ -22,15 +23,17 @@ Authoritative companion docs:
 ## Current One-line State
 
 LifeOS has completed the foundation, life data layer, RAG, Agent Preview,
-pending-action persistence, and two minimal user-confirmed real writes:
+pending-action persistence, and three minimal user-confirmed real writes:
 
 ```text
 Unified Inbox life_record Confirm -> life_events
+Unified Inbox reminder Confirm -> reminders, only when reminder write gate is enabled and due time exists
 Memory Review kept candidate Remember -> memories
 ```
 
 It is still not a fully autonomous personal Agent. Automatic Memory writes,
-Reminder writes, Tool Execution, external side effects, and MCP remain closed.
+reminder delivery/scheduling, Tool Execution, external side effects, and MCP
+remain closed.
 
 ## Phase / Code / Docs Map
 
@@ -41,7 +44,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 | Phase 3 RAG | Complete | `DocumentEndpoints.cs`, `RagChatEndpoints.cs`, `RagSearchService.cs`, `RagChat.tsx`, `KnowledgeBase.tsx` | `docs/phase3/*` | Document upload, processing, vector search, citations, chat history. |
 | Phase 3.5 Stabilization | Absorbed | rate limiting, validators, deployment docs, tests | `docs/phase3_5/*`, `docs/skills/development/*` | Non-feature hardening. |
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
-| Phase 5 Agent Write MVP | Live for LifeEvent only | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, confirm write executors, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`; reminder executor is code-ready but policy-disabled. |
+| Phase 5 Agent Write MVP | Live for LifeEvent and gated Reminder | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, confirm write executors, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`; confirmed reminders write `reminders` only when the reminder write gate is enabled and due time exists. |
 | Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Reminder minimal write is release-gate enabled for confirmed reminders with concrete due time. Memory Review minimal write approved locally. Other write targets remain No-Go. |
 | Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights and Memory Review Inbox can surface memory signals. Kept review candidates can be explicitly remembered; automatic Memory write remains closed. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
@@ -112,7 +115,7 @@ POST /api/memory/items/{memoryId}/archive
   -> archived memories are excluded from ordinary context
 
 POST /api/life/chat
-  -> read recent life_events and active memories
+  -> read recent life_events, pending reminders, and active memories
   -> answer user's life questions in read-only mode
   -> no life_events write, no Memory write, no Reminder write, no Tool execution
 
@@ -131,11 +134,13 @@ POST /api/life/review/cards/keep
 The web product surfaces are:
 
 - Home `AI 发现`: a lightweight preview of repeated themes.
+- `/reminders`: the user's confirmed pending reminders, grouped by overdue,
+  today, tomorrow, and later, with complete/cancel actions only.
 - `/memory/review`: a candidate inbox where the user can inspect, keep, or hide signals.
 - `/memory`: the user's confirmed durable memories, with archive/forget.
 - `/life/chat`: read-only life Q&A based on recent life records and active
-  memories, with product feedback when remembered content contributed to the
-  answer context.
+  reminders and active memories, with product feedback when reminders or
+  remembered content contributed to the answer context.
 - `/life/review`: read-only recent-life review generated by
   `POST /api/life/review`, with recent / today / week windows, optional
   evidence expansion from source life records, and a "worth remembering"
@@ -146,9 +151,9 @@ Only `remember` creates durable Memory records. Keep/dismiss only persist Review
 Inbox state so the user's decision survives refresh.
 Knowledge-base Q&A may use active durable memories as background, but Memory
 never becomes a document citation source.
-Life Q&A may use recent `life_events` and active Memory as private context, but
-it does not persist chat history or create new data. Archived or expired Memory
-is excluded from ordinary Life Q&A context.
+Life Q&A may use recent `life_events`, pending reminders, and active Memory as
+private context, but it does not persist chat history or create new data.
+Archived or expired Memory is excluded from ordinary Life Q&A context.
 Life Review may use recent `life_events` and active Memory as private context,
 but it returns only read-only review cards and evidence references. A review
 card may be kept as a Memory Review candidate, which writes review state only;
@@ -166,8 +171,8 @@ Durable Memory write preparation is tracked in
    - `docs/skills/_shared/phase-map.md`
    - `docs/lifeos_unified_inbox_current_design.md`
    - this consolidation map.
-3. If an old doc says preview-only but current code says LifeEvent write is
-   live, current-state docs win.
+3. If an old doc says preview-only but current code says LifeEvent or gated
+   Reminder write is live, current-state docs win.
 4. New write targets require their own Release Gate section before production
    deployment.
 
@@ -178,11 +183,11 @@ These are cleanup tasks, not prerequisites for current production operation:
 1. Run authenticated production smoke using
    `docs/lifeos_authenticated_production_smoke_checklist.md`:
    - journal text with future time mention -> life record
-   - explicit reminder command -> reminder preview
+   - explicit reminder command -> confirmed reminder appears on `/reminders`
    - life record Confirm -> appears in recent life records
 2. Decide the next approved Release Gate:
-   - reminder write
-   - durable memory write
+   - reminder delivery/scheduling
+   - automatic durable memory write
    - tool execution
 
 Completed cleanup:
@@ -213,6 +218,7 @@ The final target remains a personal life Agent:
 3. Reminder write Release Gate via `UNIFIED_INBOX_ALLOW_REMINDER_WRITES=true`.
 4. Memory Engine durable write Release Gate.
 5. Agent context uses LifeEvents, Reminders, RAG, and Memory safely.
-6. Planning and recommendation workflows produce pending actions.
-7. External integrations are added one by one behind explicit gates.
-8. No autonomous side effect happens without confirm, audit, and rollback story.
+6. Reminder delivery/scheduling gets its own explicit gate.
+7. Planning and recommendation workflows produce pending actions.
+8. External integrations are added one by one behind explicit gates.
+9. No autonomous side effect happens without confirm, audit, and rollback story.

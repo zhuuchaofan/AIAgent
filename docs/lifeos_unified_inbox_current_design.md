@@ -127,8 +127,7 @@ on `/reminders`.
 2. Recent life records
    - Source: `users/{userId}/life_events`
    - Reflects confirmed life records after write succeeds.
-   - Does not show reminder preview confirmations unless a future reminder
-     write path is approved and implemented.
+   - Does not show confirmed reminders; reminders live on `/reminders`.
 
 3. Memory preview surfaces
    - Source: recent `life_events` only.
@@ -215,8 +214,10 @@ These remain non-negotiable:
 - Memory Review `remember` may write durable Memory only from a kept candidate
   after user confirmation and guard validation.
 - Confirmed Memory can be listed and archived by the user.
-- Life Q&A may use recent life records and active Memory as read-only context.
-- Life Q&A must not write data, create reminders, or execute tools.
+- Life Q&A may use recent life records, pending reminders, and active Memory as
+  read-only context.
+- Life Q&A must not write data, create/modify/complete/cancel reminders, or
+  execute tools.
 - Life Q&A must exclude archived and expired Memory from ordinary context.
 - Life Q&A may show product-level memory usage feedback, but should not expose
   Memory as citations or implementation details.
@@ -231,7 +232,8 @@ These remain non-negotiable:
   may surface that background is available and link to `/memory`.
 - Memory is never a citation source; document citations must still come from
   retrieved Chunks.
-- Reminder durable writes are not enabled.
+- Reminder durable writes are gated by `AllowReminderWrites`; reminder delivery
+  and external notification are not enabled.
 - Tool execution is not enabled.
 - Cloud Run env changes require explicit approval.
 
@@ -246,8 +248,9 @@ The current implementation is now clearer, but still not the final Agent:
 
 ## Recommended Next Cleanup
 
-1. Add authenticated production smoke covering:
-   - journal-like input with future time mention -> life record
-   - explicit reminder request -> reminder preview
-   - confirmed life record appears in recent life records
-2. Update old Phase 8 / Phase 9 docs to point to this current-state document.
+1. Keep Reminder Write Release Gate smoke current:
+   - explicit reminder request -> confirmed reminder appears on `/reminders`
+   - missing-time reminder -> no durable reminder
+   - completed/cancelled reminders leave the pending list
+2. Plan Reminder Delivery Gate separately before any scheduler, notification,
+   or external side effect is enabled.

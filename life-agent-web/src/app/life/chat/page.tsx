@@ -26,6 +26,7 @@ const quickQuestions = [
   "最近状态",
   "反复出现",
   "近期计划",
+  "近期提醒",
 ];
 
 function buildContextMeta(usedMemoryCount: number, usedReminderCount: number): string {
