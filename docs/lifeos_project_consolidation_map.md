@@ -40,7 +40,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 | Phase 3 RAG | Complete | `DocumentEndpoints.cs`, `RagChatEndpoints.cs`, `RagSearchService.cs`, `RagChat.tsx`, `KnowledgeBase.tsx` | `docs/phase3/*` | Document upload, processing, vector search, citations, chat history. |
 | Phase 3.5 Stabilization | Absorbed | rate limiting, validators, deployment docs, tests | `docs/phase3_5/*`, `docs/skills/development/*` | Non-feature hardening. |
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
-| Phase 5 Agent Write MVP | Live for LifeEvent only | `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, `Phase80LifeEventConfirmWriteExecutor`, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`. |
+| Phase 5 Agent Write MVP | Live for LifeEvent only | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, `Phase80LifeEventConfirmWriteExecutor`, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`. |
 | Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Memory Review minimal write approved locally. Other write targets remain No-Go. |
 | Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights and Memory Review Inbox can surface memory signals. Kept review candidates can be explicitly remembered; automatic Memory write remains closed. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
@@ -53,7 +53,8 @@ life-agent-web/src/components/AgentPreview.tsx
   -> life-agent-web/src/app/actions/knowledge.ts Unified Inbox pending-action actions
   -> POST /api/agent/pending-actions
   -> AgentEndpoints.CreatePhase80PendingActionAsync
-  -> Phase80PendingActionRuntime
+  -> IUnifiedInboxRuntime / UnifiedInboxRuntime
+  -> Phase80PendingActionRuntime compatibility core
   -> IUnifiedInboxIntentClassifier
   -> IPendingActionStore
   -> Confirm
@@ -171,20 +172,22 @@ Durable Memory write preparation is tracked in
 
 These are cleanup tasks, not prerequisites for current production operation:
 
-1. Wrap or rename `Phase80PendingActionRuntime` to `UnifiedInboxRuntime`.
-2. Hide or remove `/api/agent/pending-actions/demo` compatibility aliases after
+1. Hide or remove `/api/agent/pending-actions/demo` compatibility aliases after
    tests and docs stop using them.
-3. Add authenticated production smoke for:
+2. Add authenticated production smoke for:
    - journal text with future time mention -> life record
    - explicit reminder command -> reminder preview
    - life record Confirm -> appears in recent life records
-4. Decide the next approved Release Gate:
+3. Decide the next approved Release Gate:
    - reminder write
    - durable memory write
    - tool execution
 
 Completed cleanup:
 
+- Added `IUnifiedInboxRuntime` / `UnifiedInboxRuntime` as the product-named
+  runtime entrypoint while retaining `Phase80PendingActionRuntime` as the
+  compatibility core.
 - Moved Unified Inbox classifier contracts to `Services/Agent/UnifiedInbox/`.
 - Replaced the reused event parser with a dedicated JSON-only Unified Inbox
   intent classifier prompt.

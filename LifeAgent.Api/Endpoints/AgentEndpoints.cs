@@ -2,6 +2,7 @@ using LifeAgent.Api.Models.Agent;
 using LifeAgent.Api.Services.Agent;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
+using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.LifeEvents;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -107,7 +108,7 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        var runtime = httpContext.RequestServices.GetRequiredService<Phase80PendingActionRuntime>();
+        var runtime = httpContext.RequestServices.GetRequiredService<IUnifiedInboxRuntime>();
         var result = await runtime.CreateAsync(userId, request, cancellationToken);
         return ToPhase80HttpResult(result);
     }
@@ -122,7 +123,7 @@ public static class AgentEndpoints
             return Results.Json(new { success = false, message = "Unauthorized: User ID is missing from security context." }, statusCode: 401);
         }
 
-        var runtime = httpContext.RequestServices.GetRequiredService<Phase80PendingActionRuntime>();
+        var runtime = httpContext.RequestServices.GetRequiredService<IUnifiedInboxRuntime>();
         var options = httpContext.RequestServices
             .GetRequiredService<IOptions<PendingActionPersistenceOptions>>()
             .Value;
@@ -153,7 +154,7 @@ public static class AgentEndpoints
         }
 
         return ToPhase80HttpResult(await httpContext.RequestServices
-            .GetRequiredService<Phase80PendingActionRuntime>()
+            .GetRequiredService<IUnifiedInboxRuntime>()
             .ConfirmAsync(userId, actionId, cancellationToken));
     }
 
@@ -169,7 +170,7 @@ public static class AgentEndpoints
         }
 
         return ToPhase80HttpResult(await httpContext.RequestServices
-            .GetRequiredService<Phase80PendingActionRuntime>()
+            .GetRequiredService<IUnifiedInboxRuntime>()
             .CancelAsync(userId, actionId, cancellationToken));
     }
 
@@ -185,7 +186,7 @@ public static class AgentEndpoints
         }
 
         return ToPhase80HttpResult(await httpContext.RequestServices
-            .GetRequiredService<Phase80PendingActionRuntime>()
+            .GetRequiredService<IUnifiedInboxRuntime>()
             .ArchiveAsync(userId, actionId, cancellationToken));
     }
 

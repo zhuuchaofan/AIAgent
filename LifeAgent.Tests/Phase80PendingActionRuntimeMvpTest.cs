@@ -1021,6 +1021,27 @@ public class Phase80PendingActionRuntimeMvpTest
         Assert.False(ReadBool(confirmAfterCancel.Body, "data", "wroteData"));
     }
 
+    [Fact]
+    public async Task UnifiedInboxRuntimeDelegatesToCompatibilityPendingActionRuntime()
+    {
+        var runtime = new Phase80PendingActionRuntime();
+        IUnifiedInboxRuntime unifiedInbox = new UnifiedInboxRuntime(runtime);
+
+        var created = await unifiedInbox.CreateAsync(
+            "user_a",
+            new Phase80CreatePendingActionRequest(
+                "今天骑车回来",
+                "用户输入：今天骑车回来",
+                Phase80PendingActionRuntime.LifeRecordPreview));
+        var listed = await unifiedInbox.ListAsync("user_a");
+
+        Assert.True(created.Success);
+        Assert.NotNull(created.Data);
+        Assert.Single(listed);
+        Assert.Equal(created.Data!.ActionId, listed[0].ActionId);
+        Assert.Equal(Phase80PendingActionRuntime.LifeRecordPreview, listed[0].ActionType);
+    }
+
     private static DefaultHttpContext AuthenticatedContext(string userId, IServiceProvider? services = null)
     {
         var context = new DefaultHttpContext();
@@ -1094,7 +1115,7 @@ public class Phase80PendingActionRuntimeMvpTest
         services.AddSingleton(Options.Create(new PendingActionPersistenceOptions()));
         services.AddSingleton<IPendingActionStore>(sp =>
             new InMemoryPendingActionStore(sp.GetRequiredService<TimeProvider>()));
-        services.AddSingleton(sp =>
+        services.AddSingleton<Phase80PendingActionRuntime>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
             return new Phase80PendingActionRuntime(
@@ -1102,6 +1123,7 @@ public class Phase80PendingActionRuntimeMvpTest
                 store: sp.GetRequiredService<IPendingActionStore>(),
                 safetyMode: options.SafetyMode);
         });
+        services.AddSingleton<IUnifiedInboxRuntime, UnifiedInboxRuntime>();
         return services.BuildServiceProvider();
     }
 

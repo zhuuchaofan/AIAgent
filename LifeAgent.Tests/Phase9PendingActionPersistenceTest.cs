@@ -2,6 +2,7 @@ using System.Text.Json;
 using LifeAgent.Api.Endpoints;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
+using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -839,7 +840,7 @@ public class Phase9PendingActionPersistenceTest
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(Options.Create(new PendingActionPersistenceOptions()));
         services.AddSingleton<IPendingActionStore>(store ?? new InMemoryPendingActionStore());
-        services.AddSingleton(sp =>
+        services.AddSingleton<Phase80PendingActionRuntime>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
             return new Phase80PendingActionRuntime(
@@ -847,6 +848,7 @@ public class Phase9PendingActionPersistenceTest
                 store: sp.GetRequiredService<IPendingActionStore>(),
                 safetyMode: options.SafetyMode);
         });
+        services.AddSingleton<IUnifiedInboxRuntime, UnifiedInboxRuntime>();
         return services.BuildServiceProvider();
     }
 

@@ -71,7 +71,7 @@ builder.Services.AddSingleton<IPendingActionStore>(sp =>
         sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<IPhase80ConfirmWriteExecutor, Phase80LifeEventConfirmWriteExecutor>();
 builder.Services.AddScoped<IUnifiedInboxIntentClassifier, LlmUnifiedInboxIntentClassifier>();
-builder.Services.AddScoped(sp =>
+builder.Services.AddScoped<Phase80PendingActionRuntime>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
     return new Phase80PendingActionRuntime(
@@ -86,6 +86,7 @@ builder.Services.AddScoped(sp =>
         logger: sp.GetRequiredService<ILogger<Phase80PendingActionRuntime>>(),
         enableConfirmWriteExecution: true);
 });
+builder.Services.AddScoped<IUnifiedInboxRuntime, UnifiedInboxRuntime>();
 builder.Services.AddScoped<IMemoryContextProvider>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<MemoryContextProviderOptions>>();

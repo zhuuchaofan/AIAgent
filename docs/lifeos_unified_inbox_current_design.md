@@ -28,6 +28,8 @@ User input
   -> AgentPreview / 生活收件箱 UI
   -> POST /api/agent/pending-actions
   -> Unified Inbox intent classifier
+  -> UnifiedInboxRuntime
+  -> Phase80PendingActionRuntime compatibility core
   -> server-side pending action
   -> user Confirm / Cancel
   -> confirm gate
@@ -212,20 +214,18 @@ These remain non-negotiable:
 
 The current implementation is now clearer, but still not the final Agent:
 
-- `Phase80PendingActionRuntime` is still the class name for compatibility.
-  A future cleanup should wrap or rename it to `UnifiedInboxRuntime`.
+- `UnifiedInboxRuntime` is the product-named runtime entrypoint.
+  `Phase80PendingActionRuntime` remains as the compatibility core behind it.
 - Compatibility `/demo` endpoints remain available.
 - Frontend action names now use Unified Inbox wording, but backend class names
   and some tests still retain Phase 8 / Phase 80 compatibility names.
 
 ## Recommended Next Cleanup
 
-1. Extract a dedicated `UnifiedInboxRuntime` wrapper around
-   `Phase80PendingActionRuntime`.
-2. Remove compatibility demo routes after dependent tests and docs are
+1. Remove compatibility demo routes after dependent tests and docs are
    updated.
-3. Add authenticated production smoke covering:
+2. Add authenticated production smoke covering:
    - journal-like input with future time mention -> life record
    - explicit reminder request -> reminder preview
    - confirmed life record appears in recent life records
-4. Update old Phase 8 / Phase 9 docs to point to this current-state document.
+3. Update old Phase 8 / Phase 9 docs to point to this current-state document.
