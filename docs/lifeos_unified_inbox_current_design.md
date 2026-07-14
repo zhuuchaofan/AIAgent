@@ -58,7 +58,7 @@ Classifier outputs map to the existing pending action types:
 | Intent | Action type | Current write behavior |
 |---|---|---|
 | `life_record` | `life_record_preview` | Confirm writes `life_events` |
-| `reminder` | `reminder_preview` | Preview-only |
+| `reminder` | `reminder_preview` | Confirm writes `reminders` when release gate is enabled |
 | `plan` | `plan_preview` | Preview-only |
 | unknown / external action | custom action type | No execution |
 
@@ -67,20 +67,27 @@ but the home input should normally let the classifier choose.
 
 ## Confirm / Write Gate
 
-The only real write currently enabled through the Unified Inbox path is:
+The real writes currently allowed through the Unified Inbox path are:
 
 ```text
 life_record_preview
   -> Confirm
   -> Phase80LifeEventConfirmWriteExecutor
   -> users/{userId}/life_events/{eventId}
+
+reminder_preview
+  -> Confirm
+  -> Phase80ReminderConfirmWriteExecutor
+  -> users/{userId}/reminders/{reminderId}
+     only when AllowReminderWrites=true and a concrete due time exists
 ```
 
-Production configuration in `Program.cs` intentionally keeps:
+Code defaults in `Program.cs` intentionally keep reminder writes closed unless
+the release gate explicitly enables them:
 
 ```text
 AllowLifeEventWrites = true
-AllowReminderWrites = false
+AllowReminderWrites = false by default; true in the current Reminder Write Release Gate deployment
 MemoryWriteEnabled = false
 Tool execution = unavailable
 ```
@@ -88,8 +95,9 @@ Tool execution = unavailable
 This means:
 
 - Life record Confirm writes `life_events`.
-- Reminder Confirm has a code-ready executor for `reminders`, but production
-  policy keeps it disabled until a dedicated Reminder Write Release Gate.
+- Reminder Confirm can write `reminders` in the dedicated release-gate
+  deployment, but missing-time reminders remain pending-only and do not create
+  timeless reminders.
 - Memory remains candidate-only.
 - External tools and MCP-style side effects remain closed.
 
@@ -112,8 +120,9 @@ The home page has two separate data surfaces:
    - Includes audit flags such as `wroteData`, `executed`, `realWritePath`,
      and `intentClassifier`.
 
-Reminder items are intentionally kept off the home page's primary flow. Durable
-reminders can be reviewed and completed/cancelled on `/reminders`.
+Reminder items are intentionally kept off the home page's primary flow after
+confirmation. Durable pending reminders can be reviewed and completed/cancelled
+on `/reminders`.
 
 2. Recent life records
    - Source: `users/{userId}/life_events`
@@ -138,11 +147,12 @@ reminders can be reviewed and completed/cancelled on `/reminders`.
      Memory records.
 
 4. Life Q&A
-   - Source: recent `life_events` plus active durable Memory.
+   - Source: recent `life_events`, pending `reminders`, plus active durable
+     Memory.
    - `POST /api/life/chat` answers questions about the user's life in
      read-only mode.
-   - The web UI may tell the user when active remembered content was used as
-     background.
+   - The web UI may tell the user when active remembered content or pending
+     reminders were used as background.
    - It does not persist chat history, write Memory, create reminders, or
      execute tools.
 

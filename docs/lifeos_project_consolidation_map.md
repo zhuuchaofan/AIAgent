@@ -42,7 +42,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 | Phase 3.5 Stabilization | Absorbed | rate limiting, validators, deployment docs, tests | `docs/phase3_5/*`, `docs/skills/development/*` | Non-feature hardening. |
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
 | Phase 5 Agent Write MVP | Live for LifeEvent only | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, confirm write executors, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`; reminder executor is code-ready but policy-disabled. |
-| Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Memory Review minimal write approved locally. Other write targets remain No-Go. |
+| Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Reminder minimal write is release-gate enabled for confirmed reminders with concrete due time. Memory Review minimal write approved locally. Other write targets remain No-Go. |
 | Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights and Memory Review Inbox can surface memory signals. Kept review candidates can be explicitly remembered; automatic Memory write remains closed. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
 | Phase 8/9 Pending Action | Historical foundation now absorbed | `IPendingActionStore`, `FirestorePendingActionStore`, `Phase80PendingActionRuntime` | `docs/phase8_*`, `docs/phase9_*` | Docs are historical unless explicitly updated. Current truth is Unified Inbox doc. |
@@ -69,7 +69,7 @@ life-agent-web/src/components/AgentPreview.tsx
 | Candidate | Classifier may create | Confirm creates pending status | Confirm writes durable data | Current durable target |
 |---|---:|---:|---:|---|
 | Life record | yes | yes | yes | `users/{userId}/life_events` |
-| Reminder | yes | yes | code-ready, production-disabled | `users/{userId}/reminders` only if `AllowReminderWrites=true` |
+| Reminder | yes | yes | yes, only when release gate is enabled and due time exists | `users/{userId}/reminders` only if `AllowReminderWrites=true` |
 | Memory | candidate-only | yes when preview path produces it | no | none |
 | Plan | yes | yes | no | none |
 | Tool / external action | possible as high-risk candidate | no execution | no | none |

@@ -28,6 +28,20 @@ const quickQuestions = [
   "近期计划",
 ];
 
+function buildContextMeta(usedMemoryCount: number, usedReminderCount: number): string {
+  const parts = ["最近记录"];
+
+  if (usedReminderCount > 0) {
+    parts.push(`${usedReminderCount} 条待处理提醒`);
+  }
+
+  if (usedMemoryCount > 0) {
+    parts.push(`${usedMemoryCount} 条已记住内容`);
+  }
+
+  return `基于${parts.join("、")}整理`;
+}
+
 export default function LifeChatPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -64,9 +78,7 @@ export default function LifeChatPage() {
           id: `assistant-${messageIdRef.current}`,
           role: "assistant",
           content: result.response,
-          meta: result.usedMemoryCount > 0
-            ? `基于最近记录和 ${result.usedMemoryCount} 条已记住内容整理`
-            : "基于最近记录整理",
+          meta: buildContextMeta(result.usedMemoryCount, result.usedReminderCount),
         },
       ]);
     } catch (err) {
@@ -107,7 +119,7 @@ export default function LifeChatPage() {
             <div>
               <h1 className="text-2xl font-semibold text-zinc-100">生活问答</h1>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                基于最近生活记录和你确认过的记忆回答，不会写入或执行任何操作。
+                基于最近生活记录、待处理提醒和你确认过的记忆回答，不会写入或执行任何操作。
               </p>
             </div>
           </div>

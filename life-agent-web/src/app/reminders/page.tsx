@@ -70,7 +70,7 @@ export default function RemindersPage() {
             <div>
               <h1 className="text-3xl font-bold text-zinc-100">提醒事项</h1>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-500">
-                这里只显示你确认保存的提醒，可以标记完成或取消。
+                这里只显示待处理提醒，可以标记完成或取消；当前不会发送系统通知。
               </p>
             </div>
           </div>

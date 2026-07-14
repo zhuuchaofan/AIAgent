@@ -839,6 +839,44 @@ public class FakeLifeEventService : ILifeEventService
     }
 }
 
+public class FakeReminderService : IReminderService
+{
+    private readonly IReadOnlyList<Reminder> _reminders;
+
+    public FakeReminderService(IReadOnlyList<Reminder> reminders)
+    {
+        _reminders = reminders;
+    }
+
+    public Task<Reminder> CreateReminderAsync(
+        string userId,
+        Reminder reminder,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("FakeReminderService is read-only.");
+    }
+
+    public Task<List<Reminder>> ListRemindersAsync(string userId, string status)
+    {
+        return Task.FromResult(_reminders
+            .Where(reminder => reminder.UserId == userId)
+            .Where(reminder => string.Equals(reminder.Status, status, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(reminder => reminder.DueAt)
+            .ToList());
+    }
+
+    public Task<Reminder?> GetReminderAsync(string userId, string reminderId)
+    {
+        return Task.FromResult(_reminders.FirstOrDefault(reminder =>
+            reminder.UserId == userId && reminder.Id == reminderId));
+    }
+
+    public Task<bool> UpdateReminderAsync(string userId, string reminderId, string? status, DateTime? dueAt)
+    {
+        throw new NotSupportedException("FakeReminderService is read-only.");
+    }
+}
+
 public class FailingAnswerGenerator : IRagAnswerGenerator
 {
     public Task<string> GenerateAnswerAsync(string systemInstruction, string userPrompt, List<ChatMessage> history)

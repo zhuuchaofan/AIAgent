@@ -45,7 +45,7 @@ function actionTypeLabel(actionType: string): string {
 
 function actionTypeDescription(actionType: string): string {
   if (actionType === LIFE_RECORD_PREVIEW) return "保存后会出现在最近生活记录里。";
-  if (actionType === REMINDER_PREVIEW) return "我先帮你把这条提醒线索留住，暂时不会自动提醒。";
+  if (actionType === REMINDER_PREVIEW) return "保存后会出现在提醒事项里；当前还不会发送系统通知。";
   if (actionType === PLAN_PREVIEW) return "我先帮你把这个计划线索留住。";
   return "我会先把它作为一条待保存内容处理。";
 }
@@ -175,7 +175,7 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
 
       setDraftAction(null);
       setMessage(draftAction.actionType === REMINDER_PREVIEW
-        ? "已留下提醒线索。"
+        ? (response.data?.message || response.message || "还需要补充明确时间，暂未保存为提醒事项。")
         : "已保存这条线索。");
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

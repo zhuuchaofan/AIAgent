@@ -27,6 +27,7 @@ public class LifeChatServiceTest
         Assert.False(response.Executed);
         Assert.Equal(0, response.UsedEventCount);
         Assert.Equal(0, response.UsedMemoryCount);
+        Assert.Equal(0, response.UsedReminderCount);
         Assert.Contains("还没有足够", response.Response);
     }
 
@@ -74,6 +75,7 @@ public class LifeChatServiceTest
         Assert.Equal("你最近在关注运动状态，也在准备新疆出行。", response.Response);
         Assert.Equal(1, response.UsedEventCount);
         Assert.Equal(1, response.UsedMemoryCount);
+        Assert.Equal(0, response.UsedReminderCount);
         Assert.True(response.ReadOnly);
         Assert.False(response.WroteData);
         Assert.False(response.Executed);
@@ -85,6 +87,67 @@ public class LifeChatServiceTest
         Assert.Contains("不超过 40-50 个中文字符", answerGenerator.LastSystemInstruction);
         Assert.Contains("先给结论，不主动展开日期、票务、设备、地点等证据细节", answerGenerator.LastSystemInstruction);
         Assert.Contains("禁止使用“以下是”“下面是”“你最近的状态”“具体来看”“以下是总结”“工作方面/休闲方面”等报告式开头或标题", answerGenerator.LastSystemInstruction);
+    }
+
+    [Fact]
+    public async Task AnswerAsync_IncludesPendingRemindersAsReadOnlyContext()
+    {
+        var answerGenerator = new InspectableAnswerGenerator
+        {
+            AnswerToReturn = "明天要先处理键盘轴体更换。"
+        };
+        var service = Service(
+            new[]
+            {
+                new LifeEvent
+                {
+                    Id = "evt_1",
+                    UserId = "user_a",
+                    Title = "晚上想到一个待办",
+                    Content = "提醒我明天晚上九点找键盘轴体。",
+                    CreatedAt = DateTime.UtcNow.AddHours(-1),
+                    OccurredAt = DateTime.UtcNow.AddHours(-1)
+                }
+            },
+            new InMemoryMemoryRepository(),
+            answerGenerator,
+            new[]
+            {
+                new Reminder
+                {
+                    Id = "rem_1",
+                    UserId = "user_a",
+                    Title = "寻找键盘轴体",
+                    Description = "为明天去公司更换做准备",
+                    DueAt = new DateTime(2026, 7, 14, 13, 0, 0, DateTimeKind.Utc),
+                    Timezone = "Asia/Shanghai",
+                    Status = "pending"
+                },
+                new Reminder
+                {
+                    Id = "rem_2",
+                    UserId = "user_a",
+                    Title = "已完成提醒不应进入上下文",
+                    DueAt = new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc),
+                    Timezone = "Asia/Shanghai",
+                    Status = "completed"
+                }
+            });
+
+        var response = await service.AnswerAsync("user_a", new LifeChatRequest
+        {
+            Message = "明天有什么要做？",
+            ClientTimeZone = "Asia/Shanghai"
+        });
+
+        Assert.Equal("明天要先处理键盘轴体更换。", response.Response);
+        Assert.Equal(1, response.UsedReminderCount);
+        Assert.Contains("待处理提醒", answerGenerator.LastUserPrompt);
+        Assert.Contains("寻找键盘轴体", answerGenerator.LastUserPrompt);
+        Assert.Contains("为明天去公司更换做准备", answerGenerator.LastUserPrompt);
+        Assert.DoesNotContain("已完成提醒不应进入上下文", answerGenerator.LastUserPrompt);
+        Assert.Contains("可以只读地引用待处理提醒", answerGenerator.LastSystemInstruction);
+        Assert.Contains("不要创建、修改、完成或取消提醒", answerGenerator.LastSystemInstruction);
     }
 
     [Fact]
@@ -116,6 +179,7 @@ public class LifeChatServiceTest
         Assert.False(response.WroteData);
         Assert.False(response.Executed);
         Assert.Equal(1, response.UsedEventCount);
+        Assert.Equal(0, response.UsedReminderCount);
         Assert.Contains("整理 LifeOS 项目", response.Response);
     }
 
@@ -181,11 +245,13 @@ public class LifeChatServiceTest
     private static LifeChatService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,
-        IRagAnswerGenerator answerGenerator)
+        IRagAnswerGenerator answerGenerator,
+        IReadOnlyList<Reminder>? reminders = null)
     {
         return new LifeChatService(
             new FakeLifeEventService(events),
             memoryRepository,
+            new FakeReminderService(reminders ?? Array.Empty<Reminder>()),
             answerGenerator,
             NullLogger<LifeChatService>.Instance);
     }

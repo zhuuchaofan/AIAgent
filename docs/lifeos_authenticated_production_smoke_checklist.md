@@ -142,15 +142,15 @@ Conclusion:
 
 ## Next Gate
 
-If this smoke passes, the next meaningful product gate is Reminder Write Release
-Gate. That gate must be planned separately and must not be bundled with this
-smoke.
+The Reminder Write Release Gate has been exercised separately from the original
+life-record smoke. The next product gate is not Tool Execution; it should be a
+separate reminder delivery or scheduling gate with explicit approval.
 
 ## Reminder Write Release Gate Smoke
 
-This section applies only after `UNIFIED_INBOX_ALLOW_REMINDER_WRITES=true` is
+This section applies when `UNIFIED_INBOX_ALLOW_REMINDER_WRITES=true` is
 explicitly enabled for a dedicated release-gate deployment. It is not the
-default production smoke.
+default local configuration.
 
 Preconditions:
 
