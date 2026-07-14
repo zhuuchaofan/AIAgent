@@ -79,13 +79,17 @@ builder.Services.AddScoped<IUnifiedInboxIntentClassifier, LlmUnifiedInboxIntentC
 builder.Services.AddScoped<Phase80PendingActionRuntime>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>().Value;
+    var confirmWriteOptions = UnifiedInboxConfirmWriteOptions.FromConfiguration(
+        sp.GetRequiredService<IConfiguration>());
     return new Phase80PendingActionRuntime(
         timeProvider: sp.GetRequiredService<TimeProvider>(),
         store: sp.GetRequiredService<IPendingActionStore>(),
-        safetyMode: "personal_agent_v2_life_record_confirm_write_only",
+        safetyMode: confirmWriteOptions.AllowReminderWrites
+            ? "personal_agent_v2_life_record_and_reminder_confirm_write"
+            : "personal_agent_v2_life_record_confirm_write_only",
         confirmWritePolicy: new Phase80ConfirmWritePolicy(
-            AllowLifeEventWrites: true,
-            AllowReminderWrites: false),
+            AllowLifeEventWrites: confirmWriteOptions.AllowLifeEventWrites,
+            AllowReminderWrites: confirmWriteOptions.AllowReminderWrites),
         confirmWriteExecutor: sp.GetRequiredService<IPhase80ConfirmWriteExecutor>(),
         intentClassifier: sp.GetRequiredService<IUnifiedInboxIntentClassifier>(),
         logger: sp.GetRequiredService<ILogger<Phase80PendingActionRuntime>>(),

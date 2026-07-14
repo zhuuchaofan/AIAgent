@@ -145,3 +145,63 @@ Conclusion:
 If this smoke passes, the next meaningful product gate is Reminder Write Release
 Gate. That gate must be planned separately and must not be bundled with this
 smoke.
+
+## Reminder Write Release Gate Smoke
+
+This section applies only after `UNIFIED_INBOX_ALLOW_REMINDER_WRITES=true` is
+explicitly enabled for a dedicated release-gate deployment. It is not the
+default production smoke.
+
+Preconditions:
+
+- `UNIFIED_INBOX_ALLOW_LIFE_EVENT_WRITES` is unset or true.
+- `UNIFIED_INBOX_ALLOW_REMINDER_WRITES=true` is explicitly enabled.
+- Tool Execution remains unavailable.
+- Memory automatic writes remain disabled.
+- Firestore Rules are unchanged unless separately approved.
+
+### A. Explicit Reminder Creates Durable Reminder
+
+Input:
+
+```text
+提醒我明天上午九点交材料。
+```
+
+Expected:
+
+- Home creates one pending action.
+- The action is classified as a reminder.
+- Confirm succeeds.
+- The response indicates the reminder was saved.
+- A pending reminder appears on `/reminders` after refresh.
+- It does not create a life record unless separately entered as a life record.
+
+### B. Missing Time Does Not Create Reminder
+
+Input:
+
+```text
+以后提醒我买一本新书。
+```
+
+Expected:
+
+- Home creates one pending action.
+- Confirm does not write `reminders`.
+- The user sees a clear "missing time" style message.
+- No empty or timeless reminder appears on `/reminders` after refresh.
+
+### C. Reminder State Machine Still Works
+
+Flow:
+
+1. Create a reminder with an explicit due time.
+2. Mark it completed.
+3. Create another reminder and cancel it.
+
+Expected:
+
+- Completed and cancelled reminders disappear from the pending reminder list.
+- Completed/cancelled reminders cannot be reverted to pending.
+- Completed/cancelled reminders cannot have `dueAt` edited.

@@ -210,7 +210,7 @@ The final target remains a personal life Agent:
 
 1. Unified Inbox stable for record/reminder/memory/tool candidates.
 2. LifeEvent write stable and observable.
-3. Reminder write Release Gate.
+3. Reminder write Release Gate via `UNIFIED_INBOX_ALLOW_REMINDER_WRITES=true`.
 4. Memory Engine durable write Release Gate.
 5. Agent context uses LifeEvents, Reminders, RAG, and Memory safely.
 6. Planning and recommendation workflows produce pending actions.

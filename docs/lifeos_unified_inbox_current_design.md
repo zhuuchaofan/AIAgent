@@ -93,6 +93,15 @@ This means:
 - Memory remains candidate-only.
 - External tools and MCP-style side effects remain closed.
 
+`AllowReminderWrites` is controlled by configuration and defaults to false:
+
+```text
+UnifiedInbox:ConfirmWrites:AllowReminderWrites
+UNIFIED_INBOX_ALLOW_REMINDER_WRITES
+```
+
+Only a dedicated Reminder Write Release Gate should set it to true.
+
 ## Data Sources
 
 The home page has two separate data surfaces:
@@ -102,6 +111,9 @@ The home page has two separate data surfaces:
    - Shows pending / confirmed / cancelled / expired decisions.
    - Includes audit flags such as `wroteData`, `executed`, `realWritePath`,
      and `intentClassifier`.
+
+Reminder items are intentionally kept off the home page's primary flow. Durable
+reminders can be reviewed and completed/cancelled on `/reminders`.
 
 2. Recent life records
    - Source: `users/{userId}/life_events`

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Brain, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import { Bell, BookOpen, Brain, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
@@ -222,6 +222,13 @@ export default function Home() {
               >
                 <Brain className="h-3.5 w-3.5" />
                 记忆
+              </Link>
+              <Link
+                href="/reminders"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                提醒
               </Link>
             </nav>
           )}
