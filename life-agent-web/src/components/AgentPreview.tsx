@@ -166,6 +166,13 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
         return;
       }
 
+      if (draftAction.actionType === REMINDER_PREVIEW && response.data?.wroteData) {
+        setDraftAction(null);
+        setMessage("已保存到提醒事项。");
+        onLifeRecordWritten?.();
+        return;
+      }
+
       setDraftAction(null);
       setMessage(draftAction.actionType === REMINDER_PREVIEW
         ? "已留下提醒线索。"

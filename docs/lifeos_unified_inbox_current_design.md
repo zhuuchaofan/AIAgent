@@ -88,8 +88,8 @@ Tool execution = unavailable
 This means:
 
 - Life record Confirm writes `life_events`.
-- Reminder Confirm only confirms the pending action; it does not write
-  `reminders`.
+- Reminder Confirm has a code-ready executor for `reminders`, but production
+  policy keeps it disabled until a dedicated Reminder Write Release Gate.
 - Memory remains candidate-only.
 - External tools and MCP-style side effects remain closed.
 

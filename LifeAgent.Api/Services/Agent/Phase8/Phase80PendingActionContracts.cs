@@ -103,7 +103,8 @@ public sealed record Phase80ConfirmExecutionRequest(
     string ActionType,
     string Title,
     string Summary,
-    Phase80ConfirmExecutionPlan Plan);
+    Phase80ConfirmExecutionPlan Plan,
+    string? ClientTimeZone = null);
 
 public sealed record Phase80ConfirmWriteExecutionResult(
     bool Success,

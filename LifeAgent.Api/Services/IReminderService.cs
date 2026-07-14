@@ -8,6 +8,11 @@ namespace LifeAgent.Api.Services;
 public interface IReminderService
 {
     /// <summary>
+    /// 创建提醒事项。
+    /// </summary>
+    Task<Reminder> CreateReminderAsync(string userId, Reminder reminder, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 获取指定用户的提醒事项列表，按 dueAt 升序排列。
     /// </summary>
     /// <param name="userId">用户 ID</param>

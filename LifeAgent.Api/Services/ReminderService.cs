@@ -16,6 +16,46 @@ public class ReminderService : IReminderService
     }
 
     /// <inheritdoc/>
+    public async Task<Reminder> CreateReminderAsync(
+        string userId,
+        Reminder reminder,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("userId 不能为空", nameof(userId));
+        if (reminder is null)
+            throw new ArgumentNullException(nameof(reminder));
+        if (string.IsNullOrWhiteSpace(reminder.Title))
+            throw new InvalidInputException("提醒标题不能为空");
+
+        var reminderId = string.IsNullOrWhiteSpace(reminder.Id)
+            ? $"rem_{Guid.NewGuid():N}"
+            : reminder.Id;
+        var now = DateTime.UtcNow;
+
+        reminder.Id = reminderId;
+        reminder.UserId = userId;
+        reminder.Status = string.IsNullOrWhiteSpace(reminder.Status) ? "pending" : reminder.Status;
+        reminder.RepeatRule = string.IsNullOrWhiteSpace(reminder.RepeatRule) ? "none" : reminder.RepeatRule;
+        reminder.Timezone = string.IsNullOrWhiteSpace(reminder.Timezone) ? "Asia/Shanghai" : reminder.Timezone;
+        reminder.CreatedAt = reminder.CreatedAt == default ? now : reminder.CreatedAt.ToUniversalTime();
+        reminder.UpdatedAt = now;
+        reminder.DueAt = reminder.DueAt.ToUniversalTime();
+
+        var docRef = _db.Collection("users")
+            .Document(userId)
+            .Collection("reminders")
+            .Document(reminderId);
+
+        _logger.LogInformation(
+            "创建 Firestore 提醒：users/{UserId}/reminders/{ReminderId}（dueAt={DueAt}）",
+            userId, reminderId, reminder.DueAt);
+
+        await docRef.SetAsync(reminder, cancellationToken: cancellationToken);
+        return reminder;
+    }
+
+    /// <inheritdoc/>
     public async Task<List<Reminder>> ListRemindersAsync(string userId, string status)
     {
         if (string.IsNullOrWhiteSpace(userId))

@@ -1,8 +1,10 @@
 using LifeAgent.Api.Models;
+using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
 using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.LifeEvents;
+using LifeAgent.Api.Services.Reminders;
 
 public class Phase80PendingActionRuntimeMvpTest
 {
@@ -474,6 +476,143 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
+    public async Task ReminderConfirmWriteExecutorWritesReminderWhenPolicyAllowsAndDueTimeParses()
+    {
+        var reminderService = new CapturingReminderService();
+        var executor = new Phase80ReminderConfirmWriteExecutor(
+            reminderService,
+            new FixedReminderLlmService(new ParsedEvent
+            {
+                DetectedReminderIntent = true,
+                ReminderTitle = "交材料",
+                ReminderDescription = "提交项目材料",
+                ReminderDueAtIso = "2026-07-15T01:00:00Z",
+                ExtractionConfidence = 0.86,
+                Reminder = new ReminderNode
+                {
+                    HasIntent = true,
+                    Title = "交材料",
+                    Description = "提交项目材料",
+                    DueAtIso8601 = "2026-07-15T01:00:00Z",
+                    ParseStatus = "success"
+                }
+            }));
+        var plan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.ReminderPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
+
+        var result = await executor.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "reminder_action_123",
+            ActionType: Phase80PendingActionRuntime.ReminderPreview,
+            Title: "提醒：明天九点交材料",
+            Summary: "用户输入：明天九点提醒我交材料",
+            Plan: plan,
+            ClientTimeZone: "Asia/Shanghai"));
+
+        Assert.True(result.Success);
+        Assert.True(result.WroteData);
+        Assert.True(result.RealWritePath);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, result.Target);
+        Assert.Equal("phase80_reminder_confirm_write_executor", result.ExecutorId);
+        Assert.Single(reminderService.Writes);
+        Assert.Equal("user_a", reminderService.Writes[0].UserId);
+        Assert.Equal("reminder_action_123", reminderService.Writes[0].Reminder.SourceEventId);
+        Assert.Equal("交材料", reminderService.Writes[0].Reminder.Title);
+        Assert.Equal("Asia/Shanghai", reminderService.Writes[0].Reminder.Timezone);
+        Assert.Equal("pending", reminderService.Writes[0].Reminder.Status);
+    }
+
+    [Fact]
+    public async Task ReminderConfirmWriteExecutorSkipsWhenDueTimeIsMissing()
+    {
+        var reminderService = new CapturingReminderService();
+        var executor = new Phase80ReminderConfirmWriteExecutor(
+            reminderService,
+            new FixedReminderLlmService(new ParsedEvent
+            {
+                DetectedReminderIntent = true,
+                ReminderTitle = "买一本新书",
+                ReminderDueAtIso = null,
+                Reminder = new ReminderNode
+                {
+                    HasIntent = true,
+                    Title = "买一本新书",
+                    DueAtIso8601 = null,
+                    ParseStatus = "missing_due_time"
+                }
+            }));
+        var plan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.ReminderPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
+
+        var result = await executor.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "reminder_action_missing_time",
+            ActionType: Phase80PendingActionRuntime.ReminderPreview,
+            Title: "提醒：买一本新书",
+            Summary: "用户输入：以后记得提醒我买一本新书",
+            Plan: plan,
+            ClientTimeZone: "Asia/Shanghai"));
+
+        Assert.False(result.Success);
+        Assert.False(result.WroteData);
+        Assert.False(result.RealWritePath);
+        Assert.Equal("missing_due_time", result.Status);
+        Assert.Empty(reminderService.Writes);
+    }
+
+    [Fact]
+    public async Task ConfirmWriteExecutorRouterDispatchesLifeEventsAndRemindersByTarget()
+    {
+        var lifeWriter = new CapturingAgentLifeEventWriter();
+        var reminderService = new CapturingReminderService();
+        var router = new Phase80ConfirmWriteExecutorRouter(
+            new Phase80LifeEventConfirmWriteExecutor(lifeWriter),
+            new Phase80ReminderConfirmWriteExecutor(
+                reminderService,
+                new FixedReminderLlmService(new ParsedEvent
+                {
+                    DetectedReminderIntent = true,
+                    ReminderDueAtIso = "2026-07-15T01:00:00Z",
+                    Reminder = new ReminderNode
+                    {
+                        HasIntent = true,
+                        Title = "交材料",
+                        DueAtIso8601 = "2026-07-15T01:00:00Z",
+                        ParseStatus = "success"
+                    }
+                })));
+        var lifePlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.LifeRecordPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
+        var reminderPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.ReminderPreview,
+            new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
+
+        var lifeResult = await router.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "life_action_123",
+            ActionType: Phase80PendingActionRuntime.LifeRecordPreview,
+            Title: "今天骑车",
+            Summary: "用户输入：今天骑车",
+            Plan: lifePlan));
+        var reminderResult = await router.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "reminder_action_123",
+            ActionType: Phase80PendingActionRuntime.ReminderPreview,
+            Title: "提醒：明天九点交材料",
+            Summary: "用户输入：明天九点提醒我交材料",
+            Plan: reminderPlan,
+            ClientTimeZone: "Asia/Shanghai"));
+
+        Assert.True(lifeResult.Success);
+        Assert.True(reminderResult.Success);
+        Assert.Single(lifeWriter.Writes);
+        Assert.Single(reminderService.Writes);
+    }
+
+    [Fact]
     public void ConfirmAsyncDoesNotInvokeReadyExecutorWithoutExplicitBetaRuntimeMode()
     {
         var executor = new CountingReadyForTestConfirmWriteExecutor();
@@ -830,6 +969,67 @@ public class Phase80PendingActionRuntimeMvpTest
         {
             Writes.Add((authenticatedUserId, eventId, lifeEvent));
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class CapturingReminderService : IReminderService
+    {
+        public List<(string UserId, Reminder Reminder)> Writes { get; } = new();
+
+        public Task<Reminder> CreateReminderAsync(
+            string userId,
+            Reminder reminder,
+            CancellationToken cancellationToken = default)
+        {
+            reminder.UserId = userId;
+            if (string.IsNullOrWhiteSpace(reminder.Id))
+            {
+                reminder.Id = "rem_test";
+            }
+
+            Writes.Add((userId, reminder));
+            return Task.FromResult(reminder);
+        }
+
+        public Task<List<Reminder>> ListRemindersAsync(string userId, string status)
+        {
+            return Task.FromResult(Writes
+                .Where(write => write.UserId == userId && write.Reminder.Status == status)
+                .Select(write => write.Reminder)
+                .ToList());
+        }
+
+        public Task<Reminder?> GetReminderAsync(string userId, string reminderId)
+        {
+            Reminder? reminder = Writes
+                .FirstOrDefault(write => write.UserId == userId && write.Reminder.Id == reminderId)
+                .Reminder;
+            return Task.FromResult<Reminder?>(reminder);
+        }
+
+        public Task<bool> UpdateReminderAsync(string userId, string reminderId, string? status, DateTime? dueAt)
+        {
+            return Task.FromResult(false);
+        }
+    }
+
+    private sealed class FixedReminderLlmService : ILlmService
+    {
+        private readonly ParsedEvent _parsedEvent;
+
+        public FixedReminderLlmService(ParsedEvent parsedEvent)
+        {
+            _parsedEvent = parsedEvent;
+        }
+
+        public Task<ParsedEvent> ParseAsync(string text, string timeZone)
+        {
+            return Task.FromResult(_parsedEvent);
+        }
+
+        public Task<SummarizedDay> SummarizeAsync(List<LifeEvent> events, string date, string timeZone)
+        {
+            return Task.FromResult(new SummarizedDay());
         }
     }
 

@@ -54,6 +54,8 @@ public sealed partial class Phase80PendingActionRuntime
             Message: status switch
             {
                 Confirmed when (executionResult?.WroteData ?? record.WroteData) => ConfirmedWrittenMessage(record.ActionType),
+                Confirmed when executionResult?.Status == "missing_due_time" => "还缺少明确时间，暂未保存为提醒事项。",
+                Confirmed when executionResult?.Status == "invalid_due_time" => "提醒时间暂时无法识别，未保存为提醒事项。",
                 Confirmed => ConfirmedPreviewMessage(record.ActionType),
                 Cancelled => "已取消",
                 Expired => "已过期，不能确认",
@@ -69,7 +71,8 @@ public sealed partial class Phase80PendingActionRuntime
             ActionType: record.ActionType,
             Title: ReadPayload(record, "title", "保存一条测试生活记录"),
             Summary: ReadPayload(record, "summary", "Phase 8 fake-first 待确认动作。"),
-            Plan: ResolveStoredConfirmPlan(record));
+            Plan: ResolveStoredConfirmPlan(record),
+            ClientTimeZone: ReadPayload(record, "clientTimeZone", "Asia/Shanghai"));
     }
 
     private static string ReadPayload(PendingActionRecord record, string key, string fallback)
@@ -152,6 +155,7 @@ public sealed partial class Phase80PendingActionRuntime
         return actionType switch
         {
             LifeRecordPreview => "已确认生活记录，并写入 life_events。",
+            ReminderPreview => "已确认提醒，并写入 reminders。",
             _ => ConfirmedPreviewMessage(actionType)
         };
     }

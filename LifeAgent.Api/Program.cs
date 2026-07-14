@@ -12,6 +12,7 @@ using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.Agent.Tools;
 using LifeAgent.Api.Services.LifeEvents;
 using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.Reminders;
 using LifeAgent.Api.Endpoints;
 using Microsoft.Extensions.Options;
 
@@ -69,7 +70,11 @@ builder.Services.AddSingleton<IPendingActionStore>(sp =>
         sp.GetRequiredService<IOptions<PendingActionPersistenceOptions>>(),
         () => sp.GetRequiredService<FirestoreDb>(),
         sp.GetRequiredService<TimeProvider>()));
-builder.Services.AddScoped<IPhase80ConfirmWriteExecutor, Phase80LifeEventConfirmWriteExecutor>();
+builder.Services.AddScoped<Phase80LifeEventConfirmWriteExecutor>();
+builder.Services.AddScoped<Phase80ReminderConfirmWriteExecutor>();
+builder.Services.AddScoped<IPhase80ConfirmWriteExecutor>(sp => new Phase80ConfirmWriteExecutorRouter(
+    sp.GetRequiredService<Phase80LifeEventConfirmWriteExecutor>(),
+    sp.GetRequiredService<Phase80ReminderConfirmWriteExecutor>()));
 builder.Services.AddScoped<IUnifiedInboxIntentClassifier, LlmUnifiedInboxIntentClassifier>();
 builder.Services.AddScoped<Phase80PendingActionRuntime>(sp =>
 {

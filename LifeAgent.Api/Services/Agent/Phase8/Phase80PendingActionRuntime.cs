@@ -107,6 +107,9 @@ public sealed partial class Phase80PendingActionRuntime
             {
                 ["title"] = title,
                 ["summary"] = summary,
+                ["clientTimeZone"] = string.IsNullOrWhiteSpace(request?.ClientTimeZone)
+                    ? "Asia/Shanghai"
+                    : request.ClientTimeZone.Trim(),
                 ["actionType"] = actionType,
                 ["intent"] = route.Intent,
                 ["disposition"] = route.Disposition,
