@@ -174,13 +174,11 @@ These are cleanup tasks, not prerequisites for current production operation:
 1. Wrap or rename `Phase80PendingActionRuntime` to `UnifiedInboxRuntime`.
 2. Hide or remove `/api/agent/pending-actions/demo` compatibility aliases after
    tests and docs stop using them.
-3. Build a dedicated lightweight intent-classification prompt instead of
-   reusing `ILlmService.ParseAsync`.
-4. Add authenticated production smoke for:
+3. Add authenticated production smoke for:
    - journal text with future time mention -> life record
    - explicit reminder command -> reminder preview
    - life record Confirm -> appears in recent life records
-5. Decide the next approved Release Gate:
+4. Decide the next approved Release Gate:
    - reminder write
    - durable memory write
    - tool execution
@@ -188,6 +186,8 @@ These are cleanup tasks, not prerequisites for current production operation:
 Completed cleanup:
 
 - Moved Unified Inbox classifier contracts to `Services/Agent/UnifiedInbox/`.
+- Replaced the reused event parser with a dedicated JSON-only Unified Inbox
+  intent classifier prompt.
 - Split `Phase80LifeEventConfirmWriteExecutor` into its own LifeEvents file.
 - Removed the old web manual ingest component, `/debug` pending action
   diagnostics page, and unused frontend wrappers for legacy agent preview

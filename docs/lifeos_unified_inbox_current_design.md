@@ -44,8 +44,8 @@ Production DI now uses:
 ```text
 IUnifiedInboxIntentClassifier
   -> LlmUnifiedInboxIntentClassifier
-  -> ILlmService.ParseAsync
-  -> rule fallback on LLM failure
+  -> dedicated JSON-only intent prompt through IRagAnswerGenerator
+  -> rule fallback on invalid JSON / unsupported action / LLM failure
 ```
 
 The classifier is allowed to choose a candidate action type. It is not allowed
@@ -212,9 +212,6 @@ These remain non-negotiable:
 
 The current implementation is now clearer, but still not the final Agent:
 
-- The classifier reuses `ILlmService.ParseAsync`, which was originally built
-  for life event parsing. A dedicated lightweight intent-classification prompt
-  would be cleaner.
 - `Phase80PendingActionRuntime` is still the class name for compatibility.
   A future cleanup should wrap or rename it to `UnifiedInboxRuntime`.
 - Compatibility `/demo` endpoints remain available.
@@ -225,11 +222,10 @@ The current implementation is now clearer, but still not the final Agent:
 
 1. Extract a dedicated `UnifiedInboxRuntime` wrapper around
    `Phase80PendingActionRuntime`.
-2. Replace the reused event parser with a dedicated JSON-only intent classifier.
-3. Remove compatibility demo routes after dependent tests and docs are
+2. Remove compatibility demo routes after dependent tests and docs are
    updated.
-4. Add authenticated production smoke covering:
+3. Add authenticated production smoke covering:
    - journal-like input with future time mention -> life record
    - explicit reminder request -> reminder preview
    - confirmed life record appears in recent life records
-5. Update old Phase 8 / Phase 9 docs to point to this current-state document.
+4. Update old Phase 8 / Phase 9 docs to point to this current-state document.
