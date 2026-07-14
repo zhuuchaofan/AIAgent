@@ -134,10 +134,10 @@ public class Phase9PendingActionPersistenceTest
             "malicious userId=user_b should not be trusted");
         var context = AuthenticatedContext("user_a", services);
 
-        var create = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(context, request));
+        var create = await ExecuteResultAsync(AgentEndpoints.CreateUnifiedInboxPendingActionAsync(context, request));
         var actionId = ReadString(create.Body, "data", "actionId");
-        var userAList = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(AuthenticatedContext("user_a", services)));
-        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(AuthenticatedContext("user_b", services), actionId));
+        var userAList = await ExecuteResultAsync(AgentEndpoints.ListUnifiedInboxPendingActionsAsync(AuthenticatedContext("user_a", services)));
+        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmUnifiedInboxPendingActionAsync(AuthenticatedContext("user_b", services), actionId));
 
         Assert.Equal(StatusCodes.Status200OK, create.StatusCode);
         Assert.Contains(actionId, userAList.Body);
@@ -342,13 +342,13 @@ public class Phase9PendingActionPersistenceTest
     {
         var store = new InMemoryPendingActionStore();
         var services = BuildServices(store);
-        var create = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+        var create = await ExecuteResultAsync(AgentEndpoints.CreateUnifiedInboxPendingActionAsync(
             AuthenticatedContext("user_a", services),
             new Phase80CreatePendingActionRequest("DI backed", "same store across endpoint calls")));
         var actionId = ReadString(create.Body, "data", "actionId");
 
         var fromStore = await store.GetByIdAsync("user_a", actionId);
-        var listed = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(AuthenticatedContext("user_a", services)));
+        var listed = await ExecuteResultAsync(AgentEndpoints.ListUnifiedInboxPendingActionsAsync(AuthenticatedContext("user_a", services)));
 
         Assert.NotNull(fromStore);
         Assert.Contains("DI backed", listed.Body);
@@ -360,7 +360,7 @@ public class Phase9PendingActionPersistenceTest
     {
         var services = BuildServices();
 
-        var listed = await ExecuteResultAsync(AgentEndpoints.ListPhase80PendingActionsAsync(
+        var listed = await ExecuteResultAsync(AgentEndpoints.ListUnifiedInboxPendingActionsAsync(
             AuthenticatedContext("user_a", services)));
 
         Assert.Equal(StatusCodes.Status200OK, listed.StatusCode);
@@ -494,7 +494,7 @@ public class Phase9PendingActionPersistenceTest
             idempotencyKeyHash: "idem_endpoint_b"));
         var services = BuildServices(store);
 
-        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+        var userBConfirm = await ExecuteResultAsync(AgentEndpoints.ConfirmUnifiedInboxPendingActionAsync(
             AuthenticatedContext("user_b", services),
             "pa_shared_endpoint_id"));
         var userARecord = await store.GetByIdAsync("user_a", "pa_shared_endpoint_id");
@@ -517,15 +517,15 @@ public class Phase9PendingActionPersistenceTest
     {
         var services = BuildServices();
         var context = AuthenticatedContext("user_a", services);
-        var create = await ExecuteResultAsync(AgentEndpoints.CreatePhase80PendingActionAsync(
+        var create = await ExecuteResultAsync(AgentEndpoints.CreateUnifiedInboxPendingActionAsync(
             context,
             new Phase80CreatePendingActionRequest("http conflict", "finalized state")));
         var actionId = ReadString(create.Body, "data", "actionId");
 
-        var confirm = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+        var confirm = await ExecuteResultAsync(AgentEndpoints.ConfirmUnifiedInboxPendingActionAsync(
             AuthenticatedContext("user_a", services),
             actionId));
-        var cancelAfterConfirm = await ExecuteResultAsync(AgentEndpoints.CancelPhase80PendingActionAsync(
+        var cancelAfterConfirm = await ExecuteResultAsync(AgentEndpoints.CancelUnifiedInboxPendingActionAsync(
             AuthenticatedContext("user_a", services),
             actionId));
 
@@ -542,7 +542,7 @@ public class Phase9PendingActionPersistenceTest
     [Fact]
     public async Task EndpointReturnsNotFoundForMissingPendingAction()
     {
-        var missing = await ExecuteResultAsync(AgentEndpoints.ConfirmPhase80PendingActionAsync(
+        var missing = await ExecuteResultAsync(AgentEndpoints.ConfirmUnifiedInboxPendingActionAsync(
             AuthenticatedContext("user_a"),
             "missing_action"));
 

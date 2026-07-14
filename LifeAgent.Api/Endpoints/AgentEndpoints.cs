@@ -30,48 +30,23 @@ public static class AgentEndpoints
         // from the legacy /api/agent/confirm path. They never call
         // IPendingAgentActionStore, FirestorePendingAgentActionStore, or the
         // life_event write coordinator.
-        app.MapPost("/api/agent/pending-actions", CreatePhase80PendingActionAsync)
+        app.MapPost("/api/agent/pending-actions", CreateUnifiedInboxPendingActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
 
-        app.MapGet("/api/agent/pending-actions", ListPhase80PendingActionsAsync)
+        app.MapGet("/api/agent/pending-actions", ListUnifiedInboxPendingActionsAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
 
-        app.MapPost("/api/agent/pending-actions/{actionId}/confirm", ConfirmPhase80PendingActionAsync)
+        app.MapPost("/api/agent/pending-actions/{actionId}/confirm", ConfirmUnifiedInboxPendingActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
 
-        app.MapPost("/api/agent/pending-actions/{actionId}/cancel", CancelPhase80PendingActionAsync)
+        app.MapPost("/api/agent/pending-actions/{actionId}/cancel", CancelUnifiedInboxPendingActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
 
-        app.MapPost("/api/agent/pending-actions/{actionId}/archive", ArchivePhase80PendingActionAsync)
-            .WithTags("agent")
-            .RequireRateLimiting("auth-user");
-
-        // Compatibility aliases for the Phase 8 preview deployment.
-        // These routes hit the same Personal Agent v2 runtime and store.
-        // They remain separate from the
-        // legacy /api/agent/confirm path. They never call IPendingAgentActionStore,
-        // FirestorePendingAgentActionStore, or the life_event write coordinator.
-        app.MapPost("/api/agent/pending-actions/demo", CreatePhase80PendingActionAsync)
-            .WithTags("agent")
-            .RequireRateLimiting("auth-user");
-
-        app.MapGet("/api/agent/pending-actions/demo", ListPhase80PendingActionsAsync)
-            .WithTags("agent")
-            .RequireRateLimiting("auth-user");
-
-        app.MapPost("/api/agent/pending-actions/demo/{actionId}/confirm", ConfirmPhase80PendingActionAsync)
-            .WithTags("agent")
-            .RequireRateLimiting("auth-user");
-
-        app.MapPost("/api/agent/pending-actions/demo/{actionId}/cancel", CancelPhase80PendingActionAsync)
-            .WithTags("agent")
-            .RequireRateLimiting("auth-user");
-
-        app.MapPost("/api/agent/pending-actions/demo/{actionId}/archive", ArchivePhase80PendingActionAsync)
+        app.MapPost("/api/agent/pending-actions/{actionId}/archive", ArchiveUnifiedInboxPendingActionAsync)
             .WithTags("agent")
             .RequireRateLimiting("auth-user");
     }
@@ -97,7 +72,7 @@ public static class AgentEndpoints
         });
     }
 
-    public static async Task<IResult> CreatePhase80PendingActionAsync(
+    public static async Task<IResult> CreateUnifiedInboxPendingActionAsync(
         HttpContext httpContext,
         [FromBody] Phase80CreatePendingActionRequest? request,
         CancellationToken cancellationToken = default)
@@ -113,7 +88,7 @@ public static class AgentEndpoints
         return ToPhase80HttpResult(result);
     }
 
-    public static async Task<IResult> ListPhase80PendingActionsAsync(
+    public static async Task<IResult> ListUnifiedInboxPendingActionsAsync(
         HttpContext httpContext,
         CancellationToken cancellationToken = default)
     {
@@ -142,7 +117,7 @@ public static class AgentEndpoints
         });
     }
 
-    public static async Task<IResult> ConfirmPhase80PendingActionAsync(
+    public static async Task<IResult> ConfirmUnifiedInboxPendingActionAsync(
         HttpContext httpContext,
         string actionId,
         CancellationToken cancellationToken = default)
@@ -158,7 +133,7 @@ public static class AgentEndpoints
             .ConfirmAsync(userId, actionId, cancellationToken));
     }
 
-    public static async Task<IResult> CancelPhase80PendingActionAsync(
+    public static async Task<IResult> CancelUnifiedInboxPendingActionAsync(
         HttpContext httpContext,
         string actionId,
         CancellationToken cancellationToken = default)
@@ -174,7 +149,7 @@ public static class AgentEndpoints
             .CancelAsync(userId, actionId, cancellationToken));
     }
 
-    public static async Task<IResult> ArchivePhase80PendingActionAsync(
+    public static async Task<IResult> ArchiveUnifiedInboxPendingActionAsync(
         HttpContext httpContext,
         string actionId,
         CancellationToken cancellationToken = default)

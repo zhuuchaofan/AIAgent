@@ -52,7 +52,7 @@ Reminder writes, Tool Execution, external side effects, and MCP remain closed.
 life-agent-web/src/components/AgentPreview.tsx
   -> life-agent-web/src/app/actions/knowledge.ts Unified Inbox pending-action actions
   -> POST /api/agent/pending-actions
-  -> AgentEndpoints.CreatePhase80PendingActionAsync
+  -> AgentEndpoints.CreateUnifiedInboxPendingActionAsync
   -> IUnifiedInboxRuntime / UnifiedInboxRuntime
   -> Phase80PendingActionRuntime compatibility core
   -> IUnifiedInboxIntentClassifier
@@ -172,19 +172,19 @@ Durable Memory write preparation is tracked in
 
 These are cleanup tasks, not prerequisites for current production operation:
 
-1. Hide or remove `/api/agent/pending-actions/demo` compatibility aliases after
-   tests and docs stop using them.
-2. Add authenticated production smoke for:
+1. Add authenticated production smoke for:
    - journal text with future time mention -> life record
    - explicit reminder command -> reminder preview
    - life record Confirm -> appears in recent life records
-3. Decide the next approved Release Gate:
+2. Decide the next approved Release Gate:
    - reminder write
    - durable memory write
    - tool execution
 
 Completed cleanup:
 
+- Removed `/api/agent/pending-actions/demo` compatibility aliases from the
+  current API surface and moved endpoint tests onto Unified Inbox naming.
 - Added `IUnifiedInboxRuntime` / `UnifiedInboxRuntime` as the product-named
   runtime entrypoint while retaining `Phase80PendingActionRuntime` as the
   compatibility core.
