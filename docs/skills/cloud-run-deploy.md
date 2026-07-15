@@ -11,8 +11,57 @@
 | Web custom domain | `https://life.zhuchaofan.com/` |
 | Dockerfile（API） | `LifeAgent.Api/Dockerfile` |
 | Dockerfile（Web） | `life-agent-web/Dockerfile` |
+| 标准部署入口 | `scripts/deploy-lifeos.sh` |
 | Web 部署脚本 | `life-agent-web/deploy.sh` |
 | 环境变量文件 | `life-agent-web/.env.production` |
+
+---
+
+## 标准部署入口
+
+优先使用项目根目录下的统一入口：
+
+```bash
+# 只判断将部署什么，不执行 Cloud Run 部署
+scripts/deploy-lifeos.sh --dry-run
+
+# 根据最近一次提交自动判断部署 API / Web / all / none
+scripts/deploy-lifeos.sh
+
+# 显式指定部署范围
+scripts/deploy-lifeos.sh --target api
+scripts/deploy-lifeos.sh --target web
+scripts/deploy-lifeos.sh --target all
+```
+
+`--target auto` 的默认比较范围是 `HEAD~1..HEAD`，也可以显式传入：
+
+```bash
+scripts/deploy-lifeos.sh --target auto --since <REF>
+```
+
+如果连续多个本地 commit 尚未部署，`<REF>` 应使用**上一次已部署的 commit**，不要只依赖默认 `HEAD~1`。
+
+自动部署范围判断：
+
+| 变更范围 | 操作 |
+|---|---|
+| `LifeAgent.Api/**` 或解决方案入口 | 只部署 API |
+| `life-agent-web/**` | 只部署 Web |
+| API 与 Web 都有变更 | 先部署 API → 确认成功 → 再部署 Web |
+| 只有 docs / scripts / tests / markdown | 不部署 |
+| 无法安全归类的产品代码 | 部署 API + Web |
+
+统一入口负责：
+
+1. 检查工作区必须 clean
+2. 执行 `git diff --check`
+3. 执行后端测试、前端 lint、前端 build
+4. 部署前确认 Web `.env.production` 的 `API_BASE_URL` 与当前 API Cloud Run URL 一致
+5. 按 API → Web 顺序部署
+6. 输出 revision、traffic、API health、自定义域名和最近 15 分钟 Cloud Run ERROR/500 日志
+
+`--dry-run` 只输出将执行的动作，不执行 `gcloud run deploy`。
 
 ---
 
@@ -42,6 +91,8 @@ dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj
 
 ## 部署顺序
 
+通常由 `scripts/deploy-lifeos.sh --target auto` 自动判断。手工 fallback 时遵守：
+
 | 变更范围 | 操作 |
 |---|---|
 | **只有后端改动** | 只部署 API |
@@ -51,6 +102,8 @@ dotnet test LifeAgent.Tests/LifeAgent.Tests.csproj
 ---
 
 ## API 部署命令
+
+以下命令只作为统一脚本不可用时的 fallback。
 
 API Dockerfile (`LifeAgent.Api/Dockerfile`) 是自包含的，不依赖解决方案根目录或其他项目，所以使用 `--source ./LifeAgent.Api`：
 
@@ -84,6 +137,8 @@ gcloud run services describe life-agent-api \
 
 ## Web 部署命令
 
+以下命令只作为统一脚本不可用时的 fallback。
+
 Web 使用项目自带的部署脚本（`life-agent-web/deploy.sh`）：
 
 ```bash
@@ -104,9 +159,11 @@ cd life-agent-web && ./deploy.sh
 
 以下操作 **绝对禁止**：
 
+- 未经用户明确要求执行真实部署
 - 修改域名映射
 - 重新创建 Cloud Run 服务（`gcloud run deploy` 只应更新已有服务）
 - 修改 Firebase 项目配置
+- 修改 Cloud Run env 或开启新的写入开关
 - 在生产环境启用 mock auth（`USE_MOCK_AUTH=true`）
 - **盲目使用 `gcloud run deploy --source .`（项目根目录）**——必须确认构建上下文目录正确
 - 构建失败后 **重复重试同一个部署命令** ——必须先查日志
