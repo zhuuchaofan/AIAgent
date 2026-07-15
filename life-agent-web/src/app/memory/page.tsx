@@ -6,6 +6,8 @@ import { ArrowLeft, Brain, Loader2, MessageCircle, PenLine, RefreshCw, Save, Spa
 import { archiveMemoryItem, getMemoryItems, updateMemoryItem, type MemoryItem } from "@/app/actions/memoryItems";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { MemoryListSkeleton } from "@/components/LoadingSkeletons";
+import { useAuth } from "@/providers/AuthProvider";
+import { invalidatePageDataCache, loadPageDataCache, PageDataCacheInvalidatedError, pageDataCacheKey, readPageDataCache, writePageDataCache } from "@/lib/pageDataCache";
 
 const typeOptions = [
   { value: "all", label: "全部" },
@@ -79,6 +81,7 @@ function toIsoOrNull(value: string): string | null {
 }
 
 export default function MemoryPage() {
+  const { user, loading: authLoading } = useAuth();
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [activeType, setActiveType] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
@@ -88,20 +91,57 @@ export default function MemoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
+    const cacheUserId = user?.uid ?? "anonymous";
+    const cacheKey = pageDataCacheKey("memoryItems", cacheUserId, "active", activeType);
+    const cached = readPageDataCache<MemoryItem[]>(cacheKey);
+    let cachedTimer: number | undefined;
+    let loadingTimer: number | undefined;
+
+    if (cached) {
+      cachedTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setMemories(cached.value);
+          setError(null);
+          setIsLoading(false);
+        }
+      }, 0);
+
+      if (cached.isFresh) {
+        return () => {
+          cancelled = true;
+          if (cachedTimer !== undefined) {
+            window.clearTimeout(cachedTimer);
+          }
+        };
+      }
+    } else {
+      loadingTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setIsLoading(true);
+          setError(null);
+        }
+      }, 0);
+    }
 
     const load = async () => {
-      setIsLoading(true);
-      setError(null);
       try {
-        const data = await getMemoryItems("active", activeType);
+        const data = await loadPageDataCache(cacheKey, () => getMemoryItems("active", activeType));
         if (!cancelled) {
           setMemories(data);
+          setError(null);
         }
       } catch (err) {
+        if (err instanceof PageDataCacheInvalidatedError) {
+          return;
+        }
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "暂时无法读取记忆");
-          setMemories([]);
+          if (!cached) {
+            setMemories([]);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -114,8 +154,14 @@ export default function MemoryPage() {
 
     return () => {
       cancelled = true;
+      if (cachedTimer !== undefined) {
+        window.clearTimeout(cachedTimer);
+      }
+      if (loadingTimer !== undefined) {
+        window.clearTimeout(loadingTimer);
+      }
     };
-  }, [activeType]);
+  }, [activeType, authLoading, user]);
 
   const memoryCountText = useMemo(() => {
     if (isLoading) return "正在读取记忆...";
@@ -127,7 +173,18 @@ export default function MemoryPage() {
     setError(null);
     try {
       await archiveMemoryItem(memoryId);
-      setMemories(prev => prev.filter(memory => memory.id !== memoryId));
+      setMemories(prev => {
+        const next = prev.filter(memory => memory.id !== memoryId);
+        if (user) {
+          writePageDataCache(pageDataCacheKey("memoryItems", user.uid, "active", activeType), next);
+          invalidatePageDataCache([
+            pageDataCacheKey("memoryItems", user.uid, "active", "all"),
+            pageDataCacheKey("homeOverview", user.uid),
+            pageDataCacheKey("lifeReview", user.uid),
+          ]);
+        }
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "暂时无法忘记这条记忆");
     } finally {
@@ -163,7 +220,19 @@ export default function MemoryPage() {
         importance: editDraft.importance,
         expiresAt: editDraft.type === "temporary_context" ? toIsoOrNull(editDraft.expiresAt) : null,
       });
-      setMemories(prev => prev.map(memory => memory.id === memoryId ? updated : memory));
+      setMemories(prev => {
+        const next = prev.map(memory => memory.id === memoryId ? updated : memory);
+        if (user) {
+          writePageDataCache(pageDataCacheKey("memoryItems", user.uid, "active", activeType), next);
+          invalidatePageDataCache([
+            pageDataCacheKey("memoryItems", user.uid, "active", "all"),
+            pageDataCacheKey("memoryItems", user.uid, "active", updated.type),
+            pageDataCacheKey("homeOverview", user.uid),
+            pageDataCacheKey("lifeReview", user.uid),
+          ]);
+        }
+        return next;
+      });
       cancelEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "暂时无法更新这条记忆");

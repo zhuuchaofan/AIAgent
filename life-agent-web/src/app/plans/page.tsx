@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import { PageContentSkeleton } from "@/components/LoadingSkeletons";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
+import { invalidatePageDataCache, loadPageDataCache, PageDataCacheInvalidatedError, pageDataCacheKey, readPageDataCache, writePageDataCache } from "@/lib/pageDataCache";
 
 function kindLabel(kind: string): string {
   return kind === "reminder_signal" ? "提醒线索" : "计划";
@@ -36,13 +37,33 @@ export default function PlansPage() {
   const loadSignals = useCallback(async () => {
     if (!user) return;
 
-    setIsLoading(true);
-    setError(null);
+    const cacheKey = pageDataCacheKey("plans", user.uid, "active");
+    const cached = readPageDataCache<PlanSignal[]>(cacheKey);
+
+    if (cached) {
+      setSignals(cached.value);
+      setError(null);
+      setIsLoading(false);
+
+      if (cached.isFresh) {
+        return;
+      }
+    } else {
+      setIsLoading(true);
+      setError(null);
+    }
+
     try {
-      setSignals(await getPlanSignals("active"));
+      setSignals(await loadPageDataCache(cacheKey, () => getPlanSignals("active")));
+      setError(null);
     } catch (err) {
+      if (err instanceof PageDataCacheInvalidatedError) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "暂时无法读取计划线索");
-      setSignals([]);
+      if (!cached) {
+        setSignals([]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +90,17 @@ export default function PlansPage() {
     setSuccessMessage(null);
     try {
       await archivePlanSignal(id);
-      setSignals(current => current.filter(signal => signal.id !== id));
+      setSignals(current => {
+        const next = current.filter(signal => signal.id !== id);
+        if (user) {
+          writePageDataCache(pageDataCacheKey("plans", user.uid, "active"), next);
+          invalidatePageDataCache([
+            pageDataCacheKey("homeOverview", user.uid),
+            pageDataCacheKey("lifeReview", user.uid),
+          ]);
+        }
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "暂时无法归档这条线索");
     } finally {
@@ -103,7 +134,17 @@ export default function PlansPage() {
         signal.title,
         signal.content
       );
-      setSignals(current => current.filter(item => item.id !== signal.id));
+      setSignals(current => {
+        const next = current.filter(item => item.id !== signal.id);
+        if (user) {
+          writePageDataCache(pageDataCacheKey("plans", user.uid, "active"), next);
+          invalidatePageDataCache([
+            pageDataCacheKey("homeOverview", user.uid),
+            pageDataCacheKey("lifeReview", user.uid),
+          ]);
+        }
+        return next;
+      });
       setDueAtInputs(current => {
         const next = { ...current };
         delete next[signal.id];

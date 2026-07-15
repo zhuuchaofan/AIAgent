@@ -27,6 +27,7 @@ import {
 } from "@/app/actions/homeOverview";
 import { PageContentSkeleton, TimelineSkeleton } from "@/components/LoadingSkeletons";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
+import { invalidatePageDataCache, loadPageDataCache, PageDataCacheInvalidatedError, pageDataCacheKey, readPageDataCache } from "@/lib/pageDataCache";
 
 function focusTone(type: HomeOverviewTodayFocus["type"]) {
   if (type === "reminder") {
@@ -392,20 +393,54 @@ export default function Home() {
     if (!user) return;
 
     let cancelled = false;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
+    const cacheKey = pageDataCacheKey("homeOverview", user.uid, 20, timeZone);
+    const cached = readPageDataCache<HomeOverviewData>(cacheKey);
+    let cachedTimer: number | undefined;
+    let loadingTimer: number | undefined;
+
+    if (cached) {
+      cachedTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setOverview(cached.value);
+          setOverviewError(null);
+          setIsLoadingOverview(false);
+        }
+      }, 0);
+
+      if (cached.isFresh) {
+        return () => {
+          cancelled = true;
+          if (cachedTimer !== undefined) {
+            window.clearTimeout(cachedTimer);
+          }
+        };
+      }
+    } else {
+      loadingTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setIsLoadingOverview(true);
+          setOverviewError(null);
+        }
+      }, 0);
+    }
 
     const loadOverview = async () => {
-      setIsLoadingOverview(true);
-      setOverviewError(null);
       try {
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
-        const nextOverview = await getHomeOverview(20, timeZone);
+        const nextOverview = await loadPageDataCache(cacheKey, () => getHomeOverview(20, timeZone));
         if (!cancelled) {
           setOverview(nextOverview);
+          setOverviewError(null);
         }
       } catch (error) {
+        if (error instanceof PageDataCacheInvalidatedError) {
+          return;
+        }
         if (!cancelled) {
           setOverviewError(error instanceof Error ? error.message : "首页内容暂时不可用");
-          setOverview(null);
+          if (!cached) {
+            setOverview(null);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -418,6 +453,12 @@ export default function Home() {
 
     return () => {
       cancelled = true;
+      if (cachedTimer !== undefined) {
+        window.clearTimeout(cachedTimer);
+      }
+      if (loadingTimer !== undefined) {
+        window.clearTimeout(loadingTimer);
+      }
     };
   }, [overviewRefreshTrigger, user]);
 
@@ -534,6 +575,12 @@ export default function Home() {
           <div className="space-y-6">
             <AgentPreview
               onLifeRecordWritten={() => {
+                invalidatePageDataCache([
+                  pageDataCacheKey("homeOverview", user.uid),
+                  pageDataCacheKey("memoryReview", user.uid),
+                  pageDataCacheKey("plans", user.uid),
+                  pageDataCacheKey("lifeReview", user.uid),
+                ]);
                 setRefreshTrigger(t => t + 1);
                 setOverviewRefreshTrigger(t => t + 1);
               }}

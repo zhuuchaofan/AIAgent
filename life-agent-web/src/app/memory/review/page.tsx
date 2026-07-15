@@ -8,10 +8,13 @@ import {
   getMemoryReviewInboxPreview,
   keepMemoryReviewCandidate,
   rememberMemoryReviewCandidate,
+  type MemoryReviewInboxPreviewData,
   type MemoryReviewCandidate
 } from "@/app/actions/memoryReview";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { MemoryCandidateSkeleton } from "@/components/LoadingSkeletons";
+import { useAuth } from "@/providers/AuthProvider";
+import { invalidatePageDataCache, loadPageDataCache, PageDataCacheInvalidatedError, pageDataCacheKey, readPageDataCache, writePageDataCache } from "@/lib/pageDataCache";
 
 function typeLabel(type: MemoryReviewCandidate["type"]): string {
   switch (type) {
@@ -67,6 +70,7 @@ function qualityBadge(candidate: MemoryReviewCandidate): { label: string; classN
 }
 
 export default function MemoryReviewPage() {
+  const { user, loading: authLoading } = useAuth();
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<"pending" | "kept" | "remembered">("pending");
   const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
@@ -77,20 +81,57 @@ export default function MemoryReviewPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
+    const cacheUserId = user?.uid ?? "anonymous";
+    const cacheKey = pageDataCacheKey("memoryReview", cacheUserId, 20);
+    const cached = readPageDataCache<MemoryReviewInboxPreviewData>(cacheKey);
+    let cachedTimer: number | undefined;
+    let loadingTimer: number | undefined;
+
+    if (cached) {
+      cachedTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setCandidates(cached.value.candidates ?? []);
+          setError(null);
+          setIsLoading(false);
+        }
+      }, 0);
+
+      if (cached.isFresh) {
+        return () => {
+          cancelled = true;
+          if (cachedTimer !== undefined) {
+            window.clearTimeout(cachedTimer);
+          }
+        };
+      }
+    } else {
+      loadingTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setIsLoading(true);
+          setError(null);
+        }
+      }, 0);
+    }
 
     const load = async () => {
-      setIsLoading(true);
-      setError(null);
       try {
-        const preview = await getMemoryReviewInboxPreview(20);
+        const preview = await loadPageDataCache(cacheKey, () => getMemoryReviewInboxPreview(20));
         if (!cancelled) {
           setCandidates(preview.candidates ?? []);
+          setError(null);
         }
       } catch (err) {
+        if (err instanceof PageDataCacheInvalidatedError) {
+          return;
+        }
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "暂时无法整理可能值得记住的事");
-          setCandidates([]);
+          if (!cached) {
+            setCandidates([]);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -103,8 +144,27 @@ export default function MemoryReviewPage() {
 
     return () => {
       cancelled = true;
+      if (cachedTimer !== undefined) {
+        window.clearTimeout(cachedTimer);
+      }
+      if (loadingTimer !== undefined) {
+        window.clearTimeout(loadingTimer);
+      }
     };
-  }, []);
+  }, [authLoading, user]);
+
+  const updateCachedCandidates = (nextCandidates: MemoryReviewCandidate[]) => {
+    if (!user) return;
+
+    writePageDataCache<MemoryReviewInboxPreviewData>(pageDataCacheKey("memoryReview", user.uid, 20), {
+      scannedCount: nextCandidates.length,
+      previewOnly: true,
+      wroteData: false,
+      memoryWriteEnabled: false,
+      candidates: nextCandidates,
+    });
+    invalidatePageDataCache(pageDataCacheKey("homeOverview", user.uid));
+  };
 
   const pendingCandidates = candidates.filter(candidate => (candidate.reviewStatus ?? "pending") === "pending");
   const keptCandidates = candidates.filter(candidate => candidate.reviewStatus === "kept");
@@ -132,9 +192,13 @@ export default function MemoryReviewPage() {
     setActionError(null);
     try {
       const result = await keepMemoryReviewCandidate(candidateId);
-      setCandidates(prev => prev.map(candidate => (
-        candidate.id === candidateId ? result.data : candidate
-      )));
+      setCandidates(prev => {
+        const next = prev.map(candidate => (
+          candidate.id === candidateId ? result.data : candidate
+        ));
+        updateCachedCandidates(next);
+        return next;
+      });
       setDraftTexts(prev => ({
         ...prev,
         [candidateId]: result.data.title
@@ -153,9 +217,19 @@ export default function MemoryReviewPage() {
     setActionError(null);
     try {
       const result = await rememberMemoryReviewCandidate(candidate.id, draft, 3);
-      setCandidates(prev => prev.map(item => (
-        item.id === candidate.id ? result.data : item
-      )));
+      setCandidates(prev => {
+        const next = prev.map(item => (
+          item.id === candidate.id ? result.data : item
+        ));
+        updateCachedCandidates(next);
+        if (user) {
+          invalidatePageDataCache([
+            pageDataCacheKey("memoryItems", user.uid),
+            pageDataCacheKey("lifeReview", user.uid),
+          ]);
+        }
+        return next;
+      });
       setDraftTexts(prev => ({
         ...prev,
         [candidate.id]: result.data.title
@@ -173,7 +247,11 @@ export default function MemoryReviewPage() {
     setActionError(null);
     try {
       await dismissMemoryReviewCandidate(candidateId);
-      setCandidates(prev => prev.filter(candidate => candidate.id !== candidateId));
+      setCandidates(prev => {
+        const next = prev.filter(candidate => candidate.id !== candidateId);
+        updateCachedCandidates(next);
+        return next;
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "暂时无法忽略这条线索");
     } finally {

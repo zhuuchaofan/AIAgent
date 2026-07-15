@@ -23,6 +23,7 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { ReviewCardSkeleton } from "@/components/LoadingSkeletons";
+import { invalidatePageDataCache, loadPageDataCache, PageDataCacheInvalidatedError, pageDataCacheKey, readPageDataCache } from "@/lib/pageDataCache";
 
 export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
@@ -45,31 +46,70 @@ export default function LifeReviewPage() {
     if (!user) return;
 
     let cancelled = false;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
+    const cacheKey = pageDataCacheKey("lifeReview", user.uid, activePeriod, 30, timeZone);
+    const cached = readPageDataCache<Awaited<ReturnType<typeof getLifeReview>>>(cacheKey);
+    let cachedTimer: number | undefined;
+    let loadingTimer: number | undefined;
+
+    const applyReview = (review: Awaited<ReturnType<typeof getLifeReview>>) => {
+      setCards(review.cards ?? []);
+      setReviewThemes(review.reviewThemes ?? []);
+      setContinuityHints(review.continuityHints ?? []);
+      setSourceEvents(review.sourceEvents ?? []);
+      setUsedMemoryCount(review.usedMemoryCount ?? 0);
+      setUsedPlanSignalCount(review.usedPlanSignalCount ?? 0);
+      setExpandedCards({});
+    };
+
+    if (cached) {
+      cachedTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          applyReview(cached.value);
+          setError(null);
+          setIsLoading(false);
+        }
+      }, 0);
+
+      if (cached.isFresh) {
+        return () => {
+          cancelled = true;
+          if (cachedTimer !== undefined) {
+            window.clearTimeout(cachedTimer);
+          }
+        };
+      }
+    } else {
+      loadingTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setIsLoading(true);
+          setError(null);
+        }
+      }, 0);
+    }
 
     const load = async () => {
-      setIsLoading(true);
-      setError(null);
       try {
-        const review = await getLifeReview(Intl.DateTimeFormat().resolvedOptions().timeZone, 30, activePeriod);
+        const review = await loadPageDataCache(cacheKey, () => getLifeReview(timeZone, 30, activePeriod));
 
         if (!cancelled) {
-          setCards(review.cards ?? []);
-          setReviewThemes(review.reviewThemes ?? []);
-          setContinuityHints(review.continuityHints ?? []);
-          setSourceEvents(review.sourceEvents ?? []);
-          setUsedMemoryCount(review.usedMemoryCount ?? 0);
-          setUsedPlanSignalCount(review.usedPlanSignalCount ?? 0);
-          setExpandedCards({});
+          applyReview(review);
+          setError(null);
         }
       } catch (err) {
+        if (err instanceof PageDataCacheInvalidatedError) {
+          return;
+        }
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "暂时无法整理最近回顾");
-          setCards([]);
-          setReviewThemes([]);
-          setContinuityHints([]);
-          setSourceEvents([]);
-          setUsedMemoryCount(0);
-          setUsedPlanSignalCount(0);
+          if (!cached) {
+            setCards([]);
+            setReviewThemes([]);
+            setContinuityHints([]);
+            setSourceEvents([]);
+            setUsedMemoryCount(0);
+            setUsedPlanSignalCount(0);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -82,6 +122,12 @@ export default function LifeReviewPage() {
 
     return () => {
       cancelled = true;
+      if (cachedTimer !== undefined) {
+        window.clearTimeout(cachedTimer);
+      }
+      if (loadingTimer !== undefined) {
+        window.clearTimeout(loadingTimer);
+      }
     };
   }, [user, activePeriod]);
 
@@ -116,6 +162,12 @@ export default function LifeReviewPage() {
     setActionError(null);
     try {
       await keepLifeReviewCard(card);
+      if (user) {
+        invalidatePageDataCache([
+          pageDataCacheKey("memoryReview", user.uid),
+          pageDataCacheKey("homeOverview", user.uid),
+        ]);
+      }
       setKeptCardIds(current => ({
         ...current,
         [card.id]: true,
