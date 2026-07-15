@@ -79,6 +79,21 @@ life-agent-web/src/components/AgentPreview.tsx
 
 ## Current Memory Preview Surface
 
+Current read-only personal context is centralized through:
+
+```text
+IPersonalContextService / PersonalContextService
+  -> read recent life_events
+  -> read pending reminders when requested
+  -> read active, non-expired memories
+  -> apply shared period / ordering / safety filters
+  -> no durable write, no tool execution
+```
+
+This context layer is used by Life Q&A, Life Review, and Memory preview
+surfaces so that product-facing "AI understands my life" features share one
+read model instead of reimplementing context filtering in each workflow.
+
 Phase 6 currently exposes product-facing preview surfaces only:
 
 ```text

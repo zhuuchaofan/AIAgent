@@ -2,6 +2,7 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.PersonalContext;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LifeAgent.Tests;
@@ -201,8 +202,11 @@ public class LifeReviewServiceTest
         IRagAnswerGenerator answerGenerator)
     {
         return new LifeReviewService(
-            new FakeLifeEventService(events),
-            memoryRepository,
+            new PersonalContextService(
+                new FakeLifeEventService(events),
+                memoryRepository,
+                new FakeReminderService(Array.Empty<Reminder>()),
+                NullLogger<PersonalContextService>.Instance),
             answerGenerator,
             NullLogger<LifeReviewService>.Instance);
     }

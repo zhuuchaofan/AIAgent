@@ -1,7 +1,7 @@
 using LifeAgent.Api.Models.Exceptions;
 using LifeAgent.Api.Models.Memories;
-using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.PersonalContext;
 
 namespace LifeAgent.Api.Endpoints;
 
@@ -13,7 +13,7 @@ public static class MemoryInsightEndpoints
 
         group.MapGet("/insights/preview", async (
             HttpContext ctx,
-            ILifeEventService lifeEventService,
+            IPersonalContextService personalContextService,
             IMemoryInsightPreviewService memoryInsightPreviewService,
             int limit = 20) =>
         {
@@ -24,14 +24,14 @@ public static class MemoryInsightEndpoints
             }
 
             var boundedLimit = Math.Clamp(limit, 1, 50);
-            var events = await lifeEventService.ListEventsAsync(
-                userId,
-                type: "all",
-                limit: boundedLimit,
-                cursor: null,
-                tag: null);
+            var context = await personalContextService.LoadAsync(userId, new PersonalContextRequest
+            {
+                MaxEvents = boundedLimit,
+                MaxMemories = 0,
+                MaxReminders = 0
+            });
 
-            var preview = memoryInsightPreviewService.BuildPreview(userId, events.Data);
+            var preview = memoryInsightPreviewService.BuildPreview(userId, context.Events);
 
             return Results.Ok(new MemoryInsightPreviewResponse
             {
@@ -42,7 +42,7 @@ public static class MemoryInsightEndpoints
 
         group.MapGet("/review-inbox/preview", async (
             HttpContext ctx,
-            ILifeEventService lifeEventService,
+            IPersonalContextService personalContextService,
             IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
             IMemoryReviewStateStore memoryReviewStateStore,
             int limit = 20) =>
@@ -56,7 +56,7 @@ public static class MemoryInsightEndpoints
             var preview = await BuildReviewPreviewAsync(
                 userId,
                 limit,
-                lifeEventService,
+                personalContextService,
                 memoryReviewInboxPreviewService,
                 memoryReviewStateStore);
 
@@ -137,7 +137,7 @@ public static class MemoryInsightEndpoints
         group.MapPost("/review-inbox/{candidateId}/keep", async (
             string candidateId,
             HttpContext ctx,
-            ILifeEventService lifeEventService,
+            IPersonalContextService personalContextService,
             IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
             IMemoryReviewStateStore memoryReviewStateStore) =>
         {
@@ -150,7 +150,7 @@ public static class MemoryInsightEndpoints
             var candidate = await FindReviewCandidateAsync(
                 userId,
                 candidateId,
-                lifeEventService,
+                personalContextService,
                 memoryReviewInboxPreviewService,
                 memoryReviewStateStore);
             var state = await memoryReviewStateStore.UpsertAsync(
@@ -173,7 +173,7 @@ public static class MemoryInsightEndpoints
         group.MapPost("/review-inbox/{candidateId}/dismiss", async (
             string candidateId,
             HttpContext ctx,
-            ILifeEventService lifeEventService,
+            IPersonalContextService personalContextService,
             IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
             IMemoryReviewStateStore memoryReviewStateStore) =>
         {
@@ -186,7 +186,7 @@ public static class MemoryInsightEndpoints
             var candidate = await FindReviewCandidateAsync(
                 userId,
                 candidateId,
-                lifeEventService,
+                personalContextService,
                 memoryReviewInboxPreviewService,
                 memoryReviewStateStore);
             var state = await memoryReviewStateStore.UpsertAsync(
@@ -224,7 +224,7 @@ public static class MemoryInsightEndpoints
 
         group.MapGet("/context/preview", async (
             HttpContext ctx,
-            ILifeEventService lifeEventService,
+            IPersonalContextService personalContextService,
             IMemoryContextPreviewService memoryContextPreviewService,
             int limit = 20) =>
         {
@@ -235,14 +235,14 @@ public static class MemoryInsightEndpoints
             }
 
             var boundedLimit = Math.Clamp(limit, 1, 50);
-            var events = await lifeEventService.ListEventsAsync(
-                userId,
-                type: "all",
-                limit: boundedLimit,
-                cursor: null,
-                tag: null);
+            var context = await personalContextService.LoadAsync(userId, new PersonalContextRequest
+            {
+                MaxEvents = boundedLimit,
+                MaxMemories = 0,
+                MaxReminders = 0
+            });
 
-            var preview = memoryContextPreviewService.BuildPreview(userId, events.Data);
+            var preview = memoryContextPreviewService.BuildPreview(userId, context.Events);
 
             return Results.Ok(new MemoryContextPreviewResponse
             {
@@ -255,19 +255,19 @@ public static class MemoryInsightEndpoints
     private static async Task<MemoryReviewInboxPreviewData> BuildReviewPreviewAsync(
         string userId,
         int limit,
-        ILifeEventService lifeEventService,
+        IPersonalContextService personalContextService,
         IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
         IMemoryReviewStateStore memoryReviewStateStore)
     {
         var boundedLimit = Math.Clamp(limit, 1, 50);
-        var events = await lifeEventService.ListEventsAsync(
-            userId,
-            type: "all",
-            limit: boundedLimit,
-            cursor: null,
-            tag: null);
+        var context = await personalContextService.LoadAsync(userId, new PersonalContextRequest
+        {
+            MaxEvents = boundedLimit,
+            MaxMemories = 0,
+            MaxReminders = 0
+        });
 
-        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, events.Data);
+        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, context.Events);
         var states = await memoryReviewStateStore.ListByCandidateIdsAsync(
             userId,
             preview.Candidates.Select(candidate => candidate.Id).ToArray());
@@ -280,7 +280,7 @@ public static class MemoryInsightEndpoints
     private static async Task<MemoryReviewCandidateItem> FindReviewCandidateAsync(
         string userId,
         string candidateId,
-        ILifeEventService lifeEventService,
+        IPersonalContextService personalContextService,
         IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
         IMemoryReviewStateStore memoryReviewStateStore)
     {
@@ -295,13 +295,13 @@ public static class MemoryInsightEndpoints
             return storedCandidate;
         }
 
-        var events = await lifeEventService.ListEventsAsync(
-            userId,
-            type: "all",
-            limit: 50,
-            cursor: null,
-            tag: null);
-        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, events.Data);
+        var context = await personalContextService.LoadAsync(userId, new PersonalContextRequest
+        {
+            MaxEvents = 50,
+            MaxMemories = 0,
+            MaxReminders = 0
+        });
+        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, context.Events);
         var candidate = preview.Candidates.FirstOrDefault(item =>
             string.Equals(item.Id, candidateId, StringComparison.OrdinalIgnoreCase));
 

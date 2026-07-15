@@ -2,7 +2,7 @@ using System.Text;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Exceptions;
 using LifeAgent.Api.Models.Memories;
-using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.PersonalContext;
 
 namespace LifeAgent.Api.Services;
 
@@ -12,22 +12,16 @@ public class LifeChatService : ILifeChatService
     private const int MaxMemories = 12;
     private const int MaxReminders = 8;
 
-    private readonly ILifeEventService _lifeEventService;
-    private readonly IMemoryRepository _memoryRepository;
-    private readonly IReminderService _reminderService;
+    private readonly IPersonalContextService _personalContextService;
     private readonly IRagAnswerGenerator _answerGenerator;
     private readonly ILogger<LifeChatService> _logger;
 
     public LifeChatService(
-        ILifeEventService lifeEventService,
-        IMemoryRepository memoryRepository,
-        IReminderService reminderService,
+        IPersonalContextService personalContextService,
         IRagAnswerGenerator answerGenerator,
         ILogger<LifeChatService> logger)
     {
-        _lifeEventService = lifeEventService;
-        _memoryRepository = memoryRepository;
-        _reminderService = reminderService;
+        _personalContextService = personalContextService;
         _answerGenerator = answerGenerator;
         _logger = logger;
     }
@@ -44,30 +38,17 @@ public class LifeChatService : ILifeChatService
             throw new InvalidInputException("问题不能为空");
         }
 
-        var eventsResult = await _lifeEventService.ListEventsAsync(
-            userId,
-            type: "all",
-            limit: MaxEvents,
-            cursor: null,
-            tag: null);
+        var context = await _personalContextService.LoadAsync(userId, new PersonalContextRequest
+        {
+            MaxEvents = MaxEvents,
+            MaxMemories = MaxMemories,
+            MaxReminders = MaxReminders,
+            ClientTimeZone = request.ClientTimeZone
+        });
 
-        var events = eventsResult.Data
-            .Where(item => !item.IsDeleted)
-            .OrderByDescending(item => item.OccurredAt == default ? item.CreatedAt : item.OccurredAt)
-            .Take(MaxEvents)
-            .ToList();
-
-        var memories = (await _memoryRepository.ListByUserAsync(
-                userId,
-                type: null,
-                status: MemoryStatus.Active.ToSnakeCaseString()))
-            .Where(memory => !IsExpiredMemory(memory))
-            .OrderByDescending(memory => memory.Importance)
-            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
-            .Take(MaxMemories)
-            .ToList();
-
-        var reminders = await LoadPendingRemindersAsync(userId);
+        var events = context.Events;
+        var memories = context.Memories;
+        var reminders = context.PendingReminders;
 
         if (events.Count == 0 && memories.Count == 0 && reminders.Count == 0)
         {
@@ -121,23 +102,6 @@ public class LifeChatService : ILifeChatService
                 UsedMemoryCount = memories.Count,
                 UsedReminderCount = reminders.Count
             };
-        }
-    }
-
-    private async Task<List<Reminder>> LoadPendingRemindersAsync(string userId)
-    {
-        try
-        {
-            return (await _reminderService.ListRemindersAsync(userId, "pending"))
-                .Where(reminder => string.Equals(reminder.Status, "pending", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(reminder => reminder.DueAt)
-                .Take(MaxReminders)
-                .ToList();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Life chat failed to load pending reminders for user {UserId}", userId);
-            return new List<Reminder>();
         }
     }
 
@@ -304,8 +268,4 @@ public class LifeChatService : ILifeChatService
         return string.Join("。", parts) + "。更细的判断还需要更多记录支持。";
     }
 
-    private static bool IsExpiredMemory(Memory memory)
-    {
-        return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
-    }
 }

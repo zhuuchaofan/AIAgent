@@ -130,7 +130,10 @@ on `/reminders`.
    - Does not show confirmed reminders; reminders live on `/reminders`.
 
 3. Memory preview surfaces
-   - Source: recent `life_events` only.
+   - Source: read-only personal context, currently recent `life_events` for
+     preview generation plus active Memory where the consuming workflow allows it.
+   - `IPersonalContextService` centralizes recent record, pending reminder, and
+     active non-expired Memory selection for Life Q&A, Life Review, and Memory preview surfaces.
    - `GET /api/memory/insights/preview` powers the Home `AI 发现` card.
    - `GET /api/memory/review-inbox/preview` powers `/memory/review`.
    - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
@@ -146,8 +149,8 @@ on `/reminders`.
      Memory records.
 
 4. Life Q&A
-   - Source: recent `life_events`, pending `reminders`, plus active durable
-     Memory.
+   - Source: `IPersonalContextService` read-only context containing recent
+     `life_events`, pending `reminders`, plus active durable Memory.
    - `POST /api/life/chat` answers questions about the user's life in
      read-only mode.
    - The web UI may tell the user when active remembered content or pending
@@ -156,7 +159,8 @@ on `/reminders`.
      execute tools.
 
 5. Life review
-   - Source: recent `life_events` plus active durable Memory.
+   - Source: `IPersonalContextService` read-only context containing recent
+     `life_events` plus active durable Memory.
    - `POST /api/life/review` returns structured review cards and source event
      references in read-only mode.
    - Review requests support `recent`, `today`, and `week` windows.

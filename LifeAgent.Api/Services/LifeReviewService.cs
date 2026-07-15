@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
-using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.PersonalContext;
 
 namespace LifeAgent.Api.Services;
 
@@ -28,19 +28,16 @@ public class LifeReviewService : ILifeReviewService
         ["worth_noticing"] = "可能值得留意"
     };
 
-    private readonly ILifeEventService _lifeEventService;
-    private readonly IMemoryRepository _memoryRepository;
+    private readonly IPersonalContextService _personalContextService;
     private readonly IRagAnswerGenerator _answerGenerator;
     private readonly ILogger<LifeReviewService> _logger;
 
     public LifeReviewService(
-        ILifeEventService lifeEventService,
-        IMemoryRepository memoryRepository,
+        IPersonalContextService personalContextService,
         IRagAnswerGenerator answerGenerator,
         ILogger<LifeReviewService> logger)
     {
-        _lifeEventService = lifeEventService;
-        _memoryRepository = memoryRepository;
+        _personalContextService = personalContextService;
         _answerGenerator = answerGenerator;
         _logger = logger;
     }
@@ -55,32 +52,17 @@ public class LifeReviewService : ILifeReviewService
         request ??= new LifeReviewRequest();
         var limit = Math.Clamp(request.Limit ?? DefaultMaxEvents, 1, AbsoluteMaxEvents);
         var period = NormalizePeriod(request.Period);
-        var timeZone = ResolveTimeZone(request.ClientTimeZone);
-        var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
+        var context = await _personalContextService.LoadAsync(userId, new PersonalContextRequest
+        {
+            MaxEvents = limit,
+            MaxMemories = MaxMemories,
+            MaxReminders = 0,
+            Period = period,
+            ClientTimeZone = request.ClientTimeZone
+        });
 
-        var eventsResult = await _lifeEventService.ListEventsAsync(
-            userId,
-            type: "all",
-            limit: limit,
-            cursor: null,
-            tag: null);
-
-        var events = eventsResult.Data
-            .Where(item => !item.IsDeleted)
-            .Where(item => IsInPeriod(item, period, timeZone, localNow))
-            .OrderByDescending(item => item.OccurredAt == default ? item.CreatedAt : item.OccurredAt)
-            .Take(limit)
-            .ToList();
-
-        var memories = (await _memoryRepository.ListByUserAsync(
-                userId,
-                type: null,
-                status: MemoryStatus.Active.ToSnakeCaseString()))
-            .Where(memory => !IsExpiredMemory(memory))
-            .OrderByDescending(memory => memory.Importance)
-            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
-            .Take(MaxMemories)
-            .ToList();
+        var events = context.Events;
+        var memories = context.Memories;
 
         if (events.Count == 0 && memories.Count == 0)
         {
@@ -336,42 +318,6 @@ public class LifeReviewService : ILifeReviewService
         };
     }
 
-    private static TimeZoneInfo ResolveTimeZone(string? timeZone)
-    {
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById(
-                string.IsNullOrWhiteSpace(timeZone) ? "Asia/Shanghai" : timeZone.Trim());
-        }
-        catch
-        {
-            return TimeZoneInfo.Utc;
-        }
-    }
-
-    private static bool IsInPeriod(LifeEvent item, string period, TimeZoneInfo timeZone, DateTime localNow)
-    {
-        if (period == "recent")
-        {
-            return true;
-        }
-
-        var occurredAt = item.OccurredAt == default ? item.CreatedAt : item.OccurredAt;
-        var utc = occurredAt.Kind == DateTimeKind.Utc
-            ? occurredAt
-            : DateTime.SpecifyKind(occurredAt, DateTimeKind.Utc);
-        var localOccurredAt = TimeZoneInfo.ConvertTimeFromUtc(utc, timeZone);
-
-        if (period == "today")
-        {
-            return localOccurredAt.Date == localNow.Date;
-        }
-
-        var daysFromMonday = ((int)localNow.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-        var weekStart = localNow.Date.AddDays(-daysFromMonday);
-        return localOccurredAt >= weekStart;
-    }
-
     private static LifeReviewSourceEvent ToSourceEvent(LifeEvent item)
     {
         var occurredAt = item.OccurredAt == default ? item.CreatedAt : item.OccurredAt;
@@ -408,11 +354,6 @@ public class LifeReviewService : ILifeReviewService
         {
             return DateTime.UtcNow;
         }
-    }
-
-    private static bool IsExpiredMemory(Memory memory)
-    {
-        return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
     }
 
     private static string TrimForPrompt(string? value, int maxLength)

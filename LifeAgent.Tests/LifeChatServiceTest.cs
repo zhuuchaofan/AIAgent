@@ -2,6 +2,7 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.PersonalContext;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LifeAgent.Tests;
@@ -249,9 +250,11 @@ public class LifeChatServiceTest
         IReadOnlyList<Reminder>? reminders = null)
     {
         return new LifeChatService(
-            new FakeLifeEventService(events),
-            memoryRepository,
-            new FakeReminderService(reminders ?? Array.Empty<Reminder>()),
+            new PersonalContextService(
+                new FakeLifeEventService(events),
+                memoryRepository,
+                new FakeReminderService(reminders ?? Array.Empty<Reminder>()),
+                NullLogger<PersonalContextService>.Instance),
             answerGenerator,
             NullLogger<LifeChatService>.Instance);
     }
