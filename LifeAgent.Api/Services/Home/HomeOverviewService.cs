@@ -61,7 +61,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         }, cancellationToken);
 
         var insightPreview = _memoryInsightPreviewService.BuildPreview(userId, context.Events);
-        var reviewPreview = _memoryReviewInboxPreviewService.BuildPreview(userId, context.Events);
+        var reviewPreview = _memoryReviewInboxPreviewService.BuildPreview(userId, context.Events, context.Memories);
         var states = await _memoryReviewStateStore.ListByCandidateIdsAsync(
             userId,
             reviewPreview.Candidates.Select(candidate => candidate.Id).ToArray());

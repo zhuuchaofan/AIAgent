@@ -263,11 +263,11 @@ public static class MemoryInsightEndpoints
         var context = await personalContextService.LoadAsync(userId, new PersonalContextRequest
         {
             MaxEvents = boundedLimit,
-            MaxMemories = 0,
+            MaxMemories = 20,
             MaxReminders = 0
         });
 
-        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, context.Events);
+        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, context.Events, context.Memories);
         var states = await memoryReviewStateStore.ListByCandidateIdsAsync(
             userId,
             preview.Candidates.Select(candidate => candidate.Id).ToArray());
@@ -298,10 +298,10 @@ public static class MemoryInsightEndpoints
         var context = await personalContextService.LoadAsync(userId, new PersonalContextRequest
         {
             MaxEvents = 50,
-            MaxMemories = 0,
+            MaxMemories = 20,
             MaxReminders = 0
         });
-        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, context.Events);
+        var preview = memoryReviewInboxPreviewService.BuildPreview(userId, context.Events, context.Memories);
         var candidate = preview.Candidates.FirstOrDefault(item =>
             string.Equals(item.Id, candidateId, StringComparison.OrdinalIgnoreCase));
 

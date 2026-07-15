@@ -90,6 +90,31 @@ public class HomeOverviewServiceTest
     }
 
     [Fact]
+    public async Task BuildAsync_DoesNotCountMemoryOverlappingCandidateAsPendingReview()
+    {
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Habit.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我会关注运动状态和身体感受。",
+            Importance = 4
+        });
+        var service = Service(
+            new[]
+            {
+                Event("evt_bike", "骑车", "今天骑车回来，心率不高。", minutesAgo: 10)
+            },
+            memoryRepository);
+
+        var overview = await service.BuildAsync("user_a");
+
+        Assert.Equal(1, overview.MemoryReviewCandidateCount);
+        Assert.Equal(0, overview.MemoryReviewPendingCandidateCount);
+        Assert.Equal(1, overview.MemoryReviewRememberedCandidateCount);
+    }
+
+    [Fact]
     public async Task BuildAsync_CountsActiveMemoriesAndPendingReminders()
     {
         var memoryRepository = new InMemoryMemoryRepository();

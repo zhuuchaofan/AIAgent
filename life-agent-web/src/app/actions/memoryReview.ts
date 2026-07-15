@@ -15,6 +15,8 @@ export interface MemoryReviewCandidate {
   sources: MemoryReviewSource[];
   confidence: number;
   reason: string;
+  qualityReason?: string;
+  suggestedAction?: "review" | "keep_observing" | "already_remembered" | "skip_one_off";
   reviewStatus?: "pending" | "kept" | "dismissed" | "remembered";
   reviewedAt?: string | null;
   memoryId?: string | null;

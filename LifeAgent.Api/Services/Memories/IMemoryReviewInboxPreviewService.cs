@@ -5,5 +5,8 @@ namespace LifeAgent.Api.Services.Memories;
 
 public interface IMemoryReviewInboxPreviewService
 {
-    MemoryReviewInboxPreviewData BuildPreview(string userId, IReadOnlyList<LifeEvent> events);
+    MemoryReviewInboxPreviewData BuildPreview(
+        string userId,
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory>? activeMemories = null);
 }

@@ -13,13 +13,23 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
     private const double ObservingConfidence = 0.72;
     private const double StableConfidence = 0.86;
 
-    public MemoryReviewInboxPreviewData BuildPreview(string userId, IReadOnlyList<LifeEvent> events)
+    private static readonly HashSet<string> GenericMatchFragments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "一个", "事情", "今天", "最近", "近期", "计划", "目标", "希望", "需要", "关注", "继续", "准备", "相关", "记住",
+        "状态", "个人", "背景", "记录", "整理", "反复", "出现", "内容", "可能", "值得", "线索"
+    };
+
+    public MemoryReviewInboxPreviewData BuildPreview(
+        string userId,
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory>? activeMemories = null)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
             throw new ArgumentException("userId is required for memory review inbox preview.", nameof(userId));
         }
 
+        var memories = activeMemories ?? Array.Empty<Memory>();
         var candidates = events
             .SelectMany(BuildSignals)
             .GroupBy(signal => signal.Key, StringComparer.OrdinalIgnoreCase)
@@ -45,6 +55,11 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                 var isStable = stage == "stable";
                 var candidateType = ToCandidateType(signal, isStable);
                 var candidateTitle = ToCandidateTitle(signal, isStable);
+                var relatedMemory = FindRelatedMemory(candidateTitle, signal, memories);
+                var suggestedAction = relatedMemory is not null
+                    ? "already_remembered"
+                    : ToSuggestedAction(stage);
+                var qualityReason = BuildQualityReason(stage, candidateType, sourceIds.Length, relatedMemory);
 
                 return new MemoryReviewCandidateItem
                 {
@@ -58,6 +73,10 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                     Sources = sources,
                     Confidence = ToConfidence(stage),
                     Reason = ToReason(stage),
+                    QualityReason = qualityReason,
+                    SuggestedAction = suggestedAction,
+                    ReviewStatus = relatedMemory is null ? "pending" : "remembered",
+                    MemoryId = relatedMemory?.Id,
                     PreviewOnly = true,
                     WroteData = false
                 };
@@ -112,6 +131,48 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
             "one_off" => OneOffConfidence,
             _ => ObservingConfidence
         };
+    }
+
+    private static string ToSuggestedAction(string stage)
+    {
+        return stage switch
+        {
+            "stable" => "review",
+            "one_off" => "skip_one_off",
+            _ => "keep_observing"
+        };
+    }
+
+    private static string BuildQualityReason(
+        string stage,
+        string type,
+        int sourceCount,
+        Memory? relatedMemory)
+    {
+        if (relatedMemory is not null)
+        {
+            return "已有相近的已记住内容，不需要重复确认。";
+        }
+
+        if (stage == "stable")
+        {
+            var typeText = type switch
+            {
+                "preference" => "偏好",
+                "habit" => "习惯",
+                "goal" => "目标",
+                "temporary_context" => "近期背景",
+                _ => "主题"
+            };
+            return $"来自最近 {sourceCount} 条记录，已经更像稳定的{typeText}线索。";
+        }
+
+        if (stage == "one_off")
+        {
+            return "目前只来自一条记录，更像一次性事件，建议先跳过或继续观察。";
+        }
+
+        return "目前只来自一条记录，建议先观察，等更多记录出现后再决定。";
     }
 
     private static string ToReason(string stage)
@@ -331,6 +392,63 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
     private static bool ContainsAny(string text, params string[] markers)
     {
         return markers.Any(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static Memory? FindRelatedMemory(
+        string candidateTitle,
+        ReviewSignal signal,
+        IReadOnlyList<Memory> activeMemories)
+    {
+        if (activeMemories.Count == 0)
+        {
+            return null;
+        }
+
+        var candidateText = $"{candidateTitle} {signal.Title} {BuildText(signal.LifeEvent)}";
+        return activeMemories
+            .Where(memory => string.Equals(memory.Status, MemoryStatus.Active.ToSnakeCaseString(), StringComparison.OrdinalIgnoreCase))
+            .Where(memory => !IsExpiredMemory(memory))
+            .Where(memory => HasMeaningfulOverlap(candidateText, memory.Content))
+            .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+            .FirstOrDefault();
+    }
+
+    private static bool HasMeaningfulOverlap(string left, string right)
+    {
+        var leftFragments = ExtractMatchFragments(left);
+        var rightFragments = ExtractMatchFragments(right);
+        return leftFragments.Overlaps(rightFragments);
+    }
+
+    private static HashSet<string> ExtractMatchFragments(string text)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in Regex.Matches(text ?? string.Empty, @"[A-Za-z0-9]+|[\u4e00-\u9fff]+"))
+        {
+            var token = match.Value.ToLowerInvariant();
+            if (Regex.IsMatch(token, @"^[a-z0-9]+$") && token.Length >= 2)
+            {
+                result.Add(token);
+                continue;
+            }
+
+            for (var index = 0; index < token.Length - 1; index++)
+            {
+                var fragment = token.Substring(index, 2);
+                if (!GenericMatchFragments.Contains(fragment))
+                {
+                    result.Add(fragment);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsExpiredMemory(Memory memory)
+    {
+        return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
     }
 
     private sealed record ReviewSignal(

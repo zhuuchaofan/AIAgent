@@ -50,6 +50,8 @@ public sealed class MemoryReviewCandidateItem
     public IReadOnlyList<MemoryReviewSourceItem> Sources { get; set; } = Array.Empty<MemoryReviewSourceItem>();
     public double Confidence { get; set; }
     public string Reason { get; set; } = string.Empty;
+    public string QualityReason { get; set; } = string.Empty;
+    public string SuggestedAction { get; set; } = "keep_observing";
     public string ReviewStatus { get; set; } = "pending";
     public DateTime? ReviewedAt { get; set; }
     public string? MemoryId { get; set; }

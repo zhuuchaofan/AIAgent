@@ -197,6 +197,8 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
             ["reviewStageLabel"] = candidate.ReviewStageLabel,
             ["confidence"] = candidate.Confidence,
             ["reason"] = candidate.Reason,
+            ["qualityReason"] = candidate.QualityReason,
+            ["suggestedAction"] = candidate.SuggestedAction,
             ["sourceEventIds"] = candidate.SourceEventIds.ToArray(),
             ["sourceTitles"] = candidate.Sources.Select(source => source.Title).Distinct().ToArray(),
             ["sources"] = candidate.Sources.Select(source => new Dictionary<string, object?>
@@ -283,6 +285,8 @@ public sealed class FirestoreMemoryReviewStateStore : IMemoryReviewStateStore
             Sources = sources,
             Confidence = ReadDouble(data, "confidence"),
             Reason = ReadString(data, "reason") ?? "已留着",
+            QualityReason = ReadString(data, "qualityReason") ?? string.Empty,
+            SuggestedAction = ReadString(data, "suggestedAction") ?? "keep_observing",
             ReviewStatus = status,
             ReviewedAt = ToDateTime(data, "reviewedAt"),
             MemoryId = ReadString(data, "memoryId"),
@@ -398,7 +402,9 @@ public static class MemoryReviewInboxStateProjection
     {
         if (!states.TryGetValue(candidate.Id, out var state))
         {
-            candidate.ReviewStatus = "pending";
+            candidate.ReviewStatus = string.IsNullOrWhiteSpace(candidate.ReviewStatus)
+                ? "pending"
+                : candidate.ReviewStatus;
             candidate.ReviewedAt = null;
             return candidate;
         }

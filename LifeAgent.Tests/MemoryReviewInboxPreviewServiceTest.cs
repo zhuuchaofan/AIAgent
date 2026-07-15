@@ -183,6 +183,8 @@ public class MemoryReviewInboxPreviewServiceTest
         Assert.Equal("one_off", candidate.ReviewStage);
         Assert.Equal("一次性", candidate.ReviewStageLabel);
         Assert.Equal("可能只是一次性事件", candidate.Reason);
+        Assert.Equal("skip_one_off", candidate.SuggestedAction);
+        Assert.Contains("一次性事件", candidate.QualityReason, StringComparison.Ordinal);
         Assert.Equal(0.62, candidate.Confidence);
         Assert.Contains("不建议直接当作长期记忆", candidate.Detail, StringComparison.Ordinal);
     }
@@ -218,7 +220,37 @@ public class MemoryReviewInboxPreviewServiceTest
         Assert.Equal("你会关注运动状态和身体感受。", candidate.Title);
         Assert.Equal("最近多次出现", candidate.Reason);
         Assert.Equal("stable", candidate.ReviewStage);
+        Assert.Equal("review", candidate.SuggestedAction);
+        Assert.Contains("稳定的习惯线索", candidate.QualityReason, StringComparison.Ordinal);
         Assert.Contains("较稳定的习惯线索", candidate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildPreview_MarksCandidateOverlappingActiveMemoryAsAlreadyRemembered()
+    {
+        var preview = _service.BuildPreview(
+            "user_a",
+            new[]
+            {
+                NewEvent("evt_bike", "骑车", "今天骑车回来，心率不高。")
+            },
+            new[]
+            {
+                new Memory
+                {
+                    Id = "mem_body",
+                    Type = MemoryType.Habit.ToSnakeCaseString(),
+                    Status = MemoryStatus.Active.ToSnakeCaseString(),
+                    Content = "我会关注运动状态和身体感受。",
+                    Importance = 4
+                }
+            });
+
+        var candidate = Assert.Single(preview.Candidates);
+        Assert.Equal("remembered", candidate.ReviewStatus);
+        Assert.Equal("already_remembered", candidate.SuggestedAction);
+        Assert.Equal("mem_body", candidate.MemoryId);
+        Assert.Contains("已有相近", candidate.QualityReason, StringComparison.Ordinal);
     }
 
     [Fact]

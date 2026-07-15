@@ -105,6 +105,9 @@ Expected:
 - Candidates are grouped as pending, observing, or remembered.
 - Candidate cards show user-facing labels such as `更稳定`, `观察中`, or
   `一次性`.
+- Candidate cards explain the quality judgment: stable repeated signals can be
+  reviewed, one-off signals should usually be skipped or observed, and signals
+  already covered by active Memory should not inflate pending review counts.
 - A likely one-off event is presented as something to observe, not something
   LifeOS already believes as long-term memory.
 - Source expansion shows life-record evidence, not prompts or backend payloads.

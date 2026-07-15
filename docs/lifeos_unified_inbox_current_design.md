@@ -166,6 +166,9 @@ on `/reminders`.
      active non-expired Memory selection for Life Q&A, Life Review, and Memory preview surfaces.
    - `GET /api/memory/insights/preview` powers the Home `AI 发现` card.
    - `GET /api/memory/review-inbox/preview` powers `/memory/review`.
+     Candidates include read-only quality guidance (`qualityReason` and
+     `suggestedAction`) so one-off events, stable repeated signals, and items
+     already covered by active Memory are not treated as the same pending work.
    - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
      Review Inbox status to `users/{userId}/memory_review_items`.
    - `POST /api/memory/review-inbox/{candidateId}/remember` writes an edited,

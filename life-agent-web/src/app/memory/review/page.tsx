@@ -39,6 +39,33 @@ function stageBadgeClass(stage: MemoryReviewCandidate["reviewStage"]): string {
   }
 }
 
+function qualityBadge(candidate: MemoryReviewCandidate): { label: string; className: string } | null {
+  switch (candidate.suggestedAction) {
+    case "review":
+      return {
+        label: "可考虑记住",
+        className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+      };
+    case "skip_one_off":
+      return {
+        label: "建议先跳过",
+        className: "border-amber-500/20 bg-amber-500/10 text-amber-300"
+      };
+    case "already_remembered":
+      return {
+        label: "已有相近记忆",
+        className: "border-sky-500/20 bg-sky-500/10 text-sky-300"
+      };
+    case "keep_observing":
+      return {
+        label: "建议观察",
+        className: "border-zinc-700 bg-zinc-900 text-zinc-400"
+      };
+    default:
+      return null;
+  }
+}
+
 export default function MemoryReviewPage() {
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<"pending" | "kept" | "remembered">("pending");
@@ -227,7 +254,9 @@ export default function MemoryReviewPage() {
                     ? "还没有观察中的线索。遇到不确定但有价值的内容，可以先留着，之后再决定是否记住。"
                     : "还没有真正记住的线索。确认记住后，它们会出现在这里和「我的记忆」里。"}
               </div>
-          ) : visibleCandidates.map(candidate => (
+          ) : visibleCandidates.map(candidate => {
+            const quality = qualityBadge(candidate);
+            return (
               <article
                 key={candidate.id}
                 className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4"
@@ -241,6 +270,11 @@ export default function MemoryReviewPage() {
                       <span className={`rounded-md border px-2 py-0.5 text-xs ${stageBadgeClass(candidate.reviewStage)}`}>
                         {candidate.reviewStageLabel || "观察中"}
                       </span>
+                      {quality && (
+                        <span className={`rounded-md border px-2 py-0.5 text-xs ${quality.className}`}>
+                          {quality.label}
+                        </span>
+                      )}
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
                       {candidate.reviewStatus === "kept" && (
                         <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
@@ -265,6 +299,17 @@ export default function MemoryReviewPage() {
                         这类线索更像一次发生的事，可以先留着观察，不必急着放进长期记忆。
                       </p>
                     )}
+                    {candidate.qualityReason && (
+                      <p className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${
+                        candidate.suggestedAction === "already_remembered"
+                          ? "border-sky-500/10 bg-sky-500/5 text-sky-100/80"
+                          : candidate.suggestedAction === "review"
+                            ? "border-emerald-500/10 bg-emerald-500/5 text-emerald-100/80"
+                            : "border-zinc-800 bg-zinc-950/40 text-zinc-500"
+                      }`}>
+                        {candidate.qualityReason}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -282,7 +327,12 @@ export default function MemoryReviewPage() {
                   <button
                     type="button"
                     onClick={() => keepCandidate(candidate.id)}
-                    disabled={updatingId === candidate.id || candidate.reviewStatus === "kept" || candidate.reviewStatus === "remembered"}
+                    disabled={
+                      updatingId === candidate.id ||
+                      candidate.reviewStatus === "kept" ||
+                      candidate.reviewStatus === "remembered" ||
+                      candidate.suggestedAction === "already_remembered"
+                    }
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
                   >
                     {updatingId === candidate.id ? (
@@ -388,7 +438,8 @@ export default function MemoryReviewPage() {
                   </div>
                 )}
               </article>
-          ))}
+            );
+          })}
           <p className="px-1 text-xs leading-relaxed text-zinc-600">
             待确认和观察中只是候选状态；只有点击“确认记住”后，才会进入「我的记忆」。
           </p>
