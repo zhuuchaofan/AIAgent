@@ -159,6 +159,9 @@ on `/reminders`.
      It also returns up to three read-only `contextThreads` that connect active
      Memory, repeated recent records, pending reminders, and active plan signals
      into user-facing recent themes with evidence and navigation labels.
+     The current Home UI keeps the first screen compact by surfacing only the
+     top context thread inside the AI organizing area; the response may still
+     contain up to three threads for downstream surfaces.
    - It is read-only and must not create pending actions, write Memory, create
      reminders, or execute tools.
 
@@ -178,7 +181,8 @@ on `/reminders`.
      executing tools or writing new data.
      Context threads on the same endpoint are also read-only: they may explain
      why a reminder, plan, memory, or repeated record pattern matters now, but
-     they do not create or modify any underlying resource.
+     the Home UI presents them as a lightweight summary and they do not create
+     or modify any underlying resource.
    - `POST /api/life/review` can attach read-only evidence hints to review
      cards when active Memory or active Plan Signals overlap with the card
      context. These hints are navigation/explanation only and do not create

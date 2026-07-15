@@ -90,27 +90,14 @@ Expected:
 - A brief summary explains why today's signals matter.
 - Signals are grounded in pending reminders, active Memory, repeated recent
   themes, plan signals, or pending Memory Review candidates.
+- If there is a recent context thread, the home page shows only the most
+  important thread summary inside this AI organizing area rather than expanding
+  another full module.
 - Pending Memory Review counts include only items still waiting for judgment;
   remembered items do not inflate the pending number.
 - The brief links only to existing read-only or management surfaces.
 - Loading the brief does not write data, create reminders, remember anything,
   deliver notifications, or execute tools.
-
-### 2c. Review recent context threads
-
-On the home page, inspect `近期主线`.
-
-Expected:
-
-- At most three threads are shown.
-- Threads are grounded in active Memory, repeated recent records, pending
-  reminders, or active plan signals.
-- A one-off life record does not become a long-term thread unless active Memory
-  or repeated recent evidence supports it.
-- Each thread shows read-only evidence and links only to existing management or
-  review surfaces.
-- Loading the threads does not write Memory, create reminders, create pending
-  actions, deliver notifications, or execute tools.
 
 ### 3. Inspect possible memories
 
