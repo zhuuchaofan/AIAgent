@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { Bell, BookOpen, Brain, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, BookOpen, Brain, Calendar, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
-import { getMemoryInsightPreview, type MemoryInsight } from "@/app/actions/memoryInsights";
-import { getMemoryReviewInboxPreview } from "@/app/actions/memoryReview";
-import { getMemoryItems } from "@/app/actions/memoryItems";
-import { InsightSkeleton, PageContentSkeleton } from "@/components/LoadingSkeletons";
+import type { MemoryInsight } from "@/app/actions/memoryInsights";
+import { getHomeOverview, type HomeOverviewData } from "@/app/actions/homeOverview";
+import { InsightSkeleton, PageContentSkeleton, TimelineSkeleton } from "@/components/LoadingSkeletons";
 
 function InsightCard({
   insights,
@@ -92,56 +91,42 @@ function InsightCard({
 export default function Home() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [insightRefreshTrigger, setInsightRefreshTrigger] = useState(0);
-  const [insights, setInsights] = useState<MemoryInsight[]>([]);
-  const [reviewCandidateCount, setReviewCandidateCount] = useState(0);
-  const [memoryCount, setMemoryCount] = useState(0);
-  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  const [insightError, setInsightError] = useState<string | null>(null);
-
-  const handleRecentEventsChange = useCallback(() => {
-    setInsightRefreshTrigger(t => t + 1);
-  }, []);
+  const [overviewRefreshTrigger, setOverviewRefreshTrigger] = useState(0);
+  const [overview, setOverview] = useState<HomeOverviewData | null>(null);
+  const [isLoadingOverview, setIsLoadingOverview] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
     let cancelled = false;
 
-    const loadInsights = async () => {
-      setIsLoadingInsights(true);
-      setInsightError(null);
+    const loadOverview = async () => {
+      setIsLoadingOverview(true);
+      setOverviewError(null);
       try {
-        const [preview, reviewPreview, memoryItems] = await Promise.all([
-          getMemoryInsightPreview(20),
-          getMemoryReviewInboxPreview(20),
-          getMemoryItems("active"),
-        ]);
+        const nextOverview = await getHomeOverview(20);
         if (!cancelled) {
-          setInsights(preview.insights ?? []);
-          setReviewCandidateCount(reviewPreview.candidates?.length ?? 0);
-          setMemoryCount(memoryItems.length);
+          setOverview(nextOverview);
         }
       } catch (error) {
         if (!cancelled) {
-          setInsightError(error instanceof Error ? error.message : "AI 发现暂时不可用");
-          setInsights([]);
-          setReviewCandidateCount(0);
-          setMemoryCount(0);
+          setOverviewError(error instanceof Error ? error.message : "首页内容暂时不可用");
+          setOverview(null);
         }
       } finally {
         if (!cancelled) {
-          setIsLoadingInsights(false);
+          setIsLoadingOverview(false);
         }
       }
     };
 
-    loadInsights();
+    loadOverview();
 
     return () => {
       cancelled = true;
     };
-  }, [insightRefreshTrigger, user]);
+  }, [overviewRefreshTrigger, user]);
 
   const handleLogin = async () => {
     try {
@@ -249,16 +234,35 @@ export default function Home() {
             <AgentPreview
               onLifeRecordWritten={() => {
                 setRefreshTrigger(t => t + 1);
-                setInsightRefreshTrigger(t => t + 1);
+                setOverviewRefreshTrigger(t => t + 1);
               }}
             />
-            <Timeline refreshTrigger={refreshTrigger} onRecentEventsChange={handleRecentEventsChange} />
+            {overview ? (
+              <Timeline
+                refreshTrigger={refreshTrigger}
+                initialEvents={overview.recentEvents}
+                initialHasMoreRecords={overview.hasMoreRecentEvents}
+                deferInitialLoad
+              />
+            ) : overviewError ? (
+              <Timeline refreshTrigger={refreshTrigger} />
+            ) : (
+              <div className="w-full max-w-2xl mx-auto">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="flex items-center gap-2 text-xl font-semibold text-zinc-100">
+                    <Calendar className="h-5 w-5 text-indigo-400" />
+                    最近生活记录
+                  </h2>
+                </div>
+                <TimelineSkeleton />
+              </div>
+            )}
             <InsightCard
-              insights={insights}
-              reviewCandidateCount={reviewCandidateCount}
-              memoryCount={memoryCount}
-              isLoading={isLoadingInsights}
-              error={insightError}
+              insights={overview?.insights ?? []}
+              reviewCandidateCount={overview?.memoryReviewCandidateCount ?? 0}
+              memoryCount={overview?.memoryCount ?? 0}
+              isLoading={isLoadingOverview}
+              error={overviewError}
             />
           </div>
         )}

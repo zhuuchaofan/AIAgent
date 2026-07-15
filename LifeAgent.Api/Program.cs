@@ -10,6 +10,7 @@ using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
 using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.Agent.Tools;
+using LifeAgent.Api.Services.Home;
 using LifeAgent.Api.Services.LifeEvents;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
@@ -40,6 +41,7 @@ builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptio
 builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.SectionName));
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
 builder.Services.AddScoped<IPersonalContextService, PersonalContextService>();
+builder.Services.AddScoped<IHomeOverviewService, HomeOverviewService>();
 builder.Services.AddScoped<ILifeChatService, LifeChatService>();
 builder.Services.AddScoped<ILifeReviewService, LifeReviewService>();
 builder.Services.AddScoped<ILifeReviewMemoryCandidateService, LifeReviewMemoryCandidateService>();
@@ -269,6 +271,7 @@ app.UseRateLimiter();
 // ── 路由 ──────────────────────────────────────────────────────
 
 app.MapLifeEndpoints();
+app.MapHomeEndpoints();
 app.MapReminderEndpoints();
 app.MapDailySummaryEndpoints();
 app.MapMigrationEndpoints();

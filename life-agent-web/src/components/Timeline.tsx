@@ -21,14 +21,20 @@ function getTypeText(type: string): string {
 export function Timeline({
   refreshTrigger,
   onRecentEventsChange,
+  initialEvents,
+  deferInitialLoad = false,
+  initialHasMoreRecords = false,
 }: {
   refreshTrigger: number;
   onRecentEventsChange?: (events: LifeEvent[]) => void;
+  initialEvents?: LifeEvent[];
+  deferInitialLoad?: boolean;
+  initialHasMoreRecords?: boolean;
 }) {
   const { user } = useAuth();
-  const [events, setEvents] = useState<LifeEvent[]>([]);
+  const [events, setEvents] = useState<LifeEvent[]>(initialEvents ?? []);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(initialEvents === undefined);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showAllRecords, setShowAllRecords] = useState(false);
@@ -57,6 +63,11 @@ export function Timeline({
 
   useEffect(() => {
     if (!user) return;
+
+    if (deferInitialLoad && refreshTrigger === 0 && !selectedTag) {
+      return;
+    }
+
     const load = async () => {
       await Promise.resolve();
       setIsLoading(true);
@@ -67,7 +78,7 @@ export function Timeline({
       }
     };
     load();
-  }, [fetchEvents, selectedTag, refreshTrigger, user]);
+  }, [deferInitialLoad, fetchEvents, initialEvents, selectedTag, refreshTrigger, user]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm("确定要删除此事件吗？删除后将无法恢复。")) {
@@ -130,7 +141,7 @@ export function Timeline({
   }
 
   const visibleEvents = showAllRecords ? events : events.slice(0, 3);
-  const hasMoreLocalRecords = events.length > 3 && !showAllRecords;
+  const hasMoreLocalRecords = (events.length > 3 || initialHasMoreRecords) && !showAllRecords;
 
   useEffect(() => {
     onRecentEventsChange?.(events.slice(0, 3));
@@ -293,9 +304,18 @@ export function Timeline({
             <div className="pt-2 flex justify-center">
               <button
                 type="button"
-                onClick={() => setShowAllRecords(true)}
-                className="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm font-medium rounded-xl text-zinc-300 transition-colors border border-zinc-700"
+                onClick={async () => {
+                  if (initialHasMoreRecords && events.length <= 3 && !selectedTag) {
+                    setIsLoadingMore(true);
+                    await fetchEvents(undefined, null);
+                    setIsLoadingMore(false);
+                  }
+                  setShowAllRecords(true);
+                }}
+                disabled={isLoadingMore}
+                className="flex items-center gap-2 px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm font-medium rounded-xl text-zinc-300 transition-colors border border-zinc-700 disabled:opacity-50"
               >
+                {isLoadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
                 查看全部生活记录
               </button>
             </div>

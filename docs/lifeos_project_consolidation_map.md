@@ -94,6 +94,19 @@ This context layer is used by Life Q&A, Life Review, and Memory preview
 surfaces so that product-facing "AI understands my life" features share one
 read model instead of reimplementing context filtering in each workflow.
 
+The home page now also has a first-screen read model:
+
+```text
+GET /api/home/overview
+  -> read-only Home Overview
+  -> recent 3 life records
+  -> Home AI insights
+  -> Memory Review candidate count
+  -> active Memory count
+  -> pending reminder count and nearest pending reminder
+  -> no durable write, no tool execution
+```
+
 Phase 6 currently exposes product-facing preview surfaces only:
 
 ```text
@@ -150,6 +163,8 @@ POST /api/life/review/cards/keep
 The web product surfaces are:
 
 - Home `AI 发现`: a lightweight preview of repeated themes.
+- Home Overview: a single read-only first-screen payload for recent records,
+  AI insights, Memory count, Memory Review count, and pending reminder summary.
 - `/reminders`: the user's confirmed pending reminders, grouped by overdue,
   today, tomorrow, and later, with complete/cancel actions only.
 - `/memory/review`: a candidate inbox where the user can inspect, observe, remember, or hide signals.

@@ -46,16 +46,18 @@ public sealed class PersonalContextService : IPersonalContextService
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
 
         var events = await LoadEventsAsync(userId, maxEvents, period, timeZone, localNow);
-        var memories = await LoadMemoriesAsync(userId, maxMemories);
-        var reminders = maxReminders <= 0
-            ? Array.Empty<Reminder>()
+        var memoryResult = await LoadMemoriesAsync(userId, maxMemories);
+        var reminderResult = maxReminders <= 0
+            ? new ContextReminderResult(Array.Empty<Reminder>(), 0)
             : await LoadPendingRemindersAsync(userId, maxReminders);
 
         return new PersonalContextSnapshot
         {
             Events = events,
-            Memories = memories,
-            PendingReminders = reminders,
+            Memories = memoryResult.Items,
+            PendingReminders = reminderResult.Items,
+            ActiveMemoryCount = memoryResult.TotalCount,
+            PendingReminderCount = reminderResult.TotalCount,
             Period = period,
             WindowLabel = ToWindowLabel(period)
         };
@@ -88,38 +90,48 @@ public sealed class PersonalContextService : IPersonalContextService
             .ToList();
     }
 
-    private async Task<IReadOnlyList<Memory>> LoadMemoriesAsync(string userId, int maxMemories)
+    private async Task<ContextMemoryResult> LoadMemoriesAsync(string userId, int maxMemories)
     {
         if (maxMemories <= 0)
         {
-            return Array.Empty<Memory>();
+            return new ContextMemoryResult(Array.Empty<Memory>(), 0);
         }
 
-        return (await _memoryRepository.ListByUserAsync(
+        var activeMemories = (await _memoryRepository.ListByUserAsync(
                 userId,
                 type: null,
                 status: MemoryStatus.Active.ToSnakeCaseString()))
             .Where(memory => !IsExpiredMemory(memory))
             .OrderByDescending(memory => memory.Importance)
             .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
-            .Take(maxMemories)
             .ToList();
+
+        return new ContextMemoryResult(
+            activeMemories
+            .Take(maxMemories)
+                .ToList(),
+            activeMemories.Count);
     }
 
-    private async Task<IReadOnlyList<Reminder>> LoadPendingRemindersAsync(string userId, int maxReminders)
+    private async Task<ContextReminderResult> LoadPendingRemindersAsync(string userId, int maxReminders)
     {
         try
         {
-            return (await _reminderService.ListRemindersAsync(userId, "pending"))
+            var pendingReminders = (await _reminderService.ListRemindersAsync(userId, "pending"))
                 .Where(reminder => string.Equals(reminder.Status, "pending", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(reminder => reminder.DueAt)
-                .Take(maxReminders)
                 .ToList();
+
+            return new ContextReminderResult(
+                pendingReminders
+                .Take(maxReminders)
+                    .ToList(),
+                pendingReminders.Count);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load pending reminders for personal context user {UserId}", userId);
-            return Array.Empty<Reminder>();
+            return new ContextReminderResult(Array.Empty<Reminder>(), 0);
         }
     }
 
@@ -198,4 +210,8 @@ public sealed class PersonalContextService : IPersonalContextService
     {
         return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
     }
+
+    private sealed record ContextMemoryResult(IReadOnlyList<Memory> Items, int TotalCount);
+
+    private sealed record ContextReminderResult(IReadOnlyList<Reminder> Items, int TotalCount);
 }

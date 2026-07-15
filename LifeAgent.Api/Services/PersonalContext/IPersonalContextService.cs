@@ -25,6 +25,8 @@ public sealed class PersonalContextSnapshot
     public IReadOnlyList<LifeEvent> Events { get; init; } = Array.Empty<LifeEvent>();
     public IReadOnlyList<Memory> Memories { get; init; } = Array.Empty<Memory>();
     public IReadOnlyList<Reminder> PendingReminders { get; init; } = Array.Empty<Reminder>();
+    public int ActiveMemoryCount { get; init; }
+    public int PendingReminderCount { get; init; }
     public string Period { get; init; } = "recent";
     public string WindowLabel { get; init; } = "最近";
 }

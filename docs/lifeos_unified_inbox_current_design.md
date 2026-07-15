@@ -129,6 +129,14 @@ on `/reminders`.
    - Reflects confirmed life records after write succeeds.
    - Does not show confirmed reminders; reminders live on `/reminders`.
 
+2a. Home overview
+   - Source: `IPersonalContextService` plus Memory preview services.
+   - `GET /api/home/overview` returns the home page's first-screen read model:
+     recent records, AI insights, Memory Review count, active Memory count,
+     pending reminder count, and the nearest pending reminder.
+   - It is read-only and must not create pending actions, write Memory, create
+     reminders, or execute tools.
+
 3. Memory preview surfaces
    - Source: read-only personal context, currently recent `life_events` for
      preview generation plus active Memory where the consuming workflow allows it.
