@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "小猪的快乐生活",
-  description: "记录生活、管理提醒、生成每日总结",
+  title: "LifeOS",
+  description: "一本会思考的生活记录本。",
 };
 
 export default function RootLayout({
