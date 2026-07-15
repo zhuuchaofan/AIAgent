@@ -1,6 +1,7 @@
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.Plans;
 
 namespace LifeAgent.Api.Services.PersonalContext;
 
@@ -9,21 +10,25 @@ public sealed class PersonalContextService : IPersonalContextService
     private const int AbsoluteMaxEvents = 50;
     private const int AbsoluteMaxMemories = 20;
     private const int AbsoluteMaxReminders = 20;
+    private const int AbsoluteMaxPlanSignals = 20;
 
     private readonly ILifeEventService _lifeEventService;
     private readonly IMemoryRepository _memoryRepository;
     private readonly IReminderService _reminderService;
+    private readonly IPlanSignalService _planSignalService;
     private readonly ILogger<PersonalContextService> _logger;
 
     public PersonalContextService(
         ILifeEventService lifeEventService,
         IMemoryRepository memoryRepository,
         IReminderService reminderService,
+        IPlanSignalService planSignalService,
         ILogger<PersonalContextService> logger)
     {
         _lifeEventService = lifeEventService;
         _memoryRepository = memoryRepository;
         _reminderService = reminderService;
+        _planSignalService = planSignalService;
         _logger = logger;
     }
 
@@ -41,6 +46,7 @@ public sealed class PersonalContextService : IPersonalContextService
         var maxEvents = NormalizeLimit(request.MaxEvents, AbsoluteMaxEvents);
         var maxMemories = NormalizeLimit(request.MaxMemories, AbsoluteMaxMemories);
         var maxReminders = NormalizeLimit(request.MaxReminders, AbsoluteMaxReminders);
+        var maxPlanSignals = NormalizeLimit(request.MaxPlanSignals, AbsoluteMaxPlanSignals);
         var period = NormalizePeriod(request.Period);
         var timeZone = ResolveTimeZone(request.ClientTimeZone);
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
@@ -50,14 +56,19 @@ public sealed class PersonalContextService : IPersonalContextService
         var reminderResult = maxReminders <= 0
             ? new ContextReminderResult(Array.Empty<Reminder>(), 0)
             : await LoadPendingRemindersAsync(userId, maxReminders);
+        var planSignalResult = maxPlanSignals <= 0
+            ? new ContextPlanSignalResult(Array.Empty<PlanSignal>(), 0)
+            : await LoadPlanSignalsAsync(userId, maxPlanSignals, cancellationToken);
 
         return new PersonalContextSnapshot
         {
             Events = events,
             Memories = memoryResult.Items,
             PendingReminders = reminderResult.Items,
+            PlanSignals = planSignalResult.Items,
             ActiveMemoryCount = memoryResult.TotalCount,
             PendingReminderCount = reminderResult.TotalCount,
+            PlanSignalCount = planSignalResult.TotalCount,
             Period = period,
             WindowLabel = ToWindowLabel(period)
         };
@@ -132,6 +143,31 @@ public sealed class PersonalContextService : IPersonalContextService
         {
             _logger.LogWarning(ex, "Failed to load pending reminders for personal context user {UserId}", userId);
             return new ContextReminderResult(Array.Empty<Reminder>(), 0);
+        }
+    }
+
+    private async Task<ContextPlanSignalResult> LoadPlanSignalsAsync(
+        string userId,
+        int maxPlanSignals,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var activeSignals = (await _planSignalService.ListAsync(userId, "active", cancellationToken))
+                .Where(signal => string.Equals(signal.Status, "active", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(signal => signal.CreatedAt)
+                .ToList();
+
+            return new ContextPlanSignalResult(
+                activeSignals
+                    .Take(maxPlanSignals)
+                    .ToList(),
+                activeSignals.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load plan signals for personal context user {UserId}", userId);
+            return new ContextPlanSignalResult(Array.Empty<PlanSignal>(), 0);
         }
     }
 
@@ -214,4 +250,6 @@ public sealed class PersonalContextService : IPersonalContextService
     private sealed record ContextMemoryResult(IReadOnlyList<Memory> Items, int TotalCount);
 
     private sealed record ContextReminderResult(IReadOnlyList<Reminder> Items, int TotalCount);
+
+    private sealed record ContextPlanSignalResult(IReadOnlyList<PlanSignal> Items, int TotalCount);
 }

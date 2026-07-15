@@ -10,6 +10,7 @@ export interface LifeChatResponse {
   usedEventCount: number;
   usedMemoryCount: number;
   usedReminderCount: number;
+  usedPlanSignalCount: number;
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;

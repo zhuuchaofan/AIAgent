@@ -16,6 +16,7 @@ public class LifeReviewResponse
     public IReadOnlyList<LifeReviewSourceEvent> SourceEvents { get; set; } = Array.Empty<LifeReviewSourceEvent>();
     public int UsedEventCount { get; set; }
     public int UsedMemoryCount { get; set; }
+    public int UsedPlanSignalCount { get; set; }
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
     public bool Executed { get; set; } = false;

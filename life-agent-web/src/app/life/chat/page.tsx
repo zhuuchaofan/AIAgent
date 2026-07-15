@@ -32,11 +32,15 @@ const quickQuestions = [
   "近期提醒",
 ];
 
-function buildContextMeta(usedMemoryCount: number, usedReminderCount: number): string {
+function buildContextMeta(usedMemoryCount: number, usedReminderCount: number, usedPlanSignalCount: number): string {
   const parts = ["最近记录"];
 
   if (usedReminderCount > 0) {
     parts.push(`${usedReminderCount} 条待处理提醒`);
+  }
+
+  if (usedPlanSignalCount > 0) {
+    parts.push(`${usedPlanSignalCount} 条计划线索`);
   }
 
   if (usedMemoryCount > 0) {
@@ -93,7 +97,7 @@ export default function LifeChatPage() {
           id: `assistant-${messageIdRef.current}`,
           role: "assistant",
           content: result.response,
-          meta: buildContextMeta(result.usedMemoryCount, result.usedReminderCount),
+          meta: buildContextMeta(result.usedMemoryCount, result.usedReminderCount, result.usedPlanSignalCount),
         },
       ]);
     } catch (err) {

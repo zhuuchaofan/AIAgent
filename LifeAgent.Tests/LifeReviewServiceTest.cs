@@ -25,6 +25,7 @@ public class LifeReviewServiceTest
         Assert.False(response.Executed);
         Assert.Equal(0, response.UsedEventCount);
         Assert.Equal(0, response.UsedMemoryCount);
+        Assert.Equal(0, response.UsedPlanSignalCount);
         Assert.Single(response.Cards);
         Assert.Contains("记录多一点", response.Cards[0].Text);
         Assert.Empty(response.SourceEvents);
@@ -99,6 +100,7 @@ public class LifeReviewServiceTest
         Assert.False(response.Executed);
         Assert.Equal(2, response.UsedEventCount);
         Assert.Equal(1, response.UsedMemoryCount);
+        Assert.Equal(0, response.UsedPlanSignalCount);
         Assert.Equal(2, response.Cards.Count);
         Assert.Equal("最近状态", response.Cards[0].Title);
         Assert.Equal(new[] { "evt_trip", "evt_bike" }, response.Cards[0].SourceEventIds);
@@ -108,6 +110,55 @@ public class LifeReviewServiceTest
         Assert.Contains("sourceEventIds 只能引用输入中存在的 event id", answerGenerator.LastSystemInstruction);
         Assert.Contains("id: evt_trip", answerGenerator.LastUserPrompt);
         Assert.Contains("我近期有去新疆的出行计划。", answerGenerator.LastUserPrompt);
+    }
+
+    [Fact]
+    public async Task BuildReviewAsync_IncludesPlanSignalsInPromptAndCountsContext()
+    {
+        var answerGenerator = new InspectableAnswerGenerator
+        {
+            AnswerToReturn = """
+                {
+                  "cards": [
+                    {
+                      "id": "upcoming_plans",
+                      "text": "你近期有去新疆的计划线索。",
+                      "sourceEventIds": []
+                    }
+                  ]
+                }
+                """
+        };
+
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            new InMemoryMemoryRepository(),
+            answerGenerator,
+            new[]
+            {
+                new PlanSignal
+                {
+                    Id = "plan_1",
+                    UserId = "user_a",
+                    Kind = "trip",
+                    Title = "新疆出行",
+                    Content = "下周可能在去新疆的路上。",
+                    Status = "active",
+                    CreatedAt = DateTime.UtcNow.AddHours(-1),
+                    UpdatedAt = DateTime.UtcNow.AddHours(-1)
+                }
+            });
+
+        var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest());
+
+        Assert.Equal(0, response.UsedEventCount);
+        Assert.Equal(1, response.UsedPlanSignalCount);
+        Assert.Single(response.Cards);
+        Assert.Equal("近期计划", response.Cards[0].Title);
+        Assert.Contains("新疆", response.Cards[0].Text);
+        Assert.Contains("计划线索", answerGenerator.LastUserPrompt);
+        Assert.Contains("新疆出行", answerGenerator.LastUserPrompt);
+        Assert.Contains("可以只读地引用计划线索", answerGenerator.LastSystemInstruction);
     }
 
     [Fact]
@@ -136,6 +187,7 @@ public class LifeReviewServiceTest
         Assert.False(response.WroteData);
         Assert.False(response.Executed);
         Assert.Equal(1, response.UsedEventCount);
+        Assert.Equal(0, response.UsedPlanSignalCount);
         Assert.Equal(4, response.Cards.Count);
         Assert.Contains("整理 LifeOS 项目", response.Cards[0].Text);
         Assert.Equal(new[] { "evt_1" }, response.Cards[0].SourceEventIds);
@@ -199,13 +251,15 @@ public class LifeReviewServiceTest
     private static LifeReviewService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,
-        IRagAnswerGenerator answerGenerator)
+        IRagAnswerGenerator answerGenerator,
+        IReadOnlyList<PlanSignal>? planSignals = null)
     {
         return new LifeReviewService(
             new PersonalContextService(
                 new FakeLifeEventService(events),
                 memoryRepository,
                 new FakeReminderService(Array.Empty<Reminder>()),
+                new FakePlanSignalService(planSignals ?? Array.Empty<PlanSignal>()),
                 NullLogger<PersonalContextService>.Instance),
             answerGenerator,
             NullLogger<LifeReviewService>.Instance);

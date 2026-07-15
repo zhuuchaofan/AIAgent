@@ -78,6 +78,28 @@ public class PersonalContextServiceTest
     }
 
     [Fact]
+    public async Task LoadAsync_OnlyIncludesActivePlanSignalsOrderedByCreatedAt()
+    {
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            new InMemoryMemoryRepository(),
+            planSignals: new[]
+            {
+                PlanSignal("plan_old", "旧计划", DateTime.UtcNow.AddHours(-3), "active"),
+                PlanSignal("plan_archived", "已归档计划", DateTime.UtcNow.AddHours(-1), "archived"),
+                PlanSignal("plan_new", "新计划", DateTime.UtcNow.AddHours(-1), "active")
+            });
+
+        var context = await service.LoadAsync("user_a", new PersonalContextRequest
+        {
+            MaxPlanSignals = 10
+        });
+
+        Assert.Equal(2, context.PlanSignalCount);
+        Assert.Equal(new[] { "plan_new", "plan_old" }, context.PlanSignals.Select(item => item.Id));
+    }
+
+    [Fact]
     public async Task LoadAsync_TodayPeriodUsesClientTimeZone()
     {
         var service = Service(
@@ -103,12 +125,14 @@ public class PersonalContextServiceTest
     private static PersonalContextService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,
-        IReadOnlyList<Reminder>? reminders = null)
+        IReadOnlyList<Reminder>? reminders = null,
+        IReadOnlyList<PlanSignal>? planSignals = null)
     {
         return new PersonalContextService(
             new FakeLifeEventService(events),
             memoryRepository,
             new FakeReminderService(reminders ?? Array.Empty<Reminder>()),
+            new FakePlanSignalService(planSignals ?? Array.Empty<PlanSignal>()),
             NullLogger<PersonalContextService>.Instance);
     }
 
@@ -136,6 +160,21 @@ public class PersonalContextServiceTest
             DueAt = dueAt,
             Timezone = "Asia/Shanghai",
             Status = status
+        };
+    }
+
+    private static PlanSignal PlanSignal(string id, string title, DateTime createdAt, string status)
+    {
+        return new PlanSignal
+        {
+            Id = id,
+            UserId = "user_a",
+            Kind = "plan",
+            Title = title,
+            Content = title,
+            Status = status,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
         };
     }
 }

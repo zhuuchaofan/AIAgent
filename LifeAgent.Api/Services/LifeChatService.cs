@@ -11,6 +11,7 @@ public class LifeChatService : ILifeChatService
     private const int MaxEvents = 30;
     private const int MaxMemories = 12;
     private const int MaxReminders = 8;
+    private const int MaxPlanSignals = 8;
 
     private readonly IPersonalContextService _personalContextService;
     private readonly IRagAnswerGenerator _answerGenerator;
@@ -43,21 +44,24 @@ public class LifeChatService : ILifeChatService
             MaxEvents = MaxEvents,
             MaxMemories = MaxMemories,
             MaxReminders = MaxReminders,
+            MaxPlanSignals = MaxPlanSignals,
             ClientTimeZone = request.ClientTimeZone
         });
 
         var events = context.Events;
         var memories = context.Memories;
         var reminders = context.PendingReminders;
+        var planSignals = context.PlanSignals;
 
-        if (events.Count == 0 && memories.Count == 0 && reminders.Count == 0)
+        if (events.Count == 0 && memories.Count == 0 && reminders.Count == 0 && planSignals.Count == 0)
         {
             return new LifeChatResponse
             {
-                Response = "我还没有足够的生活记录、提醒或已记住内容来回答这个问题。你可以先记录几件最近发生的事。",
+                Response = "我还没有足够的生活记录、提醒、计划线索或已记住内容来回答这个问题。你可以先记录几件最近发生的事。",
                 UsedEventCount = 0,
                 UsedMemoryCount = 0,
-                UsedReminderCount = 0
+                UsedReminderCount = 0,
+                UsedPlanSignalCount = 0
             };
         }
 
@@ -65,9 +69,10 @@ public class LifeChatService : ILifeChatService
             你是 LifeOS 的只读生活问答助手。你的任务是帮助用户回顾、理解和整理自己的生活。
 
             规则：
-            - 只能依据提供的【最近生活记录】、【待处理提醒】和【已记住内容】回答。
+            - 只能依据提供的【最近生活记录】、【待处理提醒】、【计划线索】和【已记住内容】回答。
             - 不要编造没有依据的事实；没有依据时要直接说明。
             - 可以只读地引用待处理提醒；不要创建、修改、完成或取消提醒。
+            - 可以只读地引用计划线索；不要承诺已经执行计划或创建真实提醒。
             - 不要执行工具、不要承诺已经写入任何数据。
             - 不要暴露 life_events、Memory、Runtime、Firestore、RAG 等底层实现词。
             - 回答使用简体中文，语气自然、克制、具体，像一本会思考的生活记录本在帮用户回顾。
@@ -79,17 +84,18 @@ public class LifeChatService : ILifeChatService
             - 当用户询问“最近”“今天”“下周”等时间问题时，结合提供的本地时间和记录时间判断，必要时写出明确日期。
             """;
 
-        var userPrompt = BuildUserPrompt(request, events, memories, reminders);
+        var userPrompt = BuildUserPrompt(request, events, memories, reminders, planSignals);
 
         try
         {
             var answer = await _answerGenerator.GenerateAnswerAsync(systemPrompt, userPrompt, new List<ChatMessage>());
             return new LifeChatResponse
             {
-                Response = string.IsNullOrWhiteSpace(answer) ? BuildFallback(events, memories, reminders) : answer.Trim(),
+                Response = string.IsNullOrWhiteSpace(answer) ? BuildFallback(events, memories, reminders, planSignals) : answer.Trim(),
                 UsedEventCount = events.Count,
                 UsedMemoryCount = memories.Count,
-                UsedReminderCount = reminders.Count
+                UsedReminderCount = reminders.Count,
+                UsedPlanSignalCount = planSignals.Count
             };
         }
         catch (Exception ex)
@@ -97,10 +103,11 @@ public class LifeChatService : ILifeChatService
             _logger.LogWarning(ex, "Life chat generation failed for user {UserId}", userId);
             return new LifeChatResponse
             {
-                Response = BuildFallback(events, memories, reminders),
+                Response = BuildFallback(events, memories, reminders, planSignals),
                 UsedEventCount = events.Count,
                 UsedMemoryCount = memories.Count,
-                UsedReminderCount = reminders.Count
+                UsedReminderCount = reminders.Count,
+                UsedPlanSignalCount = planSignals.Count
             };
         }
     }
@@ -109,7 +116,8 @@ public class LifeChatService : ILifeChatService
         LifeChatRequest request,
         IReadOnlyList<LifeEvent> events,
         IReadOnlyList<Memory> memories,
-        IReadOnlyList<Reminder> reminders)
+        IReadOnlyList<Reminder> reminders,
+        IReadOnlyList<PlanSignal> planSignals)
     {
         var timeZone = string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "Asia/Shanghai" : request.ClientTimeZone.Trim();
         var userTime = GetUserLocalTime(timeZone);
@@ -154,6 +162,24 @@ public class LifeChatService : ILifeChatService
                 builder.AppendLine($"{i + 1}. 时间: {FormatReminderTime(reminder)}");
                 builder.AppendLine($"   标题: {TrimForPrompt(reminder.Title, 120)}");
                 builder.AppendLine($"   内容: {TrimForPrompt(reminder.Description, 300)}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("【计划线索】");
+        if (planSignals.Count == 0)
+        {
+            builder.AppendLine("暂无。");
+        }
+        else
+        {
+            for (var i = 0; i < planSignals.Count; i++)
+            {
+                var signal = planSignals[i];
+                builder.AppendLine($"{i + 1}. 类型: {FormatPlanSignalKind(signal.Kind)}");
+                builder.AppendLine($"   时间: {signal.CreatedAt:yyyy-MM-dd HH:mm}");
+                builder.AppendLine($"   标题: {TrimForPrompt(signal.Title, 120)}");
+                builder.AppendLine($"   内容: {TrimForPrompt(signal.Content, 300)}");
             }
         }
 
@@ -212,6 +238,17 @@ public class LifeChatService : ILifeChatService
         }
     }
 
+    private static string FormatPlanSignalKind(string? kind)
+    {
+        return kind?.Trim().ToLowerInvariant() switch
+        {
+            "reminder" => "提醒线索",
+            "trip" => "出行计划",
+            "task" => "待办计划",
+            _ => "计划"
+        };
+    }
+
     private static string TrimForPrompt(string? value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -226,7 +263,8 @@ public class LifeChatService : ILifeChatService
     private static string BuildFallback(
         IReadOnlyList<LifeEvent> events,
         IReadOnlyList<Memory> memories,
-        IReadOnlyList<Reminder> reminders)
+        IReadOnlyList<Reminder> reminders,
+        IReadOnlyList<PlanSignal> planSignals)
     {
         var eventTitles = events
             .Select(item => item.Title)
@@ -246,7 +284,13 @@ public class LifeChatService : ILifeChatService
             .Take(2)
             .ToList();
 
-        if (eventTitles.Count == 0 && memoryTexts.Count == 0 && reminderTitles.Count == 0)
+        var planTitles = planSignals
+            .Select(signal => signal.Title)
+            .Where(title => !string.IsNullOrWhiteSpace(title))
+            .Take(2)
+            .ToList();
+
+        if (eventTitles.Count == 0 && memoryTexts.Count == 0 && reminderTitles.Count == 0 && planTitles.Count == 0)
         {
             return "我现在还没有足够依据回答这个问题。你可以继续记录几件最近发生的事，我会再帮你整理。";
         }
@@ -263,6 +307,10 @@ public class LifeChatService : ILifeChatService
         if (reminderTitles.Count > 0)
         {
             parts.Add($"待处理提醒包括：{string.Join("、", reminderTitles)}");
+        }
+        if (planTitles.Count > 0)
+        {
+            parts.Add($"正在准备的计划线索包括：{string.Join("、", planTitles)}");
         }
 
         return string.Join("。", parts) + "。更细的判断还需要更多记录支持。";

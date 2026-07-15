@@ -2,7 +2,6 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
-using LifeAgent.Api.Services.Plans;
 
 namespace LifeAgent.Api.Services.Home;
 
@@ -16,20 +15,17 @@ public sealed class HomeOverviewService : IHomeOverviewService
     private readonly IMemoryInsightPreviewService _memoryInsightPreviewService;
     private readonly IMemoryReviewInboxPreviewService _memoryReviewInboxPreviewService;
     private readonly IMemoryReviewStateStore _memoryReviewStateStore;
-    private readonly IPlanSignalService _planSignalService;
 
     public HomeOverviewService(
         IPersonalContextService personalContextService,
         IMemoryInsightPreviewService memoryInsightPreviewService,
         IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
-        IMemoryReviewStateStore memoryReviewStateStore,
-        IPlanSignalService planSignalService)
+        IMemoryReviewStateStore memoryReviewStateStore)
     {
         _personalContextService = personalContextService;
         _memoryInsightPreviewService = memoryInsightPreviewService;
         _memoryReviewInboxPreviewService = memoryReviewInboxPreviewService;
         _memoryReviewStateStore = memoryReviewStateStore;
-        _planSignalService = planSignalService;
     }
 
     public async Task<HomeOverviewData> BuildAsync(
@@ -47,7 +43,8 @@ public sealed class HomeOverviewService : IHomeOverviewService
         {
             MaxEvents = boundedLimit,
             MaxMemories = 20,
-            MaxReminders = MaxVisibleReminders
+            MaxReminders = MaxVisibleReminders,
+            MaxPlanSignals = 20
         }, cancellationToken);
 
         var insightPreview = _memoryInsightPreviewService.BuildPreview(userId, context.Events);
@@ -56,26 +53,49 @@ public sealed class HomeOverviewService : IHomeOverviewService
             userId,
             reviewPreview.Candidates.Select(candidate => candidate.Id).ToArray());
         var keptCandidates = await _memoryReviewStateStore.ListKeptCandidatesAsync(userId);
-        var planSignals = await _planSignalService.ListAsync(userId, "active", cancellationToken);
         var reviewCandidates = MemoryReviewInboxStateProjection.AddMissingKeptCandidates(
             MemoryReviewInboxStateProjection.Apply(reviewPreview, states),
             keptCandidates);
+        var insights = AddPlanSignalInsight(insightPreview.Insights, context.PlanSignalCount);
 
         return new HomeOverviewData
         {
             RecentEvents = context.Events.Take(RecentEventCount).Select(ToTimelineEventDto).ToArray(),
             HasMoreRecentEvents = context.Events.Count > RecentEventCount,
-            Insights = insightPreview.Insights,
+            Insights = insights,
             MemoryReviewCandidateCount = reviewCandidates.Candidates.Count,
             MemoryCount = context.ActiveMemoryCount,
             PendingReminderCount = context.PendingReminderCount,
             LatestReminder = context.PendingReminders.FirstOrDefault() is { } reminder ? ToReminderDto(reminder) : null,
-            PlanSignalCount = planSignals.Count,
-            LatestPlanSignal = planSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
+            PlanSignalCount = context.PlanSignalCount,
+            LatestPlanSignal = context.PlanSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
             ReadOnly = true,
             WroteData = false,
             Executed = false
         };
+    }
+
+    private static IReadOnlyList<MemoryInsightPreviewItem> AddPlanSignalInsight(
+        IReadOnlyList<MemoryInsightPreviewItem> insights,
+        int planSignalCount)
+    {
+        if (planSignalCount <= 0)
+        {
+            return insights;
+        }
+
+        var planInsight = new MemoryInsightPreviewItem
+        {
+            Kind = "temporary_context",
+            Text = $"你最近有 {planSignalCount} 个正在准备的计划。",
+            Confidence = 0.8,
+            SourceEventIds = Array.Empty<string>()
+        };
+
+        return new[] { planInsight }
+            .Concat(insights)
+            .Take(3)
+            .ToArray();
     }
 
     private static TimelineEventDto ToTimelineEventDto(LifeEvent item)

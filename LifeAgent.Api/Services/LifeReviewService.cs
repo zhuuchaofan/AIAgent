@@ -11,6 +11,7 @@ public class LifeReviewService : ILifeReviewService
     private const int DefaultMaxEvents = 30;
     private const int AbsoluteMaxEvents = 50;
     private const int MaxMemories = 12;
+    private const int MaxPlanSignals = 12;
 
     private static readonly string[] CardOrder =
     {
@@ -57,44 +58,51 @@ public class LifeReviewService : ILifeReviewService
             MaxEvents = limit,
             MaxMemories = MaxMemories,
             MaxReminders = 0,
+            MaxPlanSignals = MaxPlanSignals,
             Period = period,
             ClientTimeZone = request.ClientTimeZone
         });
 
         var events = context.Events;
         var memories = context.Memories;
+        var planSignals = context.PlanSignals;
 
-        if (events.Count == 0 && memories.Count == 0)
+        if (events.Count == 0 && memories.Count == 0 && planSignals.Count == 0)
         {
-            return BuildResponse(BuildEmptyCards(period), events, memories.Count, period);
+            return BuildResponse(BuildEmptyCards(period), events, memories.Count, planSignals.Count, period);
         }
 
         try
         {
             var raw = await _answerGenerator.GenerateAnswerAsync(
                 BuildSystemPrompt(),
-                BuildUserPrompt(request, events, memories, period),
+                BuildUserPrompt(request, events, memories, planSignals, period),
                 new List<ChatMessage>());
 
             var cards = ParseCards(raw, events);
-            return BuildResponse(cards.Count > 0 ? cards : BuildFallbackCards(events, period), events, memories.Count, period);
+            return BuildResponse(
+                cards.Count > 0 ? cards : BuildFallbackCards(events, planSignals, period),
+                events,
+                memories.Count,
+                planSignals.Count,
+                period);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Life review generation failed for user {UserId}", userId);
-            return BuildResponse(BuildFallbackCards(events, period), events, memories.Count, period);
+            return BuildResponse(BuildFallbackCards(events, planSignals, period), events, memories.Count, planSignals.Count, period);
         }
     }
 
     private static string BuildSystemPrompt()
     {
         return """
-            你是 LifeOS 的只读生活回顾整理器。你的任务是把用户最近的生活记录和已记住内容整理成简短、具体、可回头看的回顾卡片。
+            你是 LifeOS 的只读生活回顾整理器。你的任务是把用户最近的生活记录、计划线索和已记住内容整理成简短、具体、可回头看的回顾卡片。
 
             规则：
-            - 只能依据提供的【最近生活记录】和【已记住内容】。
+            - 只能依据提供的【最近生活记录】、【计划线索】和【已记住内容】。
             - 不要编造没有依据的事实；看不出来时要保守说明。
-            - 不要创建提醒、不要执行工具、不要承诺已经写入任何数据。
+            - 可以只读地引用计划线索；不要创建提醒、不要执行工具、不要承诺已经写入任何数据。
             - 不要暴露 life_events、Memory、Runtime、Firestore、RAG、JSON、prompt 等底层实现词。
             - 输出简体中文，语气自然克制，像一本会思考的生活记录本。
             - 每张卡的 text 不超过 55 个中文字符。
@@ -117,6 +125,7 @@ public class LifeReviewService : ILifeReviewService
         LifeReviewRequest request,
         IReadOnlyList<LifeEvent> events,
         IReadOnlyList<Memory> memories,
+        IReadOnlyList<PlanSignal> planSignals,
         string period)
     {
         var timeZone = string.IsNullOrWhiteSpace(request.ClientTimeZone) ? "Asia/Shanghai" : request.ClientTimeZone.Trim();
@@ -140,6 +149,24 @@ public class LifeReviewService : ILifeReviewService
             builder.AppendLine($"   标题: {TrimForPrompt(item.Title, 120)}");
             builder.AppendLine($"   内容: {TrimForPrompt(item.Content, 360)}");
             builder.AppendLine($"   标签: {(item.Tags.Count > 0 ? string.Join(", ", item.Tags) : "无")}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("【计划线索】");
+        if (planSignals.Count == 0)
+        {
+            builder.AppendLine("暂无。");
+        }
+        else
+        {
+            for (var i = 0; i < planSignals.Count; i++)
+            {
+                var signal = planSignals[i];
+                builder.AppendLine($"{i + 1}. 类型: {FormatPlanSignalKind(signal.Kind)}");
+                builder.AppendLine($"   时间: {signal.CreatedAt:yyyy-MM-dd HH:mm}");
+                builder.AppendLine($"   标题: {TrimForPrompt(signal.Title, 120)}");
+                builder.AppendLine($"   内容: {TrimForPrompt(signal.Content, 260)}");
+            }
         }
 
         builder.AppendLine();
@@ -216,16 +243,25 @@ public class LifeReviewService : ILifeReviewService
         }
     }
 
-    private static IReadOnlyList<LifeReviewCard> BuildFallbackCards(IReadOnlyList<LifeEvent> events, string period)
+    private static IReadOnlyList<LifeReviewCard> BuildFallbackCards(
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<PlanSignal> planSignals,
+        string period)
     {
-        if (events.Count == 0)
+        if (events.Count == 0 && planSignals.Count == 0)
         {
             return BuildEmptyCards(period);
         }
 
-        var latest = events.First();
-        var latestTitle = string.IsNullOrWhiteSpace(latest.Title) ? latest.Content : latest.Title;
-        var latestId = string.IsNullOrWhiteSpace(latest.Id) ? Array.Empty<string>() : new[] { latest.Id };
+        var latest = events.FirstOrDefault();
+        var latestTitle = latest == null
+            ? "一条新的计划线索"
+            : string.IsNullOrWhiteSpace(latest.Title) ? latest.Content : latest.Title;
+        var latestId = latest == null || string.IsNullOrWhiteSpace(latest.Id) ? Array.Empty<string>() : new[] { latest.Id };
+        var latestPlan = planSignals.FirstOrDefault();
+        var latestPlanTitle = latestPlan == null
+            ? "暂时没有足够依据整理近期计划。"
+            : $"你近期有一个计划线索：{TrimForDisplay(latestPlan.Title, latestPlan.Content, 42)}";
 
         return new[]
         {
@@ -247,7 +283,7 @@ public class LifeReviewService : ILifeReviewService
             {
                 Id = "upcoming_plans",
                 Title = CardTitles["upcoming_plans"],
-                Text = "暂时没有足够依据整理近期计划。",
+                Text = latestPlanTitle,
                 SourceEventIds = Array.Empty<string>()
             },
             new LifeReviewCard
@@ -282,6 +318,7 @@ public class LifeReviewService : ILifeReviewService
         IReadOnlyList<LifeReviewCard> cards,
         IReadOnlyList<LifeEvent> events,
         int usedMemoryCount,
+        int usedPlanSignalCount,
         string period)
     {
         return new LifeReviewResponse
@@ -292,6 +329,7 @@ public class LifeReviewService : ILifeReviewService
             SourceEvents = events.Select(ToSourceEvent).ToList(),
             UsedEventCount = events.Count,
             UsedMemoryCount = usedMemoryCount,
+            UsedPlanSignalCount = usedPlanSignalCount,
             ReadOnly = true,
             WroteData = false,
             Executed = false
@@ -354,6 +392,17 @@ public class LifeReviewService : ILifeReviewService
         {
             return DateTime.UtcNow;
         }
+    }
+
+    private static string FormatPlanSignalKind(string? kind)
+    {
+        return kind?.Trim().ToLowerInvariant() switch
+        {
+            "reminder" => "提醒线索",
+            "trip" => "出行计划",
+            "task" => "待办计划",
+            _ => "计划"
+        };
     }
 
     private static string TrimForPrompt(string? value, int maxLength)

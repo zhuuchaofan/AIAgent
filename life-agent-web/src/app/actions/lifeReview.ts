@@ -26,6 +26,7 @@ export interface LifeReviewResponse {
   sourceEvents: LifeReviewSourceEvent[];
   usedEventCount: number;
   usedMemoryCount: number;
+  usedPlanSignalCount: number;
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;

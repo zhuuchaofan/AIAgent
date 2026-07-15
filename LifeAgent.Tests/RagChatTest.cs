@@ -15,6 +15,7 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services;
 using LifeAgent.Api.Services.Memories;
+using LifeAgent.Api.Services.Plans;
 
 namespace LifeAgent.Tests;
 
@@ -874,6 +875,44 @@ public class FakeReminderService : IReminderService
     public Task<bool> UpdateReminderAsync(string userId, string reminderId, string? status, DateTime? dueAt)
     {
         throw new NotSupportedException("FakeReminderService is read-only.");
+    }
+}
+
+public class FakePlanSignalService : IPlanSignalService
+{
+    private readonly IReadOnlyList<PlanSignal> _signals;
+
+    public FakePlanSignalService(IReadOnlyList<PlanSignal> signals)
+    {
+        _signals = signals;
+    }
+
+    public Task<PlanSignal> CreateAsync(
+        string userId,
+        PlanSignal signal,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("FakePlanSignalService is read-only.");
+    }
+
+    public Task<IReadOnlyList<PlanSignal>> ListAsync(
+        string userId,
+        string status = "active",
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<PlanSignal>>(_signals
+            .Where(signal => signal.UserId == userId)
+            .Where(signal => string.Equals(signal.Status, status, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(signal => signal.CreatedAt)
+            .ToList());
+    }
+
+    public Task<bool> ArchiveAsync(
+        string userId,
+        string signalId,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("FakePlanSignalService is read-only.");
     }
 }
 

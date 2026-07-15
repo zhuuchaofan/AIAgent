@@ -3,7 +3,6 @@ using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Home;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
-using LifeAgent.Api.Services.Plans;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LifeAgent.Tests;
@@ -125,11 +124,11 @@ public class HomeOverviewServiceTest
                 new FakeLifeEventService(events),
                 memoryRepository,
                 new FakeReminderService(reminders ?? Array.Empty<Reminder>()),
+                new FakePlanSignalService(planSignals ?? Array.Empty<PlanSignal>()),
                 NullLogger<PersonalContextService>.Instance),
             new MemoryInsightPreviewService(new MemoryExtractionService(new MemoryProposalGuard())),
             new MemoryReviewInboxPreviewService(),
-            reviewStateStore ?? new FakeMemoryReviewStateStore(),
-            new FakePlanSignalService(planSignals ?? Array.Empty<PlanSignal>()));
+            reviewStateStore ?? new FakeMemoryReviewStateStore());
     }
 
     private static LifeEvent Event(string id, string title, string content, int minutesAgo)
@@ -213,41 +212,4 @@ public class HomeOverviewServiceTest
         }
     }
 
-    private sealed class FakePlanSignalService : IPlanSignalService
-    {
-        private readonly IReadOnlyList<PlanSignal> _signals;
-
-        public FakePlanSignalService(IReadOnlyList<PlanSignal> signals)
-        {
-            _signals = signals;
-        }
-
-        public Task<PlanSignal> CreateAsync(
-            string userId,
-            PlanSignal signal,
-            CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException("FakePlanSignalService is read-only.");
-        }
-
-        public Task<IReadOnlyList<PlanSignal>> ListAsync(
-            string userId,
-            string status = "active",
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<PlanSignal>>(_signals
-                .Where(signal => signal.UserId == userId)
-                .Where(signal => string.Equals(signal.Status, status, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(signal => signal.CreatedAt)
-                .ToList());
-        }
-
-        public Task<bool> ArchiveAsync(
-            string userId,
-            string signalId,
-            CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException("FakePlanSignalService is read-only.");
-        }
-    }
 }
