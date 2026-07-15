@@ -2,15 +2,118 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Bell, BookOpen, Brain, Calendar, ClipboardList, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import {
+  Bell,
+  BookOpen,
+  Brain,
+  Calendar,
+  ClipboardList,
+  Clock,
+  LogOut,
+  MessageCircle,
+  Sparkles
+} from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
 import type { MemoryInsight } from "@/app/actions/memoryInsights";
-import { getHomeOverview, type HomeOverviewData } from "@/app/actions/homeOverview";
+import {
+  getHomeOverview,
+  type HomeOverviewData,
+  type HomeOverviewPlanSignal,
+  type HomeOverviewReminder
+} from "@/app/actions/homeOverview";
 import { InsightSkeleton, PageContentSkeleton, TimelineSkeleton } from "@/components/LoadingSkeletons";
+import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
-function InsightCard({
+function planSignalLabel(kind: string): string {
+  return kind === "reminder_signal" ? "待补充提醒" : "计划";
+}
+
+function DailyActionCard({
+  reminders,
+  planSignals,
+  pendingReminderCount,
+  planSignalCount,
+  isLoading,
+}: {
+  reminders: HomeOverviewReminder[];
+  planSignals: HomeOverviewPlanSignal[];
+  pendingReminderCount: number;
+  planSignalCount: number;
+  isLoading: boolean;
+}) {
+  const hasItems = reminders.length > 0 || planSignals.length > 0;
+  const hiddenReminderCount = Math.max(0, pendingReminderCount - reminders.length);
+  const hiddenPlanCount = Math.max(0, planSignalCount - planSignals.length);
+
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">今天需要留意</h2>
+          <p className="mt-1 text-sm text-zinc-500">提醒和计划会先放在这里，复杂处理再进入对应页面。</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <div className="h-16 animate-pulse rounded-xl bg-zinc-800/40" />
+          <div className="h-16 animate-pulse rounded-xl bg-zinc-800/30" />
+        </div>
+      ) : !hasItems ? (
+        <p className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3 text-sm text-zinc-500">
+          暂时没有待处理提醒或计划线索。
+        </p>
+      ) : (
+        <div className="space-y-2.5">
+          {reminders.map(reminder => (
+            <Link
+              key={reminder.id}
+              href="/reminders"
+              className="block rounded-xl border border-indigo-500/15 bg-indigo-500/5 px-3 py-3 transition-colors hover:border-indigo-400/30"
+            >
+              <div className="mb-1 flex items-center gap-2 text-xs text-indigo-200">
+                <Bell className="h-3.5 w-3.5" />
+                提醒
+              </div>
+              <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{reminder.title}</div>
+              <div className="mt-1 flex items-center gap-1 text-xs text-zinc-500">
+                <Clock className="h-3.5 w-3.5" />
+                {formatShortChineseDateTime(reminder.dueAt)}
+              </div>
+            </Link>
+          ))}
+
+          {planSignals.map(signal => (
+            <Link
+              key={signal.id}
+              href="/plans"
+              className="block rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-3 py-3 transition-colors hover:border-cyan-400/30"
+            >
+              <div className="mb-1 flex items-center gap-2 text-xs text-cyan-200">
+                <ClipboardList className="h-3.5 w-3.5" />
+                {planSignalLabel(signal.kind)}
+              </div>
+              <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{signal.title}</div>
+              {signal.content && signal.content !== signal.title && (
+                <p className="mt-1 line-clamp-2 break-words text-xs leading-relaxed text-zinc-500">{signal.content}</p>
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {(hiddenReminderCount > 0 || hiddenPlanCount > 0) && (
+        <p className="mt-3 text-xs text-zinc-600">
+          还有 {hiddenReminderCount + hiddenPlanCount} 条未显示，可进入提醒或计划页查看。
+        </p>
+      )}
+    </section>
+  );
+}
+
+function DailyAiPanel({
   insights,
   reviewCandidateCount,
   memoryCount,
@@ -37,7 +140,7 @@ function InsightCard({
           <Sparkles className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-zinc-100">AI 发现</h2>
+          <h2 className="text-lg font-semibold text-zinc-100">AI 帮你整理</h2>
           {isLoading ? (
             <InsightSkeleton />
           ) : error ? (
@@ -155,6 +258,7 @@ export default function Home() {
   };
 
   const isLoggedIn = !!user;
+  const isOverviewPending = isLoggedIn && !overview && !overviewError;
 
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 selection:bg-indigo-500/30 md:px-10 md:py-10">
@@ -254,6 +358,13 @@ export default function Home() {
                 setOverviewRefreshTrigger(t => t + 1);
               }}
             />
+            <DailyActionCard
+              reminders={overview?.pendingReminders ?? []}
+              planSignals={overview?.planSignals ?? []}
+              pendingReminderCount={overview?.pendingReminderCount ?? 0}
+              planSignalCount={overview?.planSignalCount ?? 0}
+              isLoading={isLoadingOverview || isOverviewPending}
+            />
             {overview ? (
               <Timeline
                 refreshTrigger={refreshTrigger}
@@ -274,12 +385,12 @@ export default function Home() {
                 <TimelineSkeleton />
               </div>
             )}
-            <InsightCard
+            <DailyAiPanel
               insights={overview?.insights ?? []}
               reviewCandidateCount={overview?.memoryReviewCandidateCount ?? 0}
               memoryCount={overview?.memoryCount ?? 0}
               planSignalCount={overview?.planSignalCount ?? 0}
-              isLoading={isLoadingOverview}
+              isLoading={isLoadingOverview || isOverviewPending}
               error={overviewError}
             />
           </div>

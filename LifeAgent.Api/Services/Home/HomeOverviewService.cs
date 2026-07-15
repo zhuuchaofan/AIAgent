@@ -9,7 +9,8 @@ public sealed class HomeOverviewService : IHomeOverviewService
 {
     private const int RecentEventCount = 3;
     private const int MaxInsightSourceEvents = 20;
-    private const int MaxVisibleReminders = 1;
+    private const int MaxVisibleReminders = 3;
+    private const int MaxVisiblePlanSignals = 3;
 
     private readonly IPersonalContextService _personalContextService;
     private readonly IMemoryInsightPreviewService _memoryInsightPreviewService;
@@ -66,8 +67,10 @@ public sealed class HomeOverviewService : IHomeOverviewService
             MemoryReviewCandidateCount = reviewCandidates.Candidates.Count,
             MemoryCount = context.ActiveMemoryCount,
             PendingReminderCount = context.PendingReminderCount,
+            PendingReminders = context.PendingReminders.Take(MaxVisibleReminders).Select(ToReminderDto).ToArray(),
             LatestReminder = context.PendingReminders.FirstOrDefault() is { } reminder ? ToReminderDto(reminder) : null,
             PlanSignalCount = context.PlanSignalCount,
+            PlanSignals = context.PlanSignals.Take(MaxVisiblePlanSignals).Select(ToPlanSignalDto).ToArray(),
             LatestPlanSignal = context.PlanSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
             ReadOnly = true,
             WroteData = false,

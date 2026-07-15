@@ -89,6 +89,7 @@ public class HomeOverviewServiceTest
 
         Assert.Equal(1, overview.MemoryCount);
         Assert.Equal(2, overview.PendingReminderCount);
+        Assert.Equal(new[] { "rem_soon", "rem_later" }, overview.PendingReminders.Select(item => item.Id));
         Assert.NotNull(overview.LatestReminder);
         Assert.Equal("rem_soon", overview.LatestReminder!.Id);
     }
@@ -108,8 +109,38 @@ public class HomeOverviewServiceTest
         var overview = await service.BuildAsync("user_a");
 
         Assert.Equal(2, overview.PlanSignalCount);
+        Assert.Equal(new[] { "plan_new", "plan_old" }, overview.PlanSignals.Select(item => item.Id));
         Assert.NotNull(overview.LatestPlanSignal);
         Assert.Equal("plan_new", overview.LatestPlanSignal!.Id);
+    }
+
+    [Fact]
+    public async Task BuildAsync_LimitsDailyHubActionItemsToThree()
+    {
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            new InMemoryMemoryRepository(),
+            new[]
+            {
+                Reminder("rem_1", "提醒一", DateTime.UtcNow.AddHours(1), "pending"),
+                Reminder("rem_2", "提醒二", DateTime.UtcNow.AddHours(2), "pending"),
+                Reminder("rem_3", "提醒三", DateTime.UtcNow.AddHours(3), "pending"),
+                Reminder("rem_4", "提醒四", DateTime.UtcNow.AddHours(4), "pending")
+            },
+            new[]
+            {
+                PlanSignal("plan_1", "计划一", minutesAgo: 1),
+                PlanSignal("plan_2", "计划二", minutesAgo: 2),
+                PlanSignal("plan_3", "计划三", minutesAgo: 3),
+                PlanSignal("plan_4", "计划四", minutesAgo: 4)
+            });
+
+        var overview = await service.BuildAsync("user_a");
+
+        Assert.Equal(4, overview.PendingReminderCount);
+        Assert.Equal(3, overview.PendingReminders.Count);
+        Assert.Equal(4, overview.PlanSignalCount);
+        Assert.Equal(3, overview.PlanSignals.Count);
     }
 
     private static HomeOverviewService Service(

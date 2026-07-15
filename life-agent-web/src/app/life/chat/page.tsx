@@ -26,10 +26,11 @@ const initialMessages: Message[] = [
 const quickQuestions = [
   "最近状态",
   "反复出现",
+  "今天要处理什么",
+  "哪些提醒待处理",
+  "还有哪些计划",
   "我最近有什么变化",
   "结合我的记忆看最近状态",
-  "近期计划",
-  "近期提醒",
 ];
 
 function buildContextMeta(usedMemoryCount: number, usedReminderCount: number, usedPlanSignalCount: number): string {

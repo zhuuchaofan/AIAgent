@@ -16,8 +16,10 @@ public sealed class HomeOverviewData
     public int MemoryReviewCandidateCount { get; set; }
     public int MemoryCount { get; set; }
     public int PendingReminderCount { get; set; }
+    public IReadOnlyList<HomeOverviewReminderDto> PendingReminders { get; set; } = Array.Empty<HomeOverviewReminderDto>();
     public HomeOverviewReminderDto? LatestReminder { get; set; }
     public int PlanSignalCount { get; set; }
+    public IReadOnlyList<HomeOverviewPlanSignalDto> PlanSignals { get; set; } = Array.Empty<HomeOverviewPlanSignalDto>();
     public HomeOverviewPlanSignalDto? LatestPlanSignal { get; set; }
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;

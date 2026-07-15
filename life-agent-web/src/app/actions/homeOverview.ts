@@ -30,8 +30,10 @@ export interface HomeOverviewData {
   memoryReviewCandidateCount: number;
   memoryCount: number;
   pendingReminderCount: number;
+  pendingReminders: HomeOverviewReminder[];
   latestReminder?: HomeOverviewReminder | null;
   planSignalCount: number;
+  planSignals: HomeOverviewPlanSignal[];
   latestPlanSignal?: HomeOverviewPlanSignal | null;
   readOnly: boolean;
   wroteData: boolean;
