@@ -42,6 +42,7 @@ builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptio
 builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.SectionName));
 builder.Services.AddScoped<ILifeEventService, LifeEventService>();
 builder.Services.AddScoped<IPersonalContextService, PersonalContextService>();
+builder.Services.AddScoped<IPersonalContextThreadService, PersonalContextThreadService>();
 builder.Services.AddScoped<IHomeOverviewService, HomeOverviewService>();
 builder.Services.AddScoped<ILifeChatService, LifeChatService>();
 builder.Services.AddScoped<ILifeReviewService, LifeReviewService>();

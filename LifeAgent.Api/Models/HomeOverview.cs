@@ -26,6 +26,7 @@ public sealed class HomeOverviewData
     public HomeOverviewPlanSignalDto? LatestPlanSignal { get; set; }
     public IReadOnlyList<HomeOverviewTodayFocusDto> TodayFocus { get; set; } = Array.Empty<HomeOverviewTodayFocusDto>();
     public HomeOverviewDailyBriefDto DailyBrief { get; set; } = new();
+    public IReadOnlyList<HomeOverviewContextThreadDto> ContextThreads { get; set; } = Array.Empty<HomeOverviewContextThreadDto>();
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
     public bool Executed { get; set; } = false;
@@ -72,6 +73,28 @@ public sealed class HomeOverviewTodayFocusDto
     public string PriorityLabel { get; set; } = string.Empty;
     public string ActionLabel { get; set; } = string.Empty;
     public string Explanation { get; set; } = string.Empty;
+}
+
+public sealed class HomeOverviewContextThreadDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public string Href { get; set; } = string.Empty;
+    public string ActionLabel { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
+    public IReadOnlyList<HomeOverviewContextThreadEvidenceDto> Evidence { get; set; } = Array.Empty<HomeOverviewContextThreadEvidenceDto>();
+}
+
+public sealed class HomeOverviewContextThreadEvidenceDto
+{
+    public string SourceType { get; set; } = string.Empty;
+    public string SourceId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public string Href { get; set; } = string.Empty;
 }
 
 public sealed class HomeOverviewReminderDto

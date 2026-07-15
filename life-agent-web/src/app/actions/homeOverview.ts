@@ -62,6 +62,26 @@ export interface HomeOverviewDailyBrief {
   executed: boolean;
 }
 
+export interface HomeOverviewContextThreadEvidence {
+  sourceType: "memory" | "event" | "reminder" | "plan";
+  sourceId: string;
+  title: string;
+  detail: string;
+  href: string;
+}
+
+export interface HomeOverviewContextThread {
+  id: string;
+  title: string;
+  summary: string;
+  kind: "goal" | "routine" | "temporary_context" | "theme";
+  priority: number;
+  href: string;
+  actionLabel?: string;
+  explanation?: string;
+  evidence: HomeOverviewContextThreadEvidence[];
+}
+
 export interface HomeOverviewData {
   recentEvents: LifeEvent[];
   hasMoreRecentEvents: boolean;
@@ -79,6 +99,7 @@ export interface HomeOverviewData {
   latestPlanSignal?: HomeOverviewPlanSignal | null;
   todayFocus?: HomeOverviewTodayFocus[];
   dailyBrief?: HomeOverviewDailyBrief;
+  contextThreads?: HomeOverviewContextThread[];
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;

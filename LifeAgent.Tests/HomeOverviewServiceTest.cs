@@ -18,6 +18,7 @@ public class HomeOverviewServiceTest
 
         Assert.Empty(overview.RecentEvents);
         Assert.Empty(overview.Insights);
+        Assert.Empty(overview.ContextThreads);
         Assert.Equal(0, overview.MemoryReviewCandidateCount);
         Assert.Equal(0, overview.MemoryCount);
         Assert.Equal(0, overview.PendingReminderCount);
@@ -245,6 +246,15 @@ public class HomeOverviewServiceTest
         Assert.Contains("逾期提醒", overview.DailyBrief.Signals[0].Detail, StringComparison.Ordinal);
         Assert.Equal("查看提醒", overview.DailyBrief.Signals[0].ActionLabel);
         Assert.Contains("最明确的待处理事项", overview.DailyBrief.Signals[0].Explanation, StringComparison.Ordinal);
+
+        var thread = overview.ContextThreads.First();
+        Assert.Equal("reminder_rem_overdue", thread.Id);
+        Assert.Equal("temporary_context", thread.Kind);
+        Assert.Equal(100, thread.Priority);
+        Assert.Equal("/reminders", thread.Href);
+        Assert.Equal("查看提醒", thread.ActionLabel);
+        Assert.Contains("提醒", thread.Explanation, StringComparison.Ordinal);
+        Assert.Contains(thread.Evidence, evidence => evidence.SourceType == "reminder" && evidence.SourceId == "rem_overdue");
     }
 
     [Fact]
@@ -286,6 +296,16 @@ public class HomeOverviewServiceTest
             signal.Detail.Contains("整理新疆路线", StringComparison.Ordinal) &&
             signal.ActionLabel == "查看计划" &&
             signal.Explanation.Contains("已记住的个人背景", StringComparison.Ordinal));
+
+        var thread = Assert.Single(overview.ContextThreads);
+        Assert.Equal("plan_memory_plan_related", thread.Id);
+        Assert.Equal("goal", thread.Kind);
+        Assert.Equal("整理新疆路线", thread.Title);
+        Assert.Equal("/plans", thread.Href);
+        Assert.Equal("查看计划", thread.ActionLabel);
+        Assert.Contains("计划线索和已确认记忆", thread.Explanation, StringComparison.Ordinal);
+        Assert.Contains(thread.Evidence, evidence => evidence.SourceType == "plan" && evidence.SourceId == "plan_related");
+        Assert.Contains(thread.Evidence, evidence => evidence.SourceType == "memory");
     }
 
     [Fact]
@@ -360,7 +380,98 @@ public class HomeOverviewServiceTest
         var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
 
         Assert.Empty(overview.TodayFocus);
+        Assert.Empty(overview.ContextThreads);
         Assert.DoesNotContain(overview.DailyBrief.Signals, signal => signal.Basis == "recent_pattern");
+    }
+
+    [Fact]
+    public async Task BuildAsync_AddsMemoryPatternThreadOnlyWithRepeatedRecentEvidence()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Habit.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我最近关注骑行状态和心率。",
+            Importance = 4
+        });
+        var service = Service(
+            new[]
+            {
+                Event("evt_ride_1", "骑行记录", "今天骑行心率比较平稳。", minutesAgo: 5),
+                Event("evt_ride_2", "运动状态", "昨天骑行以后也关注了心率。", minutesAgo: 30)
+            },
+            memoryRepository,
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        var thread = Assert.Single(overview.ContextThreads);
+        Assert.Equal("routine", thread.Kind);
+        Assert.Equal("/life/review", thread.Href);
+        Assert.Equal("查看回顾", thread.ActionLabel);
+        Assert.Contains("至少两条近期记录", thread.Explanation, StringComparison.Ordinal);
+        Assert.Contains(thread.Evidence, evidence => evidence.SourceType == "memory");
+        Assert.Equal(2, thread.Evidence.Count(evidence => evidence.SourceType == "event"));
+    }
+
+    [Fact]
+    public async Task BuildAsync_DoesNotUseExpiredTemporaryMemoryForContextThreads()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我正在准备新疆旅行。",
+            Importance = 5,
+            ExpiresAt = now.UtcDateTime.AddDays(-1)
+        });
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            memoryRepository,
+            planSignals: new[] { PlanSignal("plan_xinjiang", "整理新疆路线", minutesAgo: 5) },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        Assert.Empty(overview.ContextThreads);
+    }
+
+    [Fact]
+    public async Task BuildAsync_LimitsContextThreadsToThree()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Goal.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我计划去新疆旅行。",
+            Importance = 5
+        });
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            memoryRepository,
+            reminders: new[]
+            {
+                Reminder("rem_1", "提醒一", now.UtcDateTime.AddHours(-1), "pending"),
+                Reminder("rem_2", "提醒二", now.UtcDateTime.AddHours(1), "pending"),
+                Reminder("rem_3", "提醒三", now.UtcDateTime.AddHours(2), "pending")
+            },
+            planSignals: new[]
+            {
+                PlanSignal("plan_xinjiang_1", "整理新疆路线", minutesAgo: 5),
+                PlanSignal("plan_xinjiang_2", "准备新疆行李", minutesAgo: 10)
+            },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        Assert.Equal(3, overview.ContextThreads.Count);
+        Assert.All(overview.ContextThreads, thread => Assert.NotEmpty(thread.Evidence));
     }
 
     [Fact]
@@ -397,7 +508,7 @@ public class HomeOverviewServiceTest
             new MemoryInsightPreviewService(new MemoryExtractionService(new MemoryProposalGuard())),
             new MemoryReviewInboxPreviewService(),
             reviewStateStore ?? new FakeMemoryReviewStateStore(),
-            timeProvider);
+            timeProvider: timeProvider);
     }
 
     private static LifeEvent Event(string id, string title, string content, int minutesAgo)

@@ -19,6 +19,7 @@ import { AgentPreview } from "@/components/AgentPreview";
 import type { MemoryInsight } from "@/app/actions/memoryInsights";
 import {
   getHomeOverview,
+  type HomeOverviewContextThread,
   type HomeOverviewDailyBrief,
   type HomeOverviewData,
   type HomeOverviewPlanSignal,
@@ -68,6 +69,21 @@ function FocusIcon({ type, className }: { type: HomeOverviewTodayFocus["type"]; 
   if (type === "reminder") return <Bell className={className} />;
   if (type === "plan") return <ClipboardList className={className} />;
   return <Sparkles className={className} />;
+}
+
+function threadKindLabel(kind: HomeOverviewContextThread["kind"]) {
+  if (kind === "goal") return "目标";
+  if (kind === "routine") return "习惯";
+  if (kind === "temporary_context") return "近期";
+  return "主题";
+}
+
+function evidenceLabel(sourceType: HomeOverviewContextThread["evidence"][number]["sourceType"]) {
+  if (sourceType === "memory") return "记忆";
+  if (sourceType === "event") return "记录";
+  if (sourceType === "reminder") return "提醒";
+  if (sourceType === "plan") return "计划";
+  return "依据";
 }
 
 function DailyActionCard({
@@ -194,6 +210,86 @@ function DailyActionCard({
         <p className="mt-3 text-xs text-zinc-600">
           另有 {hiddenManagedItemCount} 条提醒或计划线索，可进入对应页面查看。
         </p>
+      )}
+    </section>
+  );
+}
+
+function ContextThreadsCard({
+  threads,
+  isLoading,
+}: {
+  threads?: HomeOverviewContextThread[];
+  isLoading: boolean;
+}) {
+  const visibleThreads = threads ?? [];
+
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">近期主线</h2>
+          <p className="mt-1 text-sm text-zinc-500">把记忆、计划、提醒和最近记录串起来看。</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <div className="h-20 animate-pulse rounded-xl bg-zinc-800/40" />
+          <div className="h-20 animate-pulse rounded-xl bg-zinc-800/30" />
+        </div>
+      ) : visibleThreads.length === 0 ? (
+        <p className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3 text-sm text-zinc-500">
+          暂时还没有足够明确的近期主线。继续记录后，我会把反复出现的事整理出来。
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {visibleThreads.map(thread => (
+            <Link
+              key={thread.id}
+              href={thread.href || "/life/review"}
+              className="block rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4 transition-colors hover:border-violet-400/40"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-zinc-950/30 px-2.5 py-1 text-xs text-violet-200">
+                  <Brain className="h-3.5 w-3.5" />
+                  {threadKindLabel(thread.kind)}
+                </span>
+                {thread.priority > 0 && (
+                  <span className="rounded-full border border-zinc-700 bg-zinc-950/40 px-2.5 py-1 text-xs text-zinc-300">
+                    优先级 {thread.priority}
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 break-words text-base font-semibold leading-relaxed text-zinc-100">{thread.title}</div>
+              <p className="mt-1 break-words text-sm leading-relaxed text-zinc-300">{thread.summary}</p>
+              {thread.explanation && (
+                <p className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-950/35 px-3 py-2 text-xs leading-relaxed text-zinc-400">
+                  {thread.explanation}
+                </p>
+              )}
+              {thread.evidence.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {thread.evidence.slice(0, 3).map(evidence => (
+                    <div
+                      key={`${thread.id}-${evidence.sourceType}-${evidence.sourceId}`}
+                      className="rounded-lg border border-zinc-800/70 bg-zinc-950/30 px-2.5 py-2"
+                    >
+                      <div className="text-xs text-violet-200">{evidenceLabel(evidence.sourceType)} · {evidence.title}</div>
+                      {evidence.detail && (
+                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{evidence.detail}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-violet-200">
+                {thread.actionLabel || "查看"}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </Link>
+          ))}
+        </div>
       )}
     </section>
   );
@@ -501,6 +597,10 @@ export default function Home() {
               planSignals={overview?.planSignals ?? []}
               pendingReminderCount={overview?.pendingReminderCount ?? 0}
               planSignalCount={overview?.planSignalCount ?? 0}
+              isLoading={isLoadingOverview || isOverviewPending}
+            />
+            <ContextThreadsCard
+              threads={overview?.contextThreads}
               isLoading={isLoadingOverview || isOverviewPending}
             />
             {overview ? (

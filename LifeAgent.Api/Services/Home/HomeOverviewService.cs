@@ -23,6 +23,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
     private readonly IMemoryInsightPreviewService _memoryInsightPreviewService;
     private readonly IMemoryReviewInboxPreviewService _memoryReviewInboxPreviewService;
     private readonly IMemoryReviewStateStore _memoryReviewStateStore;
+    private readonly IPersonalContextThreadService _personalContextThreadService;
     private readonly TimeProvider _timeProvider;
 
     public HomeOverviewService(
@@ -30,6 +31,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         IMemoryInsightPreviewService memoryInsightPreviewService,
         IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
         IMemoryReviewStateStore memoryReviewStateStore,
+        IPersonalContextThreadService? personalContextThreadService = null,
         TimeProvider? timeProvider = null)
     {
         _personalContextService = personalContextService;
@@ -37,6 +39,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         _memoryReviewInboxPreviewService = memoryReviewInboxPreviewService;
         _memoryReviewStateStore = memoryReviewStateStore;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _personalContextThreadService = personalContextThreadService ?? new PersonalContextThreadService(_timeProvider);
     }
 
     public async Task<HomeOverviewData> BuildAsync(
@@ -73,6 +76,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         var insights = AddPlanSignalInsight(insightPreview.Insights, context.PlanSignalCount);
         var todayFocus = BuildTodayFocus(context, insightPreview.Insights, timeZone);
         var dailyBrief = BuildDailyBrief(context, insightPreview.Insights, reviewStatusCounts, timeZone);
+        var contextThreads = _personalContextThreadService.BuildThreads(context, timeZone);
 
         return new HomeOverviewData
         {
@@ -92,6 +96,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
             LatestPlanSignal = context.PlanSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
             TodayFocus = todayFocus,
             DailyBrief = dailyBrief,
+            ContextThreads = contextThreads,
             ReadOnly = true,
             WroteData = false,
             Executed = false

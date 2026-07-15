@@ -96,6 +96,22 @@ Expected:
 - Loading the brief does not write data, create reminders, remember anything,
   deliver notifications, or execute tools.
 
+### 2c. Review recent context threads
+
+On the home page, inspect `近期主线`.
+
+Expected:
+
+- At most three threads are shown.
+- Threads are grounded in active Memory, repeated recent records, pending
+  reminders, or active plan signals.
+- A one-off life record does not become a long-term thread unless active Memory
+  or repeated recent evidence supports it.
+- Each thread shows read-only evidence and links only to existing management or
+  review surfaces.
+- Loading the threads does not write Memory, create reminders, create pending
+  actions, deliver notifications, or execute tools.
+
 ### 3. Inspect possible memories
 
 Open `/memory/review`.
