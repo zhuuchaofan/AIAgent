@@ -37,4 +37,10 @@ public sealed class PlanSignal
 
     [FirestoreProperty("archivedAt")]
     public DateTime? ArchivedAt { get; set; }
+
+    [FirestoreProperty("convertedAt")]
+    public DateTime? ConvertedAt { get; set; }
+
+    [FirestoreProperty("convertedReminderId")]
+    public string? ConvertedReminderId { get; set; }
 }

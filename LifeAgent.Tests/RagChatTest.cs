@@ -907,9 +907,27 @@ public class FakePlanSignalService : IPlanSignalService
             .ToList());
     }
 
+    public Task<PlanSignal?> GetAsync(
+        string userId,
+        string signalId,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_signals.FirstOrDefault(signal =>
+            signal.UserId == userId && signal.Id == signalId));
+    }
+
     public Task<bool> ArchiveAsync(
         string userId,
         string signalId,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("FakePlanSignalService is read-only.");
+    }
+
+    public Task<PlanSignalReminderConversionResult?> ConvertReminderSignalAsync(
+        string userId,
+        string signalId,
+        PlanSignalReminderConversionRequest request,
         CancellationToken cancellationToken = default)
     {
         throw new NotSupportedException("FakePlanSignalService is read-only.");

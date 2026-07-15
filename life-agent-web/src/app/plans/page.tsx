@@ -2,8 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Archive, Bell, ClipboardList, Loader2, LogOut } from "lucide-react";
-import { archivePlanSignal, getPlanSignals, type PlanSignal } from "@/app/actions/planSignals";
+import { ArrowLeft, Archive, Bell, Check, ClipboardList, Loader2, LogOut } from "lucide-react";
+import {
+  archivePlanSignal,
+  convertPlanSignalToReminder,
+  getPlanSignals,
+  type PlanSignal
+} from "@/app/actions/planSignals";
 import { useAuth } from "@/providers/AuthProvider";
 import { PageContentSkeleton } from "@/components/LoadingSkeletons";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
@@ -23,7 +28,10 @@ export default function PlansPage() {
   const [signals, setSignals] = useState<PlanSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [dueAtInputs, setDueAtInputs] = useState<Record<string, string>>({});
 
   const loadSignals = useCallback(async () => {
     if (!user) return;
@@ -58,6 +66,7 @@ export default function PlansPage() {
   const handleArchive = async (id: string) => {
     setArchivingId(id);
     setError(null);
+    setSuccessMessage(null);
     try {
       await archivePlanSignal(id);
       setSignals(current => current.filter(signal => signal.id !== id));
@@ -65,6 +74,46 @@ export default function PlansPage() {
       setError(err instanceof Error ? err.message : "暂时无法归档这条线索");
     } finally {
       setArchivingId(null);
+    }
+  };
+
+  const handleConvertToReminder = async (signal: PlanSignal) => {
+    const dueAtInput = dueAtInputs[signal.id]?.trim();
+    if (!dueAtInput) {
+      setError("请先为这条提醒线索补充时间");
+      setSuccessMessage(null);
+      return;
+    }
+
+    setConvertingId(signal.id);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const dueAtDate = new Date(dueAtInput);
+      if (Number.isNaN(dueAtDate.getTime())) {
+        setError("请输入有效的提醒时间");
+        return;
+      }
+
+      const dueAt = dueAtDate.toISOString();
+      await convertPlanSignalToReminder(
+        signal.id,
+        dueAt,
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
+        signal.title,
+        signal.content
+      );
+      setSignals(current => current.filter(item => item.id !== signal.id));
+      setDueAtInputs(current => {
+        const next = { ...current };
+        delete next[signal.id];
+        return next;
+      });
+      setSuccessMessage("已保存为提醒；当前不会发送系统通知。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "暂时无法保存为提醒");
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -132,6 +181,11 @@ export default function PlansPage() {
                 {error}
               </div>
             )}
+            {successMessage && (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                {successMessage}
+              </div>
+            )}
 
             {signals.length === 0 ? (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-relaxed text-zinc-500">
@@ -172,9 +226,36 @@ export default function PlansPage() {
                             <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{signal.content}</p>
                           )}
                           {signal.kind === "reminder_signal" && (
-                            <p className="mt-3 rounded-xl border border-amber-500/10 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-100/80">
-                              这条提醒还缺少明确时间，所以暂时不会出现在提醒事项里。
-                            </p>
+                            <div className="mt-3 rounded-xl border border-amber-500/10 bg-amber-500/5 p-3">
+                              <p className="text-xs leading-relaxed text-amber-100/80">
+                                这条提醒还缺少明确时间，所以暂时不会出现在提醒事项里。
+                              </p>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                                <input
+                                  type="datetime-local"
+                                  value={dueAtInputs[signal.id] ?? ""}
+                                  onChange={event => {
+                                    const value = event.target.value;
+                                    setDueAtInputs(current => ({ ...current, [signal.id]: value }));
+                                  }}
+                                  className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-amber-400"
+                                  aria-label="提醒时间"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleConvertToReminder(signal)}
+                                  disabled={convertingId === signal.id}
+                                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {convertingId === signal.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                  保存为提醒
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
                         <button

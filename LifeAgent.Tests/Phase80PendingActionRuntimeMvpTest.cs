@@ -1094,12 +1094,32 @@ public class Phase80PendingActionRuntimeMvpTest
                 .ToList());
         }
 
+        public Task<PlanSignal?> GetAsync(
+            string userId,
+            string signalId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Writes
+                .Where(write => write.UserId == userId)
+                .Select(write => write.Signal)
+                .FirstOrDefault(signal => signal.Id == signalId));
+        }
+
         public Task<bool> ArchiveAsync(
             string userId,
             string signalId,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(false);
+        }
+
+        public Task<PlanSignalReminderConversionResult?> ConvertReminderSignalAsync(
+            string userId,
+            string signalId,
+            PlanSignalReminderConversionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("CapturingPlanSignalService does not convert reminders.");
         }
     }
 
