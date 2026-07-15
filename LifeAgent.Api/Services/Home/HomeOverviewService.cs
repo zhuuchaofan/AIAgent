@@ -81,6 +81,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         var todayFocus = BuildTodayFocus(context, insightPreview.Insights, timeZone);
         var dailyBrief = BuildDailyBrief(context, insightPreview.Insights, reviewStatusCounts, timeZone);
         var contextThreads = _personalContextThreadService.BuildThreads(context, timeZone);
+        var contextSpine = BuildContextSpine(contextThreads, todayFocus, dailyBrief, reviewStatusCounts);
 
         return new HomeOverviewData
         {
@@ -101,9 +102,141 @@ public sealed class HomeOverviewService : IHomeOverviewService
             TodayFocus = todayFocus,
             DailyBrief = dailyBrief,
             ContextThreads = contextThreads,
+            ContextSpine = contextSpine,
             ReadOnly = true,
             WroteData = false,
             Executed = false
+        };
+    }
+
+    private static HomeOverviewContextSpineDto BuildContextSpine(
+        IReadOnlyList<HomeOverviewContextThreadDto> contextThreads,
+        IReadOnlyList<HomeOverviewTodayFocusDto> todayFocus,
+        HomeOverviewDailyBriefDto dailyBrief,
+        ReviewStatusCounts reviewStatusCounts)
+    {
+        var signals = new List<HomeOverviewContextSpineSignalDto>();
+
+        signals.AddRange(todayFocus.Select(item => new HomeOverviewContextSpineSignalDto
+        {
+            Id = $"focus_{item.Type}_{item.Id}",
+            Kind = item.Type,
+            Title = item.Title,
+            Detail = string.IsNullOrWhiteSpace(item.Explanation) ? item.Reason : item.Explanation,
+            Href = item.Href,
+            ActionLabel = item.ActionLabel,
+            Explanation = item.Explanation,
+            Priority = item.Priority
+        }));
+
+        signals.AddRange(dailyBrief.Signals
+            .Where(signal => !string.Equals(signal.Basis, "empty_context", StringComparison.OrdinalIgnoreCase))
+            .Select(signal => new HomeOverviewContextSpineSignalDto
+            {
+                Id = $"brief_{signal.Id}",
+                Kind = signal.Basis,
+                Title = signal.Title,
+                Detail = signal.Detail,
+                Href = signal.Href,
+                ActionLabel = signal.ActionLabel,
+                Explanation = signal.Explanation,
+                Priority = SignalPriority(signal.Basis)
+            }));
+
+        var compactSignals = signals
+            .Where(signal => !string.IsNullOrWhiteSpace(signal.Title))
+            .GroupBy(signal => $"{signal.Href}:{signal.Title}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.Priority).First())
+            .OrderByDescending(signal => signal.Priority)
+            .ThenBy(signal => signal.Id, StringComparer.Ordinal)
+            .Take(5)
+            .ToArray();
+
+        return new HomeOverviewContextSpineDto
+        {
+            Threads = contextThreads,
+            Signals = compactSignals,
+            NextBestLinks = BuildContextSpineLinks(contextThreads, compactSignals, reviewStatusCounts),
+            ContextCounts = dailyBrief.ContextCounts,
+            ReadOnly = true,
+            WroteData = false,
+            Executed = false
+        };
+    }
+
+    private static IReadOnlyList<HomeOverviewContextSpineLinkDto> BuildContextSpineLinks(
+        IReadOnlyList<HomeOverviewContextThreadDto> contextThreads,
+        IReadOnlyList<HomeOverviewContextSpineSignalDto> signals,
+        ReviewStatusCounts reviewStatusCounts)
+    {
+        var links = new List<HomeOverviewContextSpineLinkDto>();
+
+        if (contextThreads.Any(thread => string.Equals(thread.Href, "/life/review", StringComparison.OrdinalIgnoreCase)) ||
+            signals.Any(signal => string.Equals(signal.Href, "/life/review", StringComparison.OrdinalIgnoreCase)))
+        {
+            links.Add(new HomeOverviewContextSpineLinkDto
+            {
+                Href = "/life/review",
+                Label = "查看最近回顾",
+                Reason = "把近期主线和生活记录依据放在一起看。"
+            });
+        }
+
+        if (reviewStatusCounts.Pending > 0)
+        {
+            links.Add(new HomeOverviewContextSpineLinkDto
+            {
+                Href = "/memory/review",
+                Label = $"判断 {reviewStatusCounts.Pending} 条记忆线索",
+                Reason = "这些线索需要你确认后才会进入长期记忆。"
+            });
+        }
+
+        if (contextThreads.Any(thread => string.Equals(thread.Href, "/plans", StringComparison.OrdinalIgnoreCase)) ||
+            signals.Any(signal => string.Equals(signal.Href, "/plans", StringComparison.OrdinalIgnoreCase)))
+        {
+            links.Add(new HomeOverviewContextSpineLinkDto
+            {
+                Href = "/plans",
+                Label = "查看计划线索",
+                Reason = "这些计划只是上下文线索，不会自动执行。"
+            });
+        }
+
+        if (contextThreads.Any(thread => thread.Evidence.Any(evidence =>
+                string.Equals(evidence.SourceType, "memory", StringComparison.OrdinalIgnoreCase))))
+        {
+            links.Add(new HomeOverviewContextSpineLinkDto
+            {
+                Href = "/memory",
+                Label = "查看我的记忆",
+                Reason = "这些主线引用了你确认过的长期背景。"
+            });
+        }
+
+        links.Add(new HomeOverviewContextSpineLinkDto
+        {
+            Href = "/life/chat",
+            Label = "问问最近状态",
+            Reason = "用只读方式基于近期记录和记忆整理答案。"
+        });
+
+        return links
+            .GroupBy(link => link.Href, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(3)
+            .ToArray();
+    }
+
+    private static int SignalPriority(string basis)
+    {
+        return basis?.Trim().ToLowerInvariant() switch
+        {
+            "due_reminder" => 95,
+            "memory_related_plan" => 85,
+            "recent_pattern" => 70,
+            "memory_review_pending" => 60,
+            _ => 40
         };
     }
 

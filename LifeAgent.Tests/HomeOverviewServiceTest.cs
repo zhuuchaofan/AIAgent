@@ -19,6 +19,15 @@ public class HomeOverviewServiceTest
         Assert.Empty(overview.RecentEvents);
         Assert.Empty(overview.Insights);
         Assert.Empty(overview.ContextThreads);
+        Assert.Empty(overview.ContextSpine.Threads);
+        Assert.Empty(overview.ContextSpine.Signals);
+        var nextLink = Assert.Single(overview.ContextSpine.NextBestLinks);
+        Assert.Equal("/life/chat", nextLink.Href);
+        Assert.Equal("问问最近状态", nextLink.Label);
+        Assert.Equal(0, overview.ContextSpine.ContextCounts.RecentEventCount);
+        Assert.True(overview.ContextSpine.ReadOnly);
+        Assert.False(overview.ContextSpine.WroteData);
+        Assert.False(overview.ContextSpine.Executed);
         Assert.Equal(0, overview.MemoryReviewCandidateCount);
         Assert.Equal(0, overview.MemoryCount);
         Assert.Equal(0, overview.PendingReminderCount);
@@ -306,6 +315,29 @@ public class HomeOverviewServiceTest
         Assert.Contains("计划线索和已确认记忆", thread.Explanation, StringComparison.Ordinal);
         Assert.Contains(thread.Evidence, evidence => evidence.SourceType == "plan" && evidence.SourceId == "plan_related");
         Assert.Contains(thread.Evidence, evidence => evidence.SourceType == "memory");
+
+        var spineThread = Assert.Single(overview.ContextSpine.Threads);
+        Assert.Equal(thread.Id, spineThread.Id);
+        Assert.Contains(overview.ContextSpine.Signals, signal =>
+            signal.Kind == "plan" &&
+            signal.Title == "整理新疆路线" &&
+            signal.Href == "/plans" &&
+            signal.Priority == 80);
+        Assert.Contains(overview.ContextSpine.Signals, signal =>
+            signal.Kind == "memory_related_plan" &&
+            signal.Href == "/plans" &&
+            signal.Priority == 85);
+        Assert.Contains(overview.ContextSpine.NextBestLinks, link =>
+            link.Href == "/plans" &&
+            link.Label == "查看计划线索" &&
+            link.Reason.Contains("不会自动执行", StringComparison.Ordinal));
+        Assert.Contains(overview.ContextSpine.NextBestLinks, link =>
+            link.Href == "/memory" &&
+            link.Label == "查看我的记忆");
+        Assert.Equal(1, overview.ContextSpine.ContextCounts.ActiveMemoryCount);
+        Assert.True(overview.ContextSpine.ReadOnly);
+        Assert.False(overview.ContextSpine.WroteData);
+        Assert.False(overview.ContextSpine.Executed);
     }
 
     [Fact]
@@ -361,6 +393,12 @@ public class HomeOverviewServiceTest
         Assert.Contains(overview.DailyBrief.Signals, signal =>
             signal.Basis == "recent_pattern" &&
             signal.ActionLabel == "查看回顾");
+        Assert.Contains(overview.ContextSpine.Signals, signal =>
+            signal.Kind == "recent_pattern" &&
+            signal.Href == "/life/review");
+        Assert.Contains(overview.ContextSpine.NextBestLinks, link =>
+            link.Href == "/life/review" &&
+            link.Label == "查看最近回顾");
     }
 
     [Fact]

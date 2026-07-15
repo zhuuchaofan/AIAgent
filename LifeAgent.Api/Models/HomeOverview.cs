@@ -27,9 +27,40 @@ public sealed class HomeOverviewData
     public IReadOnlyList<HomeOverviewTodayFocusDto> TodayFocus { get; set; } = Array.Empty<HomeOverviewTodayFocusDto>();
     public HomeOverviewDailyBriefDto DailyBrief { get; set; } = new();
     public IReadOnlyList<HomeOverviewContextThreadDto> ContextThreads { get; set; } = Array.Empty<HomeOverviewContextThreadDto>();
+    public HomeOverviewContextSpineDto ContextSpine { get; set; } = new();
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
     public bool Executed { get; set; } = false;
+}
+
+public sealed class HomeOverviewContextSpineDto
+{
+    public IReadOnlyList<HomeOverviewContextThreadDto> Threads { get; set; } = Array.Empty<HomeOverviewContextThreadDto>();
+    public IReadOnlyList<HomeOverviewContextSpineSignalDto> Signals { get; set; } = Array.Empty<HomeOverviewContextSpineSignalDto>();
+    public IReadOnlyList<HomeOverviewContextSpineLinkDto> NextBestLinks { get; set; } = Array.Empty<HomeOverviewContextSpineLinkDto>();
+    public HomeOverviewDailyBriefContextCountsDto ContextCounts { get; set; } = new();
+    public bool ReadOnly { get; set; } = true;
+    public bool WroteData { get; set; } = false;
+    public bool Executed { get; set; } = false;
+}
+
+public sealed class HomeOverviewContextSpineSignalDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public string Href { get; set; } = string.Empty;
+    public string ActionLabel { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
+    public int Priority { get; set; }
+}
+
+public sealed class HomeOverviewContextSpineLinkDto
+{
+    public string Href { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
 }
 
 public sealed class HomeOverviewDailyBriefDto

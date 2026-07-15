@@ -160,6 +160,11 @@ on `/reminders`.
      It also returns up to three read-only `contextThreads` that connect active
      Memory, repeated recent records, pending reminders, and active plan signals
      into user-facing recent themes with evidence and navigation labels.
+     It also returns a compact read-only `contextSpine` that groups
+     `contextThreads`, normalized signals from today focus / daily brief,
+     `nextBestLinks`, and context counts so later Life Review and Life Q&A
+     surfaces can reuse one personal-context spine instead of inventing
+     separate ranking models.
      The current Home UI keeps the first screen compact by surfacing only the
      top context thread inside the AI organizing area; the response may still
      contain up to three threads for downstream surfaces.
@@ -186,6 +191,10 @@ on `/reminders`.
      or modify any underlying resource. A plan-memory context thread requires a
      concrete overlap; generic words such as "project" or "work" alone are not
      sufficient.
+     `contextSpine` is also read-only and is intended as the shared continuity
+     contract for future personal-context surfaces. Its links are navigation
+     suggestions only; they do not create pending actions, write Memory, deliver
+     reminders, or execute tools.
    - `POST /api/life/review` can attach read-only evidence hints to review
      cards when active Memory or active Plan Signals overlap with the card
      context. These hints are navigation/explanation only and do not create
