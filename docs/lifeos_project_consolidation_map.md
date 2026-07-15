@@ -47,7 +47,7 @@ execution, calendar integration, and MCP remain closed.
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
 | Phase 5 Agent Write MVP | Live for LifeEvent, Plan Signals, and gated Reminder | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, confirm write executors, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`; confirmed plans write `plan_signals`; confirmed reminders write `reminders` only when the reminder write gate is enabled and due time exists. |
 | Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Reminder minimal write is release-gate enabled for confirmed reminders with concrete due time. Memory Review minimal write approved locally. Other write targets remain No-Go. |
-| Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `Services/Home/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*`, `/api/home/overview` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights, Life Review, and Memory Review Inbox can surface memory signals. Review candidates are separated into stable, observing, likely one-off, and already-remembered signals to reduce memory pollution. Kept review candidates can be explicitly remembered; My Memory supports explicit edit/archive; Home overview can show read-only today focus, daily brief, recent context threads, and a compact `contextSpine` that groups threads, signals, next links, and context counts for downstream personal-context surfaces; automatic Memory write remains closed. |
+| Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `Services/Home/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*`, `/api/home/overview` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights, Life Review, and Memory Review Inbox can surface memory signals. Review candidates are separated into stable, observing, likely one-off, and already-remembered signals to reduce memory pollution. Kept review candidates can be explicitly remembered; My Memory supports explicit edit/archive; Home overview can show read-only today focus, daily brief, recent context threads, and a compact `contextSpine` that groups threads, signals, next links, and context counts for downstream personal-context surfaces. Home also exposes short-cache update awareness, manual refresh, background refresh status, and expandable read-only evidence; automatic Memory write remains closed. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
 | Phase 8/9 Pending Action | Historical foundation now absorbed | `IPendingActionStore`, `FirestorePendingActionStore`, `Phase80PendingActionRuntime` | `docs/phase8_*`, `docs/phase9_*` | Docs are historical unless explicitly updated. Current truth is Unified Inbox doc. |
 
@@ -114,6 +114,12 @@ GET /api/home/overview
   -> browser time zone for local due-date boundaries
   -> no durable write, no tool execution
 ```
+
+The Home web surface keeps this overview in a short-lived tab-local cache so
+page returns do not force a full reload. It shows when the overview was last
+updated, allows explicit manual refresh, preserves stale content if background
+refresh fails, and lets the user expand read-only evidence behind the top
+today-focus and personal-context thread suggestions.
 
 Phase 6 currently exposes product-facing preview surfaces only:
 

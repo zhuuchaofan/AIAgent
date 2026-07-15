@@ -168,6 +168,11 @@ on `/reminders`.
      The current Home UI keeps the first screen compact by surfacing only the
      top context thread inside the AI organizing area; the response may still
      contain up to three threads for downstream surfaces.
+     The Home UI may keep this payload in a short-lived tab-local memory cache
+     so returning to the page can show the previous Daily Hub immediately while
+     a background refresh runs. It must show when the overview was last updated,
+     expose manual refresh, and preserve stale content if a background refresh
+     fails.
    - It is read-only and must not create pending actions, write Memory, create
      reminders, or execute tools.
 
@@ -195,6 +200,10 @@ on `/reminders`.
      contract for future personal-context surfaces. Its links are navigation
      suggestions only; they do not create pending actions, write Memory, deliver
      reminders, or execute tools.
+     Home can expand today-focus, daily-brief, and context-thread evidence so
+     users can see which reminder, plan, memory, or life record supported a
+     suggestion. These explanations are read-only trust affordances, not
+     confirmation prompts or execution controls.
    - `POST /api/life/review` can attach read-only evidence hints to review
      cards when active Memory or active Plan Signals overlap with the card
      context. These hints are navigation/explanation only and do not create

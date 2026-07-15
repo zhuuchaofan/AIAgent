@@ -8,9 +8,12 @@ import {
   BookOpen,
   Brain,
   Calendar,
+  ChevronDown,
   ClipboardList,
+  Clock,
   LogOut,
   MessageCircle,
+  RefreshCw,
   Sparkles
 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
@@ -86,6 +89,33 @@ function evidenceLabel(sourceType: HomeOverviewContextThread["evidence"][number]
   return "依据";
 }
 
+function focusBasisLabel(basis: HomeOverviewTodayFocus["basis"]) {
+  if (basis === "overdue") return "已过时间";
+  if (basis === "due_today") return "今天到期";
+  if (basis === "due_soon") return "近期到期";
+  if (basis === "memory_related") return "与你的记忆相关";
+  return "近期反复出现";
+}
+
+function briefBasisLabel(basis: HomeOverviewDailyBrief["signals"][number]["basis"]) {
+  if (basis === "due_reminder") return "提醒依据";
+  if (basis === "memory_related_plan") return "记忆相关计划";
+  if (basis === "recent_pattern") return "近期模式";
+  if (basis === "memory_review_pending") return "待判断记忆线索";
+  return "上下文状态";
+}
+
+function formatOverviewUpdatedLabel(updatedAt: number | null) {
+  if (!updatedAt) return "尚未更新";
+
+  const ageMs = Math.max(0, Date.now() - updatedAt);
+  if (ageMs < 10_000) return "刚刚更新";
+  if (ageMs < 60_000) return `${Math.floor(ageMs / 1000)} 秒前更新`;
+  if (ageMs < 60 * 60_000) return `${Math.floor(ageMs / 60_000)} 分钟前更新`;
+
+  return formatShortChineseDateTime(new Date(updatedAt).toISOString());
+}
+
 interface AiActionLink {
   href: string;
   label: string;
@@ -134,6 +164,9 @@ function DailyActionCard({
   pendingReminderCount,
   planSignalCount,
   isLoading,
+  isRefreshing,
+  updatedAt,
+  onRefresh,
 }: {
   todayFocus?: HomeOverviewTodayFocus[];
   reminders: HomeOverviewReminder[];
@@ -141,6 +174,9 @@ function DailyActionCard({
   pendingReminderCount: number;
   planSignalCount: number;
   isLoading: boolean;
+  isRefreshing: boolean;
+  updatedAt: number | null;
+  onRefresh: () => void;
 }) {
   const legacyFocus: HomeOverviewTodayFocus[] = [
     ...reminders.map(reminder => ({
@@ -174,7 +210,21 @@ function DailyActionCard({
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">今天需要留意</h2>
           <p className="mt-1 text-sm text-zinc-500">按时间和你的个人背景，整理今天最值得关注的事。</p>
+          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-zinc-600">
+            <Clock className="h-3.5 w-3.5" />
+            {formatOverviewUpdatedLabel(updatedAt)}
+            {isRefreshing && <span className="text-indigo-300">· 正在后台更新</span>}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isRefreshing || isLoading}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/40 px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          刷新
+        </button>
       </div>
 
       {isLoading ? (
@@ -189,8 +239,7 @@ function DailyActionCard({
       ) : (
         <div className="space-y-3">
           {primaryFocus && primaryTone && (
-            <Link
-              href={primaryFocus.href}
+            <div
               className={`block rounded-2xl border ${primaryTone.border} ${primaryTone.bg} p-4 transition-colors ${primaryTone.hover}`}
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -211,13 +260,24 @@ function DailyActionCard({
                   {primaryFocus.explanation && (
                     <p className="text-xs leading-relaxed text-zinc-400">{primaryFocus.explanation}</p>
                   )}
-                  <span className={`mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white ${primaryTone.button}`}>
-                    {primaryFocus.actionLabel || "查看"}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </span>
                 </div>
               )}
-            </Link>
+              <details className="mt-3 rounded-xl border border-zinc-800/70 bg-zinc-950/20 px-3 py-2 text-xs text-zinc-500">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-zinc-400">
+                  为什么显示这个
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </summary>
+                <div className="mt-2 space-y-1.5 leading-relaxed">
+                  <p>依据类型：{focusBasisLabel(primaryFocus.basis)}</p>
+                  <p>{primaryFocus.explanation || primaryFocus.reason}</p>
+                  <p className="text-zinc-600">这里只做只读整理，不会自动写入记忆、创建任务或执行工具。</p>
+                </div>
+              </details>
+              <Link href={primaryFocus.href} className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white ${primaryTone.button}`}>
+                {primaryFocus.actionLabel || "查看"}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           )}
 
           {secondaryFocus.length > 0 && (
@@ -225,9 +285,8 @@ function DailyActionCard({
               {secondaryFocus.map(item => {
                 const tone = focusTone(item.type);
                 return (
-                  <Link
+                  <div
                     key={`${item.type}-${item.id}`}
-                    href={item.href}
                     className={`block rounded-xl border px-3 py-3 transition-colors ${tone.border} ${tone.bg} ${tone.hover}`}
                   >
                     <div className={`mb-1 flex items-center gap-2 text-xs ${tone.text}`}>
@@ -239,7 +298,18 @@ function DailyActionCard({
                     </div>
                     <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{item.title}</div>
                     <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{item.explanation || item.reason}</p>
-                  </Link>
+                    <details className="mt-2 rounded-lg border border-zinc-800/70 bg-zinc-950/20 px-2.5 py-2 text-xs text-zinc-500">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-zinc-400">
+                        依据
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </summary>
+                      <p className="mt-1.5 leading-relaxed">{focusBasisLabel(item.basis)}：{item.explanation || item.reason}</p>
+                    </details>
+                    <Link href={item.href} className={`mt-2 inline-flex items-center gap-1 text-xs ${tone.text} hover:text-zinc-100`}>
+                      查看
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 );
               })}
             </div>
@@ -264,6 +334,8 @@ function DailyAiPanel({
   memoryCount,
   planSignalCount,
   isLoading,
+  isRefreshing,
+  updatedAt,
   error,
 }: {
   dailyBrief?: HomeOverviewDailyBrief;
@@ -273,6 +345,8 @@ function DailyAiPanel({
   memoryCount: number;
   planSignalCount: number;
   isLoading: boolean;
+  isRefreshing: boolean;
+  updatedAt: number | null;
   error: string | null;
 }) {
   const memoryCountText = isLoading ? "已记住 -- 条" : `已记住 ${memoryCount} 条`;
@@ -299,6 +373,11 @@ function DailyAiPanel({
             <h2 className="text-lg font-semibold text-zinc-100">AI 帮你整理</h2>
             <span className="text-xs text-zinc-600">{memoryCountText}</span>
           </div>
+          <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-zinc-600">
+            <Clock className="h-3.5 w-3.5" />
+            {formatOverviewUpdatedLabel(updatedAt)}
+            {isRefreshing && <span className="text-indigo-300">· 正在后台更新</span>}
+          </p>
           {!isLoading && hasMemoryLoop && (
             <div className="mt-2 flex flex-wrap gap-2">
               {pendingReviewCandidateCount > 0 && (
@@ -326,7 +405,9 @@ function DailyAiPanel({
             </div>
           ) : error ? (
             <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-              暂时无法整理 AI 发现。你可以继续记录，稍后我再试一次。
+              {dailyBrief || primaryThread
+                ? "后台更新失败，先保留上次整理结果。"
+                : "暂时无法整理 AI 发现。你可以继续记录，稍后我再试一次。"}
             </p>
           ) : (
             <div className="mt-3 space-y-3">
@@ -335,8 +416,7 @@ function DailyAiPanel({
               </p>
 
               {primaryThread && (
-                <Link
-                  href={primaryThread.href || "/life/review"}
+                <div
                   className="block rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-3 transition-colors hover:border-violet-400/40"
                 >
                   <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -347,12 +427,55 @@ function DailyAiPanel({
                   </div>
                   <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{primaryThread.title}</div>
                   <p className="mt-1 break-words text-xs leading-relaxed text-zinc-400">{primaryThread.summary}</p>
-                  {primaryThread.evidence.length > 0 && (
-                    <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-zinc-500">
-                      依据：{primaryThread.evidence.slice(0, 2).map(evidence => `${evidenceLabel(evidence.sourceType)} · ${evidence.title}`).join("；")}
-                    </p>
-                  )}
-                </Link>
+                  <details className="mt-2 rounded-lg border border-zinc-800/70 bg-zinc-950/20 px-2.5 py-2 text-xs text-zinc-500">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-zinc-400">
+                      查看依据
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </summary>
+                    {primaryThread.evidence.length > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        {primaryThread.evidence.slice(0, 3).map(evidence => (
+                          <Link
+                            key={`${evidence.sourceType}-${evidence.sourceId}`}
+                            href={evidence.href}
+                            className="block rounded-lg border border-zinc-800/70 bg-zinc-950/30 px-2.5 py-2 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+                          >
+                            <span className="text-zinc-400">{evidenceLabel(evidence.sourceType)} · {evidence.title}</span>
+                            <span className="mt-1 block leading-relaxed text-zinc-600">{evidence.detail}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 leading-relaxed">来自最近生活记录、记忆、提醒和计划线索的只读整理。</p>
+                    )}
+                    <p className="mt-2 leading-relaxed text-zinc-600">这些依据只用于解释，不会自动写入记忆或执行任何动作。</p>
+                  </details>
+                  <Link href={primaryThread.href || "/life/review"} className="mt-2 inline-flex items-center gap-1 text-xs text-violet-200 hover:text-violet-100">
+                    {primaryThread.actionLabel || "查看最近回顾"}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
+
+              {dailyBrief?.signals?.some(signal => signal.basis !== "empty_context") && (
+                <details className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-2 text-xs text-zinc-500">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-zinc-400">
+                    今日简报依据
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {dailyBrief.signals.filter(signal => signal.basis !== "empty_context").slice(0, 3).map(signal => (
+                      <Link
+                        key={`${signal.basis}-${signal.id}`}
+                        href={signal.href}
+                        className="block rounded-lg border border-zinc-800/70 bg-zinc-950/30 px-2.5 py-2 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+                      >
+                        <span className="text-zinc-400">{briefBasisLabel(signal.basis)} · {signal.title}</span>
+                        <span className="mt-1 block leading-relaxed text-zinc-600">{signal.explanation || signal.detail}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </details>
               )}
 
               <div className="grid gap-2 sm:grid-cols-2">
@@ -387,6 +510,8 @@ export default function Home() {
   const [overviewRefreshTrigger, setOverviewRefreshTrigger] = useState(0);
   const [overview, setOverview] = useState<HomeOverviewData | null>(null);
   const [isLoadingOverview, setIsLoadingOverview] = useState(false);
+  const [isRefreshingOverview, setIsRefreshingOverview] = useState(false);
+  const [overviewUpdatedAt, setOverviewUpdatedAt] = useState<number | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -396,6 +521,7 @@ export default function Home() {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
     const cacheKey = pageDataCacheKey("homeOverview", user.uid, 20, timeZone);
     const cached = readPageDataCache<HomeOverviewData>(cacheKey);
+    const hasExistingOverview = Boolean(overview);
     let cachedTimer: number | undefined;
     let loadingTimer: number | undefined;
 
@@ -403,8 +529,10 @@ export default function Home() {
       cachedTimer = window.setTimeout(() => {
         if (!cancelled) {
           setOverview(cached.value);
+          setOverviewUpdatedAt(Date.now() - cached.ageMs);
           setOverviewError(null);
           setIsLoadingOverview(false);
+          setIsRefreshingOverview(false);
         }
       }, 0);
 
@@ -419,17 +547,23 @@ export default function Home() {
     } else {
       loadingTimer = window.setTimeout(() => {
         if (!cancelled) {
-          setIsLoadingOverview(true);
+          setIsLoadingOverview(!hasExistingOverview);
+          setIsRefreshingOverview(hasExistingOverview);
           setOverviewError(null);
         }
       }, 0);
     }
 
     const loadOverview = async () => {
+      if (cached) {
+        setIsRefreshingOverview(true);
+      }
+
       try {
         const nextOverview = await loadPageDataCache(cacheKey, () => getHomeOverview(20, timeZone));
         if (!cancelled) {
           setOverview(nextOverview);
+          setOverviewUpdatedAt(Date.now());
           setOverviewError(null);
         }
       } catch (error) {
@@ -445,6 +579,7 @@ export default function Home() {
       } finally {
         if (!cancelled) {
           setIsLoadingOverview(false);
+          setIsRefreshingOverview(false);
         }
       }
     };
@@ -460,7 +595,7 @@ export default function Home() {
         window.clearTimeout(loadingTimer);
       }
     };
-  }, [overviewRefreshTrigger, user]);
+  }, [overviewRefreshTrigger, overview, user]);
 
   const handleLogin = async () => {
     try {
@@ -478,8 +613,17 @@ export default function Home() {
     }
   };
 
+  const handleRefreshOverview = () => {
+    if (!user || isRefreshingOverview || isLoadingOverview) return;
+
+    invalidatePageDataCache(pageDataCacheKey("homeOverview", user.uid));
+    setIsRefreshingOverview(true);
+    setOverviewRefreshTrigger(t => t + 1);
+  };
+
   const isLoggedIn = !!user;
   const isOverviewPending = isLoggedIn && !overview && !overviewError;
+  const shouldShowOverviewSkeleton = isLoadingOverview && !overview;
 
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 selection:bg-indigo-500/30 md:px-10 md:py-10">
@@ -591,7 +735,10 @@ export default function Home() {
               planSignals={overview?.planSignals ?? []}
               pendingReminderCount={overview?.pendingReminderCount ?? 0}
               planSignalCount={overview?.planSignalCount ?? 0}
-              isLoading={isLoadingOverview || isOverviewPending}
+              isLoading={shouldShowOverviewSkeleton || isOverviewPending}
+              isRefreshing={isRefreshingOverview}
+              updatedAt={overviewUpdatedAt}
+              onRefresh={handleRefreshOverview}
             />
             {overview ? (
               <Timeline
@@ -620,7 +767,9 @@ export default function Home() {
               pendingReviewCandidateCount={overview?.memoryReviewPendingCandidateCount ?? overview?.memoryReviewCandidateCount ?? 0}
               memoryCount={overview?.memoryCount ?? 0}
               planSignalCount={overview?.planSignalCount ?? 0}
-              isLoading={isLoadingOverview || isOverviewPending}
+              isLoading={shouldShowOverviewSkeleton || isOverviewPending}
+              isRefreshing={isRefreshingOverview}
+              updatedAt={overviewUpdatedAt}
               error={overviewError}
             />
           </div>
