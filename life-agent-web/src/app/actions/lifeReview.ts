@@ -20,6 +20,16 @@ export interface LifeReviewEvidenceHint {
   href: string;
 }
 
+export interface LifeReviewTheme {
+  id: string;
+  kind: "memory_progress" | "plan_progress" | string;
+  title: string;
+  summary: string;
+  href: string;
+  actionLabel: string;
+  evidenceHints?: LifeReviewEvidenceHint[];
+}
+
 export interface LifeReviewSourceEvent {
   id: string;
   title: string;
@@ -32,6 +42,7 @@ export interface LifeReviewResponse {
   period: LifeReviewPeriod;
   windowLabel: string;
   cards: LifeReviewCard[];
+  reviewThemes: LifeReviewTheme[];
   sourceEvents: LifeReviewSourceEvent[];
   usedEventCount: number;
   usedMemoryCount: number;

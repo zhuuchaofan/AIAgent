@@ -14,11 +14,18 @@ public class LifeReviewService : ILifeReviewService
     private const int MaxMemories = 12;
     private const int MaxPlanSignals = 12;
     private const int MaxEvidenceHintsPerCard = 2;
+    private const int MaxReviewThemes = 3;
+    private const int MinRelatedEventsForTheme = 2;
 
     private static readonly HashSet<string> GenericMatchFragments = new(StringComparer.OrdinalIgnoreCase)
     {
         "一个", "事情", "今天", "最近", "近期", "计划", "目标", "希望", "需要", "关注", "继续", "准备", "相关", "记住",
         "状态", "个人", "背景", "记录", "整理", "反复", "出现", "内容", "可能", "值得", "线索"
+    };
+
+    private static readonly HashSet<string> WeakSingleOverlapFragments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "项目", "工作", "生活", "时间", "任务", "安排", "看看", "处理", "感觉", "事情", "最近", "近期", "计划"
     };
 
     private static readonly string[] CardOrder =
@@ -330,11 +337,13 @@ public class LifeReviewService : ILifeReviewService
         string period)
     {
         var enrichedCards = AddEvidenceHints(cards, events, memories, planSignals);
+        var reviewThemes = BuildReviewThemes(events, memories, planSignals);
         return new LifeReviewResponse
         {
             Period = period,
             WindowLabel = ToWindowLabel(period),
             Cards = enrichedCards,
+            ReviewThemes = reviewThemes,
             SourceEvents = events.Select(ToSourceEvent).ToList(),
             UsedEventCount = events.Count,
             UsedMemoryCount = memories.Count,
@@ -432,6 +441,183 @@ public class LifeReviewService : ILifeReviewService
             .ToArray();
     }
 
+    private static IReadOnlyList<LifeReviewTheme> BuildReviewThemes(
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory> memories,
+        IReadOnlyList<PlanSignal> planSignals)
+    {
+        var activeMemories = memories
+            .Where(memory => string.Equals(memory.Status, MemoryStatus.Active.ToSnakeCaseString(), StringComparison.OrdinalIgnoreCase))
+            .Where(memory => !IsExpiredMemory(memory))
+            .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+            .ToArray();
+
+        var activePlanSignals = planSignals
+            .Where(signal => string.Equals(signal.Status, "active", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(signal => signal.UpdatedAt == default ? signal.CreatedAt : signal.UpdatedAt)
+            .ToArray();
+
+        if (activeMemories.Length == 0 && activePlanSignals.Length == 0)
+        {
+            return Array.Empty<LifeReviewTheme>();
+        }
+
+        var themes = new List<LifeReviewTheme>();
+        var usedMemoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usedPlanIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var signal in activePlanSignals)
+        {
+            var signalText = BuildPlanSignalText(signal);
+            var relatedMemory = activeMemories.FirstOrDefault(memory => HasStrongOverlap(signalText, memory.Content));
+            var relatedEventCount = events.Count(item => HasStrongOverlap(signalText, BuildEventText(item)));
+
+            if (relatedMemory == null && relatedEventCount < MinRelatedEventsForTheme)
+            {
+                continue;
+            }
+
+            themes.Add(new LifeReviewTheme
+            {
+                Id = string.IsNullOrWhiteSpace(signal.Id) ? $"plan_progress_{themes.Count + 1}" : $"plan_progress_{signal.Id}",
+                Kind = "plan_progress",
+                Title = TrimForDisplay(signal.Title, signal.Content, 36),
+                Summary = relatedMemory == null
+                    ? "这个计划最近在多条记录里出现，可以作为近期主线回看。"
+                    : "这个计划和你确认过的个人背景有关，适合放在近期复盘里继续观察。",
+                Href = "/plans",
+                ActionLabel = "查看计划",
+                EvidenceHints = BuildThemeHints(signal, relatedMemory)
+            });
+
+            if (!string.IsNullOrWhiteSpace(signal.Id))
+            {
+                usedPlanIds.Add(signal.Id);
+            }
+
+            if (!string.IsNullOrWhiteSpace(relatedMemory?.Id))
+            {
+                usedMemoryIds.Add(relatedMemory.Id);
+            }
+
+            if (themes.Count >= MaxReviewThemes)
+            {
+                return themes;
+            }
+        }
+
+        foreach (var memory in activeMemories)
+        {
+            if (!string.IsNullOrWhiteSpace(memory.Id) && usedMemoryIds.Contains(memory.Id))
+            {
+                continue;
+            }
+
+            var relatedEvents = events
+                .Where(item => HasStrongOverlap(memory.Content, BuildEventText(item)))
+                .Take(MinRelatedEventsForTheme)
+                .ToArray();
+
+            if (relatedEvents.Length < MinRelatedEventsForTheme)
+            {
+                continue;
+            }
+
+            themes.Add(new LifeReviewTheme
+            {
+                Id = string.IsNullOrWhiteSpace(memory.Id) ? $"memory_progress_{themes.Count + 1}" : $"memory_progress_{memory.Id}",
+                Kind = "memory_progress",
+                Title = TrimForDisplay(memory.Content, "已记住内容", 36),
+                Summary = "最近多条记录都和这条已确认背景有关，可以作为一个变化线索回看。",
+                Href = "/memory",
+                ActionLabel = "查看记忆",
+                EvidenceHints = new[]
+                {
+                    new LifeReviewEvidenceHint
+                    {
+                        Kind = "memory",
+                        Label = "关联记忆",
+                        Text = TrimForDisplay(memory.Content, "已记住内容", 52),
+                        Reason = MemoryEvidenceReason(memory.Type),
+                        Href = "/memory"
+                    }
+                }
+            });
+
+            if (themes.Count >= MaxReviewThemes)
+            {
+                return themes;
+            }
+        }
+
+        foreach (var signal in activePlanSignals)
+        {
+            if (!string.IsNullOrWhiteSpace(signal.Id) && usedPlanIds.Contains(signal.Id))
+            {
+                continue;
+            }
+
+            var signalText = BuildPlanSignalText(signal);
+            var relatedEvents = events
+                .Where(item => HasStrongOverlap(signalText, BuildEventText(item)))
+                .Take(MinRelatedEventsForTheme)
+                .ToArray();
+
+            if (relatedEvents.Length < MinRelatedEventsForTheme)
+            {
+                continue;
+            }
+
+            themes.Add(new LifeReviewTheme
+            {
+                Id = string.IsNullOrWhiteSpace(signal.Id) ? $"plan_progress_{themes.Count + 1}" : $"plan_progress_{signal.Id}",
+                Kind = "plan_progress",
+                Title = TrimForDisplay(signal.Title, signal.Content, 36),
+                Summary = "这个计划最近在多条记录里出现，可以作为近期主线回看。",
+                Href = "/plans",
+                ActionLabel = "查看计划",
+                EvidenceHints = BuildThemeHints(signal, null)
+            });
+
+            if (themes.Count >= MaxReviewThemes)
+            {
+                return themes;
+            }
+        }
+
+        return themes;
+    }
+
+    private static IReadOnlyList<LifeReviewEvidenceHint> BuildThemeHints(PlanSignal signal, Memory? relatedMemory)
+    {
+        var hints = new List<LifeReviewEvidenceHint>
+        {
+            new()
+            {
+                Kind = "plan_signal",
+                Label = "相关计划",
+                Text = TrimForDisplay(signal.Title, signal.Content, 52),
+                Reason = PlanSignalEvidenceReason(signal.Kind),
+                Href = "/plans"
+            }
+        };
+
+        if (relatedMemory != null)
+        {
+            hints.Add(new LifeReviewEvidenceHint
+            {
+                Kind = "memory",
+                Label = "关联记忆",
+                Text = TrimForDisplay(relatedMemory.Content, "已记住内容", 52),
+                Reason = MemoryEvidenceReason(relatedMemory.Type),
+                Href = "/memory"
+            });
+        }
+
+        return hints;
+    }
+
     private static string BuildCardEvidenceText(
         LifeReviewCard card,
         IReadOnlyDictionary<string, LifeEvent> eventMap)
@@ -484,6 +670,22 @@ public class LifeReviewService : ILifeReviewService
         return leftFragments.Overlaps(rightFragments);
     }
 
+    private static bool HasStrongOverlap(string left, string right)
+    {
+        var leftFragments = ExtractMatchFragments(left);
+        var rightFragments = ExtractMatchFragments(right);
+        var shared = leftFragments.Intersect(rightFragments, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        if (shared.Length >= 2)
+        {
+            return true;
+        }
+
+        return shared.Any(fragment =>
+            fragment.Length >= 4 ||
+            !WeakSingleOverlapFragments.Contains(fragment));
+    }
+
     private static HashSet<string> ExtractMatchFragments(string text)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -507,6 +709,16 @@ public class LifeReviewService : ILifeReviewService
         }
 
         return result;
+    }
+
+    private static string BuildEventText(LifeEvent item)
+    {
+        return $"{item.Title} {item.Content} {string.Join(' ', item.Tags)}";
+    }
+
+    private static string BuildPlanSignalText(PlanSignal signal)
+    {
+        return $"{signal.Title} {signal.Content}";
     }
 
     private static bool IsExpiredMemory(Memory memory)

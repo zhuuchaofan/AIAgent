@@ -28,6 +28,7 @@ public class LifeReviewServiceTest
         Assert.Equal(0, response.UsedPlanSignalCount);
         Assert.Single(response.Cards);
         Assert.Contains("记录多一点", response.Cards[0].Text);
+        Assert.Empty(response.ReviewThemes);
         Assert.Empty(response.SourceEvents);
     }
 
@@ -431,6 +432,184 @@ public class LifeReviewServiceTest
         Assert.All(response.Cards[0].EvidenceHints, hint => Assert.Equal("memory", hint.Kind));
         Assert.DoesNotContain(response.Cards[0].EvidenceHints, hint => hint.Text.Contains("归档", StringComparison.Ordinal));
         Assert.DoesNotContain(response.Cards[0].EvidenceHints, hint => hint.Text.Contains("过期", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task BuildReviewAsync_AddsMemoryProgressThemeWhenConfirmedMemoryRepeatsAcrossEvents()
+    {
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Habit.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我会持续关注运动状态和身体感受。",
+            Importance = 4
+        });
+
+        var service = Service(
+            new[]
+            {
+                new LifeEvent
+                {
+                    Id = "evt_run",
+                    UserId = "user_a",
+                    Title = "跑步后的运动状态",
+                    Content = "今天记录了运动状态和心率。",
+                    CreatedAt = DateTime.UtcNow.AddHours(-1),
+                    OccurredAt = DateTime.UtcNow.AddHours(-1)
+                },
+                new LifeEvent
+                {
+                    Id = "evt_body",
+                    UserId = "user_a",
+                    Title = "身体感受记录",
+                    Content = "晚上补了一条身体感受，恢复还可以。",
+                    CreatedAt = DateTime.UtcNow.AddHours(-2),
+                    OccurredAt = DateTime.UtcNow.AddHours(-2)
+                }
+            },
+            memoryRepository,
+            new FailingAnswerGenerator());
+
+        var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest());
+
+        var theme = Assert.Single(response.ReviewThemes);
+        Assert.Equal("memory_progress", theme.Kind);
+        Assert.Contains("运动状态", theme.Title, StringComparison.Ordinal);
+        Assert.Equal("/memory", theme.Href);
+        Assert.Equal("查看记忆", theme.ActionLabel);
+        var hint = Assert.Single(theme.EvidenceHints);
+        Assert.Equal("memory", hint.Kind);
+        Assert.Contains("习惯", hint.Reason, StringComparison.Ordinal);
+        Assert.True(response.ReadOnly);
+        Assert.False(response.WroteData);
+        Assert.False(response.Executed);
+    }
+
+    [Fact]
+    public async Task BuildReviewAsync_AddsPlanProgressThemeWhenPlanMatchesConfirmedMemory()
+    {
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我近期有新疆出行计划。",
+            Importance = 4,
+            ExpiresAt = DateTime.UtcNow.AddDays(20)
+        });
+
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            memoryRepository,
+            new FailingAnswerGenerator(),
+            new[]
+            {
+                new PlanSignal
+                {
+                    Id = "plan_xinjiang",
+                    UserId = "user_a",
+                    Kind = "trip",
+                    Title = "新疆出行路线",
+                    Content = "继续整理新疆出行路线。",
+                    Status = "active",
+                    CreatedAt = DateTime.UtcNow.AddHours(-1),
+                    UpdatedAt = DateTime.UtcNow.AddHours(-1)
+                }
+            });
+
+        var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest());
+
+        var theme = Assert.Single(response.ReviewThemes);
+        Assert.Equal("plan_progress", theme.Kind);
+        Assert.Contains("新疆出行路线", theme.Title, StringComparison.Ordinal);
+        Assert.Equal("/plans", theme.Href);
+        Assert.Equal("查看计划", theme.ActionLabel);
+        Assert.Collection(
+            theme.EvidenceHints,
+            hint => Assert.Equal("plan_signal", hint.Kind),
+            hint => Assert.Equal("memory", hint.Kind));
+    }
+
+    [Fact]
+    public async Task BuildReviewAsync_DoesNotAddReviewThemeForSingleWeakPlanMention()
+    {
+        var service = Service(
+            new[]
+            {
+                new LifeEvent
+                {
+                    Id = "evt_project",
+                    UserId = "user_a",
+                    Title = "处理项目安排",
+                    Content = "今天只是处理了一下项目安排。",
+                    CreatedAt = DateTime.UtcNow.AddHours(-1),
+                    OccurredAt = DateTime.UtcNow.AddHours(-1)
+                }
+            },
+            new InMemoryMemoryRepository(),
+            new FailingAnswerGenerator(),
+            new[]
+            {
+                new PlanSignal
+                {
+                    Id = "plan_project",
+                    UserId = "user_a",
+                    Kind = "task",
+                    Title = "项目安排",
+                    Content = "项目安排需要看看。",
+                    Status = "active",
+                    CreatedAt = DateTime.UtcNow.AddHours(-2),
+                    UpdatedAt = DateTime.UtcNow.AddHours(-2)
+                }
+            });
+
+        var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest());
+
+        Assert.Empty(response.ReviewThemes);
+    }
+
+    [Fact]
+    public async Task BuildReviewAsync_DoesNotAddReviewThemeForExpiredTemporaryMemory()
+    {
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我近期在准备新疆出行。",
+            Importance = 5,
+            ExpiresAt = DateTime.UtcNow.AddDays(-1)
+        });
+
+        var service = Service(
+            new[]
+            {
+                new LifeEvent
+                {
+                    Id = "evt_1",
+                    UserId = "user_a",
+                    Title = "新疆出行路线",
+                    Content = "今天整理新疆出行路线。",
+                    CreatedAt = DateTime.UtcNow.AddHours(-1),
+                    OccurredAt = DateTime.UtcNow.AddHours(-1)
+                },
+                new LifeEvent
+                {
+                    Id = "evt_2",
+                    UserId = "user_a",
+                    Title = "新疆行李",
+                    Content = "继续准备新疆出行行李。",
+                    CreatedAt = DateTime.UtcNow.AddHours(-2),
+                    OccurredAt = DateTime.UtcNow.AddHours(-2)
+                }
+            },
+            memoryRepository,
+            new FailingAnswerGenerator());
+
+        var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest());
+
+        Assert.Empty(response.ReviewThemes);
     }
 
     private static LifeReviewService Service(

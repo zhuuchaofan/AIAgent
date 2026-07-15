@@ -13,6 +13,7 @@ public class LifeReviewResponse
     public string Period { get; set; } = "recent";
     public string WindowLabel { get; set; } = "最近";
     public IReadOnlyList<LifeReviewCard> Cards { get; set; } = Array.Empty<LifeReviewCard>();
+    public IReadOnlyList<LifeReviewTheme> ReviewThemes { get; set; } = Array.Empty<LifeReviewTheme>();
     public IReadOnlyList<LifeReviewSourceEvent> SourceEvents { get; set; } = Array.Empty<LifeReviewSourceEvent>();
     public int UsedEventCount { get; set; }
     public int UsedMemoryCount { get; set; }
@@ -28,6 +29,17 @@ public class LifeReviewCard
     public string Title { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
     public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<LifeReviewEvidenceHint> EvidenceHints { get; set; } = Array.Empty<LifeReviewEvidenceHint>();
+}
+
+public class LifeReviewTheme
+{
+    public string Id { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string Href { get; set; } = string.Empty;
+    public string ActionLabel { get; set; } = string.Empty;
     public IReadOnlyList<LifeReviewEvidenceHint> EvidenceHints { get; set; } = Array.Empty<LifeReviewEvidenceHint>();
 }
 

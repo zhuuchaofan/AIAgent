@@ -17,6 +17,7 @@ import {
   type LifeReviewCard,
   type LifeReviewPeriod,
   type LifeReviewSourceEvent,
+  type LifeReviewTheme,
 } from "@/app/actions/lifeReview";
 import { useAuth } from "@/providers/AuthProvider";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
@@ -25,6 +26,7 @@ import { ReviewCardSkeleton } from "@/components/LoadingSkeletons";
 export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [cards, setCards] = useState<LifeReviewCard[]>([]);
+  const [reviewThemes, setReviewThemes] = useState<LifeReviewTheme[]>([]);
   const [sourceEvents, setSourceEvents] = useState<LifeReviewSourceEvent[]>([]);
   const [usedMemoryCount, setUsedMemoryCount] = useState(0);
   const [usedPlanSignalCount, setUsedPlanSignalCount] = useState(0);
@@ -50,6 +52,7 @@ export default function LifeReviewPage() {
 
         if (!cancelled) {
           setCards(review.cards ?? []);
+          setReviewThemes(review.reviewThemes ?? []);
           setSourceEvents(review.sourceEvents ?? []);
           setUsedMemoryCount(review.usedMemoryCount ?? 0);
           setUsedPlanSignalCount(review.usedPlanSignalCount ?? 0);
@@ -59,6 +62,7 @@ export default function LifeReviewPage() {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "暂时无法整理最近回顾");
           setCards([]);
+          setReviewThemes([]);
           setSourceEvents([]);
           setUsedMemoryCount(0);
           setUsedPlanSignalCount(0);
@@ -194,6 +198,67 @@ export default function LifeReviewPage() {
                 {contextSummary && "。"}
                 {" "}如果某个回顾点以后还会用到，可以先放进「可能值得记住的事」。
               </div>
+            )}
+            {reviewThemes.length > 0 && (
+              <section className="rounded-2xl border border-indigo-500/15 bg-indigo-500/5 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Brain className="h-4 w-4 text-indigo-200" />
+                  <h2 className="text-sm font-semibold text-zinc-100">近期复盘主线</h2>
+                </div>
+                <div className="space-y-2.5">
+                  {reviewThemes.map(theme => {
+                    const hints = theme.evidenceHints ?? [];
+                    const isPlanTheme = theme.kind === "plan_progress";
+
+                    return (
+                      <Link
+                        key={theme.id}
+                        href={theme.href || (isPlanTheme ? "/plans" : "/memory")}
+                        className={`block rounded-xl border px-3 py-3 transition-colors ${
+                          isPlanTheme
+                            ? "border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-400/30"
+                            : "border-indigo-500/15 bg-zinc-950/25 hover:border-indigo-400/30"
+                        }`}
+                      >
+                        <div className="mb-1.5 flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            {isPlanTheme ? (
+                              <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-200" />
+                            ) : (
+                              <Brain className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-200" />
+                            )}
+                            <p className="min-w-0 break-words text-sm font-medium leading-relaxed text-zinc-100">
+                              {theme.title}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-xs text-zinc-500">
+                            {theme.actionLabel || (isPlanTheme ? "查看计划" : "查看记忆")}
+                          </span>
+                        </div>
+                        <p className="break-words text-xs leading-relaxed text-zinc-500">
+                          {theme.summary}
+                        </p>
+                        {hints.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {hints.slice(0, 2).map((hint, index) => (
+                              <span
+                                key={`${theme.id}-${hint.kind}-${index}`}
+                                className={`rounded-full border px-2 py-1 text-[11px] ${
+                                  hint.kind === "memory"
+                                    ? "border-indigo-500/15 bg-indigo-500/5 text-indigo-200"
+                                    : "border-cyan-500/15 bg-cyan-500/5 text-cyan-200"
+                                }`}
+                              >
+                                {hint.label}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
             )}
             {(actionMessage || actionError) && (
               <div className={`rounded-2xl border p-4 text-sm ${
