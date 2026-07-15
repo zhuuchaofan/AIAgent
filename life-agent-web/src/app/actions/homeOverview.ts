@@ -37,6 +37,9 @@ export interface HomeOverviewData {
   hasMoreRecentEvents: boolean;
   insights: MemoryInsight[];
   memoryReviewCandidateCount: number;
+  memoryReviewPendingCandidateCount?: number;
+  memoryReviewKeptCandidateCount?: number;
+  memoryReviewRememberedCandidateCount?: number;
   memoryCount: number;
   pendingReminderCount: number;
   pendingReminders: HomeOverviewReminder[];

@@ -69,6 +69,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         var reviewCandidates = MemoryReviewInboxStateProjection.AddMissingKeptCandidates(
             MemoryReviewInboxStateProjection.Apply(reviewPreview, states),
             keptCandidates);
+        var reviewStatusCounts = CountReviewStatuses(reviewCandidates.Candidates);
         var insights = AddPlanSignalInsight(insightPreview.Insights, context.PlanSignalCount);
         var todayFocus = BuildTodayFocus(context, insightPreview.Insights, timeZone);
 
@@ -78,6 +79,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
             HasMoreRecentEvents = context.Events.Count > RecentEventCount,
             Insights = insights,
             MemoryReviewCandidateCount = reviewCandidates.Candidates.Count,
+            MemoryReviewPendingCandidateCount = reviewStatusCounts.Pending,
+            MemoryReviewKeptCandidateCount = reviewStatusCounts.Kept,
+            MemoryReviewRememberedCandidateCount = reviewStatusCounts.Remembered,
             MemoryCount = context.ActiveMemoryCount,
             PendingReminderCount = context.PendingReminderCount,
             PendingReminders = context.PendingReminders.Take(MaxVisibleReminders).Select(ToReminderDto).ToArray(),
@@ -90,6 +94,33 @@ public sealed class HomeOverviewService : IHomeOverviewService
             WroteData = false,
             Executed = false
         };
+    }
+
+    private static ReviewStatusCounts CountReviewStatuses(IReadOnlyList<MemoryReviewCandidateItem> candidates)
+    {
+        var pending = 0;
+        var kept = 0;
+        var remembered = 0;
+
+        foreach (var candidate in candidates)
+        {
+            switch (candidate.ReviewStatus?.Trim().ToLowerInvariant())
+            {
+                case "kept":
+                    kept++;
+                    break;
+                case "remembered":
+                    remembered++;
+                    break;
+                case "pending":
+                case "":
+                case null:
+                    pending++;
+                    break;
+            }
+        }
+
+        return new ReviewStatusCounts(pending, kept, remembered);
     }
 
     private IReadOnlyList<HomeOverviewTodayFocusDto> BuildTodayFocus(
@@ -349,4 +380,6 @@ public sealed class HomeOverviewService : IHomeOverviewService
             CreatedAt = signal.CreatedAt.ToString("O")
         };
     }
+
+    private sealed record ReviewStatusCounts(int Pending, int Kept, int Remembered);
 }

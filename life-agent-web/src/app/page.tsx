@@ -131,6 +131,7 @@ function DailyActionCard({
 function DailyAiPanel({
   insights,
   reviewCandidateCount,
+  pendingReviewCandidateCount,
   memoryCount,
   planSignalCount,
   isLoading,
@@ -138,13 +139,14 @@ function DailyAiPanel({
 }: {
   insights: MemoryInsight[];
   reviewCandidateCount: number;
+  pendingReviewCandidateCount: number;
   memoryCount: number;
   planSignalCount: number;
   isLoading: boolean;
   error: string | null;
 }) {
-  const reviewLinkText = reviewCandidateCount > 0
-    ? `查看 ${reviewCandidateCount} 条可能值得记住的事`
+  const reviewLinkText = pendingReviewCandidateCount > 0
+    ? `查看 ${pendingReviewCandidateCount} 条待确认线索`
     : "查看可能值得记住的事";
   const memoryCountText = isLoading ? "已记住 -- 条" : `已记住 ${memoryCount} 条`;
   const hasMemoryLoop = reviewCandidateCount > 0 || memoryCount > 0;
@@ -162,12 +164,12 @@ function DailyAiPanel({
           </div>
           {!isLoading && hasMemoryLoop && (
             <div className="mt-2 flex flex-wrap gap-2">
-              {reviewCandidateCount > 0 && (
+              {pendingReviewCandidateCount > 0 && (
                 <Link
                   href="/memory/review"
                   className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-xs text-indigo-200 transition-colors hover:border-indigo-400/40"
                 >
-                  {reviewCandidateCount} 条待判断
+                  {pendingReviewCandidateCount} 条待判断
                 </Link>
               )}
               {memoryCount > 0 && (
@@ -423,6 +425,7 @@ export default function Home() {
             <DailyAiPanel
               insights={overview?.insights ?? []}
               reviewCandidateCount={overview?.memoryReviewCandidateCount ?? 0}
+              pendingReviewCandidateCount={overview?.memoryReviewPendingCandidateCount ?? overview?.memoryReviewCandidateCount ?? 0}
               memoryCount={overview?.memoryCount ?? 0}
               planSignalCount={overview?.planSignalCount ?? 0}
               isLoading={isLoadingOverview || isOverviewPending}

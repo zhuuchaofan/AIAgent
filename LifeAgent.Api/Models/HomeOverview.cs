@@ -14,6 +14,9 @@ public sealed class HomeOverviewData
     public bool HasMoreRecentEvents { get; set; }
     public IReadOnlyList<MemoryInsightPreviewItem> Insights { get; set; } = Array.Empty<MemoryInsightPreviewItem>();
     public int MemoryReviewCandidateCount { get; set; }
+    public int MemoryReviewPendingCandidateCount { get; set; }
+    public int MemoryReviewKeptCandidateCount { get; set; }
+    public int MemoryReviewRememberedCandidateCount { get; set; }
     public int MemoryCount { get; set; }
     public int PendingReminderCount { get; set; }
     public IReadOnlyList<HomeOverviewReminderDto> PendingReminders { get; set; } = Array.Empty<HomeOverviewReminderDto>();

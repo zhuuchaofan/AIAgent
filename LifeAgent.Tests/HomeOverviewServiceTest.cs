@@ -50,6 +50,35 @@ public class HomeOverviewServiceTest
     }
 
     [Fact]
+    public async Task BuildAsync_ReturnsMemoryReviewCountsByStatus()
+    {
+        var reviewedAt = DateTime.UtcNow;
+        var reviewStateStore = new FakeMemoryReviewStateStore(new Dictionary<string, MemoryReviewStateRecord>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["review_project_work"] = new("review_project_work", "kept", reviewedAt, reviewedAt),
+            ["review_xinjiang_travel_plan"] = new("review_xinjiang_travel_plan", "remembered", reviewedAt, reviewedAt, "mem_xinjiang")
+        });
+        var service = Service(
+            new[]
+            {
+                Event("evt_brand", "户外品牌", "种草了 kolon sports，版型好看，但是价格很贵。", minutesAgo: 20),
+                Event("evt_project", "项目和出行", "最近让 codex 整理 LifeOS 项目。下周应该就在去新疆的路上啦。", minutesAgo: 10)
+            },
+            new InMemoryMemoryRepository(),
+            reviewStateStore: reviewStateStore);
+
+        var overview = await service.BuildAsync("user_a");
+
+        Assert.Equal(4, overview.MemoryReviewCandidateCount);
+        Assert.Equal(2, overview.MemoryReviewPendingCandidateCount);
+        Assert.Equal(1, overview.MemoryReviewKeptCandidateCount);
+        Assert.Equal(1, overview.MemoryReviewRememberedCandidateCount);
+        Assert.True(overview.ReadOnly);
+        Assert.False(overview.WroteData);
+        Assert.False(overview.Executed);
+    }
+
+    [Fact]
     public async Task BuildAsync_CountsActiveMemoriesAndPendingReminders()
     {
         var memoryRepository = new InMemoryMemoryRepository();
@@ -352,13 +381,28 @@ public class HomeOverviewServiceTest
 
     private sealed class FakeMemoryReviewStateStore : IMemoryReviewStateStore
     {
+        private readonly IReadOnlyDictionary<string, MemoryReviewStateRecord> _states;
+
+        public FakeMemoryReviewStateStore()
+            : this(new Dictionary<string, MemoryReviewStateRecord>(StringComparer.OrdinalIgnoreCase))
+        {
+        }
+
+        public FakeMemoryReviewStateStore(IReadOnlyDictionary<string, MemoryReviewStateRecord> states)
+        {
+            _states = states;
+        }
+
         public Task<IReadOnlyDictionary<string, MemoryReviewStateRecord>> ListByCandidateIdsAsync(
             string userId,
             IReadOnlyList<string> candidateIds,
             CancellationToken cancellationToken = default)
         {
+            var requested = candidateIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
             return Task.FromResult<IReadOnlyDictionary<string, MemoryReviewStateRecord>>(
-                new Dictionary<string, MemoryReviewStateRecord>(StringComparer.OrdinalIgnoreCase));
+                _states
+                    .Where(pair => requested.Contains(pair.Key))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase));
         }
 
         public Task<IReadOnlyList<MemoryReviewCandidateItem>> ListKeptCandidatesAsync(
