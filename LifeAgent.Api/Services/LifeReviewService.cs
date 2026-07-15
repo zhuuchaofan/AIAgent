@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.PersonalContext;
@@ -12,6 +13,13 @@ public class LifeReviewService : ILifeReviewService
     private const int AbsoluteMaxEvents = 50;
     private const int MaxMemories = 12;
     private const int MaxPlanSignals = 12;
+    private const int MaxEvidenceHintsPerCard = 2;
+
+    private static readonly HashSet<string> GenericMatchFragments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "一个", "事情", "今天", "最近", "近期", "计划", "目标", "希望", "需要", "关注", "继续", "准备", "相关", "记住",
+        "状态", "个人", "背景", "记录", "整理", "反复", "出现", "内容", "可能", "值得", "线索"
+    };
 
     private static readonly string[] CardOrder =
     {
@@ -69,7 +77,7 @@ public class LifeReviewService : ILifeReviewService
 
         if (events.Count == 0 && memories.Count == 0 && planSignals.Count == 0)
         {
-            return BuildResponse(BuildEmptyCards(period), events, memories.Count, planSignals.Count, period);
+            return BuildResponse(BuildEmptyCards(period), events, memories, planSignals, period);
         }
 
         try
@@ -83,14 +91,14 @@ public class LifeReviewService : ILifeReviewService
             return BuildResponse(
                 cards.Count > 0 ? cards : BuildFallbackCards(events, planSignals, period),
                 events,
-                memories.Count,
-                planSignals.Count,
+                memories,
+                planSignals,
                 period);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Life review generation failed for user {UserId}", userId);
-            return BuildResponse(BuildFallbackCards(events, planSignals, period), events, memories.Count, planSignals.Count, period);
+            return BuildResponse(BuildFallbackCards(events, planSignals, period), events, memories, planSignals, period);
         }
     }
 
@@ -317,23 +325,193 @@ public class LifeReviewService : ILifeReviewService
     private static LifeReviewResponse BuildResponse(
         IReadOnlyList<LifeReviewCard> cards,
         IReadOnlyList<LifeEvent> events,
-        int usedMemoryCount,
-        int usedPlanSignalCount,
+        IReadOnlyList<Memory> memories,
+        IReadOnlyList<PlanSignal> planSignals,
         string period)
     {
+        var enrichedCards = AddEvidenceHints(cards, events, memories, planSignals);
         return new LifeReviewResponse
         {
             Period = period,
             WindowLabel = ToWindowLabel(period),
-            Cards = cards,
+            Cards = enrichedCards,
             SourceEvents = events.Select(ToSourceEvent).ToList(),
             UsedEventCount = events.Count,
-            UsedMemoryCount = usedMemoryCount,
-            UsedPlanSignalCount = usedPlanSignalCount,
+            UsedMemoryCount = memories.Count,
+            UsedPlanSignalCount = planSignals.Count,
             ReadOnly = true,
             WroteData = false,
             Executed = false
         };
+    }
+
+    private static IReadOnlyList<LifeReviewCard> AddEvidenceHints(
+        IReadOnlyList<LifeReviewCard> cards,
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory> memories,
+        IReadOnlyList<PlanSignal> planSignals)
+    {
+        if (cards.Count == 0)
+        {
+            return cards;
+        }
+
+        var eventMap = events
+            .Where(item => !string.IsNullOrWhiteSpace(item.Id))
+            .ToDictionary(item => item.Id, item => item, StringComparer.OrdinalIgnoreCase);
+
+        var activeMemories = memories
+            .Where(memory => string.Equals(memory.Status, MemoryStatus.Active.ToSnakeCaseString(), StringComparison.OrdinalIgnoreCase))
+            .Where(memory => !IsExpiredMemory(memory))
+            .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+            .ToArray();
+
+        var activePlanSignals = planSignals
+            .Where(signal => string.Equals(signal.Status, "active", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(signal => signal.UpdatedAt == default ? signal.CreatedAt : signal.UpdatedAt)
+            .ToArray();
+
+        return cards
+            .Select(card =>
+            {
+                var evidenceText = BuildCardEvidenceText(card, eventMap);
+                var hints = new List<LifeReviewEvidenceHint>();
+
+                foreach (var memory in activeMemories)
+                {
+                    if (!HasMeaningfulOverlap(evidenceText, memory.Content))
+                    {
+                        continue;
+                    }
+
+                    hints.Add(new LifeReviewEvidenceHint
+                    {
+                        Kind = "memory",
+                        Label = "关联记忆",
+                        Text = TrimForDisplay(memory.Content, "已记住内容", 52),
+                        Reason = MemoryEvidenceReason(memory.Type),
+                        Href = "/memory"
+                    });
+
+                    if (hints.Count >= MaxEvidenceHintsPerCard)
+                    {
+                        break;
+                    }
+                }
+
+                if (hints.Count < MaxEvidenceHintsPerCard)
+                {
+                    foreach (var signal in activePlanSignals)
+                    {
+                        var signalText = $"{signal.Title} {signal.Content}";
+                        if (!HasMeaningfulOverlap(evidenceText, signalText))
+                        {
+                            continue;
+                        }
+
+                        hints.Add(new LifeReviewEvidenceHint
+                        {
+                            Kind = "plan_signal",
+                            Label = "相关计划",
+                            Text = TrimForDisplay(signal.Title, signal.Content, 52),
+                            Reason = PlanSignalEvidenceReason(signal.Kind),
+                            Href = "/plans"
+                        });
+
+                        if (hints.Count >= MaxEvidenceHintsPerCard)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                card.EvidenceHints = hints;
+                return card;
+            })
+            .ToArray();
+    }
+
+    private static string BuildCardEvidenceText(
+        LifeReviewCard card,
+        IReadOnlyDictionary<string, LifeEvent> eventMap)
+    {
+        var builder = new StringBuilder();
+        builder.Append(card.Title).Append(' ');
+        builder.Append(card.Text).Append(' ');
+
+        foreach (var eventId in card.SourceEventIds)
+        {
+            if (!eventMap.TryGetValue(eventId, out var source))
+            {
+                continue;
+            }
+
+            builder.Append(source.Title).Append(' ');
+            builder.Append(source.Content).Append(' ');
+        }
+
+        return builder.ToString();
+    }
+
+    private static string MemoryEvidenceReason(string memoryType)
+    {
+        return memoryType switch
+        {
+            "goal" => "和你确认过的目标有关。",
+            "temporary_context" => "和你确认过的近期背景有关。",
+            "preference" or "constraint" => "和你确认过的偏好或边界有关。",
+            "habit" or "routine" => "和你确认过的习惯有关。",
+            _ => "和你确认过的个人背景有关。"
+        };
+    }
+
+    private static string PlanSignalEvidenceReason(string? kind)
+    {
+        return kind?.Trim().ToLowerInvariant() switch
+        {
+            "trip" => "和最近保存的出行计划有关。",
+            "task" => "和最近保存的待办计划有关。",
+            "reminder" => "和最近保存的提醒线索有关。",
+            _ => "和最近保存的计划线索有关。"
+        };
+    }
+
+    private static bool HasMeaningfulOverlap(string left, string right)
+    {
+        var leftFragments = ExtractMatchFragments(left);
+        var rightFragments = ExtractMatchFragments(right);
+        return leftFragments.Overlaps(rightFragments);
+    }
+
+    private static HashSet<string> ExtractMatchFragments(string text)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in Regex.Matches(text ?? string.Empty, @"[A-Za-z0-9]+|[\u4e00-\u9fff]+"))
+        {
+            var token = match.Value.ToLowerInvariant();
+            if (Regex.IsMatch(token, @"^[a-z0-9]+$") && token.Length >= 2)
+            {
+                result.Add(token);
+                continue;
+            }
+
+            for (var index = 0; index < token.Length - 1; index++)
+            {
+                var fragment = token.Substring(index, 2);
+                if (!GenericMatchFragments.Contains(fragment))
+                {
+                    result.Add(fragment);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsExpiredMemory(Memory memory)
+    {
+        return memory.ExpiresAt.HasValue && memory.ExpiresAt.Value <= DateTime.UtcNow;
     }
 
     private static string NormalizePeriod(string? period)

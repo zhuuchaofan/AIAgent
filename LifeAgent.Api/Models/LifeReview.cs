@@ -28,6 +28,16 @@ public class LifeReviewCard
     public string Title { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
     public IReadOnlyList<string> SourceEventIds { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<LifeReviewEvidenceHint> EvidenceHints { get; set; } = Array.Empty<LifeReviewEvidenceHint>();
+}
+
+public class LifeReviewEvidenceHint
+{
+    public string Kind { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public string Href { get; set; } = string.Empty;
 }
 
 public class LifeReviewSourceEvent

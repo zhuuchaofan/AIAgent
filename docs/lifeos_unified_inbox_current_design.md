@@ -173,6 +173,10 @@ on `/reminders`.
      brief items include read-only priority, action label, and explanation
      metadata so the Home page can show why an item matters today without
      executing tools or writing new data.
+   - `POST /api/life/review` can attach read-only evidence hints to review
+     cards when active Memory or active Plan Signals overlap with the card
+     context. These hints are navigation/explanation only and do not create
+     pending actions or write Memory.
    - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
      Review Inbox status to `users/{userId}/memory_review_items`.
    - `POST /api/memory/review-inbox/{candidateId}/remember` writes an edited,

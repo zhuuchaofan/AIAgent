@@ -152,6 +152,8 @@ Expected:
 
 - Recent review can use life records and active memories as context.
 - Review cards remain read-only.
+- Review cards can show read-only evidence hints such as related remembered
+  context or related plan signals, with navigation links only.
 - If a card is worth remembering, it can only be sent into Memory Review state;
   durable Memory still requires the explicit Memory Review remember flow.
 

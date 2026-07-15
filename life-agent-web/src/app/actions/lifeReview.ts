@@ -9,6 +9,15 @@ export interface LifeReviewCard {
   title: string;
   text: string;
   sourceEventIds: string[];
+  evidenceHints?: LifeReviewEvidenceHint[];
+}
+
+export interface LifeReviewEvidenceHint {
+  kind: "memory" | "plan_signal";
+  label: string;
+  text: string;
+  reason: string;
+  href: string;
 }
 
 export interface LifeReviewSourceEvent {

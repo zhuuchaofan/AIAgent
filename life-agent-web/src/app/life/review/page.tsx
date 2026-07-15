@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  Brain,
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   Sparkles,
 } from "lucide-react";
 import {
@@ -215,6 +217,7 @@ export default function LifeReviewPage() {
               const canKeep = sources.length > 0;
               const isKept = Boolean(keptCardIds[item.id]);
               const isKeeping = keepingCardId === item.id;
+              const evidenceHints = item.evidenceHints ?? [];
 
               return (
                 <section key={item.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-5">
@@ -225,6 +228,38 @@ export default function LifeReviewPage() {
                   <p className="break-words text-sm leading-relaxed text-zinc-400">
                     {item.text}
                   </p>
+                  {evidenceHints.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {evidenceHints.map((hint, index) => (
+                        <Link
+                          key={`${hint.kind}-${index}-${hint.text}`}
+                          href={hint.href || (hint.kind === "memory" ? "/memory" : "/plans")}
+                          className={`block rounded-xl border px-3 py-2.5 transition-colors ${
+                            hint.kind === "memory"
+                              ? "border-indigo-500/15 bg-indigo-500/5 hover:border-indigo-400/30"
+                              : "border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-400/30"
+                          }`}
+                        >
+                          <div className={`mb-1 flex items-center gap-1.5 text-xs ${
+                            hint.kind === "memory" ? "text-indigo-200" : "text-cyan-200"
+                          }`}>
+                            {hint.kind === "memory" ? (
+                              <Brain className="h-3.5 w-3.5" />
+                            ) : (
+                              <ClipboardList className="h-3.5 w-3.5" />
+                            )}
+                            {hint.label || (hint.kind === "memory" ? "关联记忆" : "相关计划")}
+                          </div>
+                          <p className="break-words text-xs font-medium leading-relaxed text-zinc-200">
+                            {hint.text}
+                          </p>
+                          <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">
+                            {hint.reason}
+                          </p>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                   {canKeep && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
