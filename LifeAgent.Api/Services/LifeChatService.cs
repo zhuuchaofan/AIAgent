@@ -12,6 +12,7 @@ public class LifeChatService : ILifeChatService
     private const int MaxMemories = 12;
     private const int MaxReminders = 8;
     private const int MaxPlanSignals = 8;
+    private const int MaxUsedContextItems = 4;
 
     private readonly IPersonalContextService _personalContextService;
     private readonly IRagAnswerGenerator _answerGenerator;
@@ -52,6 +53,7 @@ public class LifeChatService : ILifeChatService
         var memories = context.Memories;
         var reminders = context.PendingReminders;
         var planSignals = context.PlanSignals;
+        var usedContext = BuildUsedContext(events, memories, reminders, planSignals);
 
         if (events.Count == 0 && memories.Count == 0 && reminders.Count == 0 && planSignals.Count == 0)
         {
@@ -61,7 +63,8 @@ public class LifeChatService : ILifeChatService
                 UsedEventCount = 0,
                 UsedMemoryCount = 0,
                 UsedReminderCount = 0,
-                UsedPlanSignalCount = 0
+                UsedPlanSignalCount = 0,
+                UsedContext = usedContext
             };
         }
 
@@ -95,7 +98,8 @@ public class LifeChatService : ILifeChatService
                 UsedEventCount = events.Count,
                 UsedMemoryCount = memories.Count,
                 UsedReminderCount = reminders.Count,
-                UsedPlanSignalCount = planSignals.Count
+                UsedPlanSignalCount = planSignals.Count,
+                UsedContext = usedContext
             };
         }
         catch (Exception ex)
@@ -107,9 +111,88 @@ public class LifeChatService : ILifeChatService
                 UsedEventCount = events.Count,
                 UsedMemoryCount = memories.Count,
                 UsedReminderCount = reminders.Count,
-                UsedPlanSignalCount = planSignals.Count
+                UsedPlanSignalCount = planSignals.Count,
+                UsedContext = usedContext
             };
         }
+    }
+
+    private static LifeChatUsedContext BuildUsedContext(
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory> memories,
+        IReadOnlyList<Reminder> reminders,
+        IReadOnlyList<PlanSignal> planSignals)
+    {
+        var items = new List<LifeChatUsedContextItem>();
+
+        items.AddRange(memories
+            .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+            .Take(2)
+            .Select(memory => new LifeChatUsedContextItem
+            {
+                Id = string.IsNullOrWhiteSpace(memory.Id) ? $"memory_{items.Count + 1}" : memory.Id,
+                SourceType = "memory",
+                Title = MemoryContextTitle(memory.Type),
+                Detail = TrimForDisplay(memory.Content, "已记住内容", 64),
+                Href = "/memory",
+                Reason = "来自你确认过的长期记忆。"
+            }));
+
+        items.AddRange(reminders
+            .OrderBy(reminder => reminder.DueAt)
+            .Take(1)
+            .Select(reminder => new LifeChatUsedContextItem
+            {
+                Id = string.IsNullOrWhiteSpace(reminder.Id) ? $"reminder_{items.Count + 1}" : reminder.Id,
+                SourceType = "reminder",
+                Title = TrimForDisplay(reminder.Title, "待处理提醒", 48),
+                Detail = FormatReminderTime(reminder),
+                Href = "/reminders",
+                Reason = "来自当前待处理提醒，只读参考。"
+            }));
+
+        items.AddRange(planSignals
+            .OrderByDescending(signal => signal.UpdatedAt == default ? signal.CreatedAt : signal.UpdatedAt)
+            .Take(1)
+            .Select(signal => new LifeChatUsedContextItem
+            {
+                Id = string.IsNullOrWhiteSpace(signal.Id) ? $"plan_{items.Count + 1}" : signal.Id,
+                SourceType = "plan",
+                Title = TrimForDisplay(signal.Title, signal.Content, 48),
+                Detail = PlanContextReason(signal.Kind),
+                Href = "/plans",
+                Reason = "来自已保存的计划线索，不代表已经执行。"
+            }));
+
+        if (items.Count < MaxUsedContextItems)
+        {
+            items.AddRange(events
+                .OrderByDescending(GetOccurredAt)
+                .Take(MaxUsedContextItems - items.Count)
+                .Select(item => new LifeChatUsedContextItem
+                {
+                    Id = string.IsNullOrWhiteSpace(item.Id) ? $"event_{items.Count + 1}" : item.Id,
+                    SourceType = "event",
+                    Title = TrimForDisplay(item.Title, item.Content, 48),
+                    Detail = TrimForDisplay(item.Content, item.Title, 72),
+                    Href = "/life/review",
+                    Reason = "来自最近生活记录。"
+                }));
+        }
+
+        return new LifeChatUsedContext
+        {
+            Items = items
+                .Where(item => !string.IsNullOrWhiteSpace(item.Title))
+                .GroupBy(item => $"{item.SourceType}:{item.Id}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .Take(MaxUsedContextItems)
+                .ToArray(),
+            ReadOnly = true,
+            WroteData = false,
+            Executed = false
+        };
     }
 
     private static string BuildUserPrompt(
@@ -249,6 +332,31 @@ public class LifeChatService : ILifeChatService
         };
     }
 
+    private static string MemoryContextTitle(string memoryType)
+    {
+        return memoryType switch
+        {
+            "goal" => "已记住的目标",
+            "habit" or "routine" => "已记住的习惯",
+            "temporary_context" => "已记住的近期背景",
+            "preference" => "已记住的偏好",
+            "constraint" => "已记住的边界",
+            _ => "已记住的个人背景"
+        };
+    }
+
+    private static string PlanContextReason(string? kind)
+    {
+        return kind?.Trim().ToLowerInvariant() switch
+        {
+            "reminder_signal" => "缺少明确时间的提醒线索。",
+            "reminder" => "提醒相关计划线索。",
+            "trip" => "出行相关计划线索。",
+            "task" => "待办相关计划线索。",
+            _ => "近期计划线索。"
+        };
+    }
+
     private static string TrimForPrompt(string? value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -258,6 +366,22 @@ public class LifeChatService : ILifeChatService
 
         var normalized = value.Trim();
         return normalized.Length <= maxLength ? normalized : normalized[..maxLength] + "...";
+    }
+
+    private static string TrimForDisplay(string? value, string? fallback, int maxLength)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? fallback?.Trim() : value.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return string.Empty;
+        }
+
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength] + "...";
+    }
+
+    private static DateTime GetOccurredAt(LifeEvent item)
+    {
+        return item.OccurredAt == default ? item.CreatedAt : item.OccurredAt;
     }
 
     private static string BuildFallback(

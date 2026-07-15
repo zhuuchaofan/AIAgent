@@ -223,6 +223,10 @@ on `/reminders`.
      read-only mode.
    - The web UI may tell the user when active remembered content or pending
      reminders were used as background.
+   - The response may include a compact read-only `usedContext` list with
+     user-facing source labels and navigation links. This is explanation only:
+     it does not persist chat history, write Memory, create reminders, update
+     plans, or execute tools.
    - It does not persist chat history, write Memory, create reminders, or
      execute tools.
 

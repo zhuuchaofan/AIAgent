@@ -4,6 +4,22 @@ import { getToken } from "./auth";
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:5140";
 
+export interface LifeChatUsedContextItem {
+  id: string;
+  sourceType: "memory" | "event" | "reminder" | "plan" | string;
+  title: string;
+  detail: string;
+  href: string;
+  reason: string;
+}
+
+export interface LifeChatUsedContext {
+  items: LifeChatUsedContextItem[];
+  readOnly: boolean;
+  wroteData: boolean;
+  executed: boolean;
+}
+
 export interface LifeChatResponse {
   success: boolean;
   response: string;
@@ -11,6 +27,7 @@ export interface LifeChatResponse {
   usedMemoryCount: number;
   usedReminderCount: number;
   usedPlanSignalCount: number;
+  usedContext?: LifeChatUsedContext;
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;

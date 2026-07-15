@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Brain, Loader2, Send } from "lucide-react";
-import { askLifeChat } from "@/app/actions/lifeChat";
+import { askLifeChat, type LifeChatUsedContextItem } from "@/app/actions/lifeChat";
 import { Markdown } from "@/components/Markdown";
 import { useAuth } from "@/providers/AuthProvider";
 import { PageContentSkeleton } from "@/components/LoadingSkeletons";
@@ -13,6 +13,7 @@ type Message = {
   role: "assistant" | "user";
   content: string;
   meta?: string;
+  usedContext?: LifeChatUsedContextItem[];
 };
 
 const initialMessages: Message[] = [
@@ -99,6 +100,7 @@ export default function LifeChatPage() {
           role: "assistant",
           content: result.response,
           meta: buildContextMeta(result.usedMemoryCount, result.usedReminderCount, result.usedPlanSignalCount),
+          usedContext: result.usedContext?.items ?? [],
         },
       ]);
     } catch (err) {
@@ -204,6 +206,23 @@ export default function LifeChatPage() {
                       <p className="px-1 text-[10px] text-zinc-600">
                         {message.meta}
                       </p>
+                    )}
+                    {message.role === "assistant" && message.usedContext && message.usedContext.length > 0 && (
+                      <div className="space-y-1 px-1">
+                        <p className="text-[10px] text-zinc-600">参考了这些背景：</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {message.usedContext.map(item => (
+                            <Link
+                              key={`${item.sourceType}-${item.id}`}
+                              href={item.href || "/life/review"}
+                              className="max-w-full rounded-full border border-zinc-800 bg-zinc-950/40 px-2.5 py-1 text-[10px] text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+                              title={`${item.detail}｜${item.reason}`}
+                            >
+                              <span className="break-words">{item.title}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

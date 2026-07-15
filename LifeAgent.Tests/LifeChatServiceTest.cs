@@ -30,6 +30,10 @@ public class LifeChatServiceTest
         Assert.Equal(0, response.UsedMemoryCount);
         Assert.Equal(0, response.UsedReminderCount);
         Assert.Equal(0, response.UsedPlanSignalCount);
+        Assert.Empty(response.UsedContext.Items);
+        Assert.True(response.UsedContext.ReadOnly);
+        Assert.False(response.UsedContext.WroteData);
+        Assert.False(response.UsedContext.Executed);
         Assert.Contains("还没有足够", response.Response);
     }
 
@@ -82,6 +86,15 @@ public class LifeChatServiceTest
         Assert.True(response.ReadOnly);
         Assert.False(response.WroteData);
         Assert.False(response.Executed);
+        Assert.Contains(response.UsedContext.Items, item =>
+            item.SourceType == "memory" &&
+            item.Title == "已记住的近期背景" &&
+            item.Href == "/memory" &&
+            item.Reason.Contains("确认过", StringComparison.Ordinal));
+        Assert.Contains(response.UsedContext.Items, item =>
+            item.SourceType == "event" &&
+            item.Title.Contains("骑车", StringComparison.Ordinal) &&
+            item.Href == "/life/review");
         Assert.Contains("骑车回来", answerGenerator.LastUserPrompt);
         Assert.Contains("今天骑车回来，心率不高。", answerGenerator.LastUserPrompt);
         Assert.Contains("我近期有去新疆的出行计划。", answerGenerator.LastUserPrompt);
@@ -146,6 +159,10 @@ public class LifeChatServiceTest
         Assert.Equal("明天要先处理键盘轴体更换。", response.Response);
         Assert.Equal(1, response.UsedReminderCount);
         Assert.Equal(0, response.UsedPlanSignalCount);
+        var usedReminder = Assert.Single(response.UsedContext.Items, item => item.SourceType == "reminder");
+        Assert.Equal("rem_1", usedReminder.Id);
+        Assert.Equal("/reminders", usedReminder.Href);
+        Assert.Contains("只读参考", usedReminder.Reason, StringComparison.Ordinal);
         Assert.Contains("待处理提醒", answerGenerator.LastUserPrompt);
         Assert.Contains("寻找键盘轴体", answerGenerator.LastUserPrompt);
         Assert.Contains("为明天去公司更换做准备", answerGenerator.LastUserPrompt);
@@ -198,6 +215,10 @@ public class LifeChatServiceTest
 
         Assert.Equal("你近期有去新疆的计划线索。", response.Response);
         Assert.Equal(1, response.UsedPlanSignalCount);
+        var usedPlan = Assert.Single(response.UsedContext.Items, item => item.SourceType == "plan");
+        Assert.Equal("plan_1", usedPlan.Id);
+        Assert.Equal("/plans", usedPlan.Href);
+        Assert.Contains("不代表已经执行", usedPlan.Reason, StringComparison.Ordinal);
         Assert.Contains("计划线索", answerGenerator.LastUserPrompt);
         Assert.Contains("新疆出行", answerGenerator.LastUserPrompt);
         Assert.Contains("下周可能在去新疆的路上。", answerGenerator.LastUserPrompt);
@@ -294,6 +315,10 @@ public class LifeChatServiceTest
         });
 
         Assert.Equal(1, response.UsedMemoryCount);
+        var usedContext = Assert.Single(response.UsedContext.Items, item => item.SourceType == "memory");
+        Assert.Contains("LifeOS 项目", usedContext.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(response.UsedContext.Items, item => item.Detail.Contains("我喜欢骑行", StringComparison.Ordinal));
+        Assert.DoesNotContain(response.UsedContext.Items, item => item.Detail.Contains("这条已经忘记", StringComparison.Ordinal));
         Assert.DoesNotContain("我喜欢骑行。", answerGenerator.LastUserPrompt);
         Assert.DoesNotContain("这条已经忘记。", answerGenerator.LastUserPrompt);
         Assert.Contains("我最近在整理 LifeOS 项目。", answerGenerator.LastUserPrompt);
