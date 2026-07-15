@@ -9,6 +9,7 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
     private const int MaxCandidateCount = 8;
     private const int MaxSourceCount = 3;
     private const int MaxSourceSnippetLength = 96;
+    private const double OneOffConfidence = 0.62;
     private const double ObservingConfidence = 0.72;
     private const double StableConfidence = 0.86;
 
@@ -40,28 +41,29 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
                     .Select(item => item.EventId)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
-                var isStable = sourceIds.Length > 1;
+                var stage = ToReviewStage(signal, sourceIds.Length);
+                var isStable = stage == "stable";
                 var candidateType = ToCandidateType(signal, isStable);
                 var candidateTitle = ToCandidateTitle(signal, isStable);
-                var stage = isStable ? "stable" : "observing";
 
                 return new MemoryReviewCandidateItem
                 {
                     Id = $"review_{signal.Key}",
                     Type = candidateType,
                     Title = candidateTitle,
-                    Detail = BuildDetail(candidateType, sourceIds.Length, isStable),
+                    Detail = BuildDetail(candidateType, sourceIds.Length, stage),
                     ReviewStage = stage,
-                    ReviewStageLabel = isStable ? "更稳定" : "观察中",
+                    ReviewStageLabel = ToReviewStageLabel(stage),
                     SourceEventIds = sourceIds,
                     Sources = sources,
-                    Confidence = isStable ? StableConfidence : ObservingConfidence,
-                    Reason = isStable ? "最近多次出现" : "近期线索",
+                    Confidence = ToConfidence(stage),
+                    Reason = ToReason(stage),
                     PreviewOnly = true,
                     WroteData = false
                 };
             })
             .OrderByDescending(candidate => candidate.ReviewStage == "stable")
+            .ThenByDescending(candidate => candidate.ReviewStage == "observing")
             .ThenByDescending(candidate => candidate.SourceEventIds.Count)
             .ThenBy(candidate => candidate.Id, StringComparer.Ordinal)
             .Take(MaxCandidateCount)
@@ -73,6 +75,52 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
             PreviewOnly = true,
             WroteData = false,
             Candidates = candidates
+        };
+    }
+
+    private static string ToReviewStage(ReviewSignal signal, int sourceCount)
+    {
+        if (sourceCount > 1)
+        {
+            return "stable";
+        }
+
+        return signal.Key switch
+        {
+            "food_spending" => "one_off",
+            "purchase_price" => "one_off",
+            "travel_experience" => "one_off",
+            _ => "observing"
+        };
+    }
+
+    private static string ToReviewStageLabel(string stage)
+    {
+        return stage switch
+        {
+            "stable" => "更稳定",
+            "one_off" => "一次性",
+            _ => "观察中"
+        };
+    }
+
+    private static double ToConfidence(string stage)
+    {
+        return stage switch
+        {
+            "stable" => StableConfidence,
+            "one_off" => OneOffConfidence,
+            _ => ObservingConfidence
+        };
+    }
+
+    private static string ToReason(string stage)
+    {
+        return stage switch
+        {
+            "stable" => "最近多次出现",
+            "one_off" => "可能只是一次性事件",
+            _ => "近期线索"
         };
     }
 
@@ -201,9 +249,9 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
         };
     }
 
-    private static string BuildDetail(string type, int sourceCount, bool isStable)
+    private static string BuildDetail(string type, int sourceCount, string stage)
     {
-        if (isStable)
+        if (stage == "stable")
         {
             var typeText = type switch
             {
@@ -215,6 +263,11 @@ public sealed class MemoryReviewInboxPreviewService : IMemoryReviewInboxPreviewS
             };
 
             return $"来自最近 {sourceCount} 条生活记录，可以先作为较稳定的{typeText}线索观察。";
+        }
+
+        if (stage == "one_off")
+        {
+            return "来自最近一条生活记录，可能只是一次性事件。可以先观察，不建议直接当作长期记忆。";
         }
 
         return "来自最近一条生活记录，先作为线索观察，等更多记录出现后再判断是否值得记住。";

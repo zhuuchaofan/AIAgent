@@ -31,7 +31,7 @@ Keep AI agents aligned with LifeOS phase-based development and prevent conflatin
 | Phase 5 Agent Write MVP | LifeEvent and gated Reminder minimal writes live | Unified Inbox can create a server-side pending action and Confirm `life_record_preview` into `life_events`; confirmed reminders can write `reminders` only when the reminder write gate is enabled and a due time exists. |
 | Unified Inbox | Current product mainline | Home input -> intent classifier -> pending action -> confirm gate -> allowlisted executor. See `docs/lifeos_unified_inbox_current_design.md`. |
 | Release Gate | LifeEvent and Reminder minimal gates passed; Memory Review minimal write approved locally | Reminder delivery/scheduling, automatic Memory writes, external tools, MCP, and Cloud Run env changes remain separately approved gates. |
-| Phase 6 Memory Engine | Current development context | Long-term Memory taxonomy, preview proposals, Review Inbox state persistence, explicit remember action, memory management, Memory Value Loop, retrieval skeletons, merge/conflict/pollution guard. Automatic Memory write and tool-style runtime integration require separate approval. |
+| Phase 6 Memory Engine | Current development context | Long-term Memory taxonomy, preview proposals, Review Inbox state persistence, explicit remember action, memory management, Memory Value Loop, retrieval skeletons, merge/conflict/pollution guard, and candidate hygiene that separates stable, observing, and likely one-off signals. Automatic Memory write and tool-style runtime integration require separate approval. |
 
 ## Release Gate boundary
 

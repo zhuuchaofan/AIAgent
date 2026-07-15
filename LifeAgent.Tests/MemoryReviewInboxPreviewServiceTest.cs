@@ -169,6 +169,25 @@ public class MemoryReviewInboxPreviewServiceTest
     }
 
     [Fact]
+    public void BuildPreview_MarksSingleTravelExperienceAsOneOff()
+    {
+        var preview = _service.BuildPreview("user_a", new[]
+        {
+            NewEvent("evt_trip", "出行", "今天路上去了西安国家版本馆飞无人机。")
+        });
+
+        var candidate = Assert.Single(preview.Candidates);
+        Assert.Equal("review_travel_experience", candidate.Id);
+        Assert.Equal("temporary_context", candidate.Type);
+        Assert.Equal("你最近记录过出行和新体验。", candidate.Title);
+        Assert.Equal("one_off", candidate.ReviewStage);
+        Assert.Equal("一次性", candidate.ReviewStageLabel);
+        Assert.Equal("可能只是一次性事件", candidate.Reason);
+        Assert.Equal(0.62, candidate.Confidence);
+        Assert.Contains("不建议直接当作长期记忆", candidate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BuildPreview_TreatsSingleHabitLikeSignalAsRecentContext()
     {
         var preview = _service.BuildPreview("user_a", new[]

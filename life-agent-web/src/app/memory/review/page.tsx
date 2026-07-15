@@ -27,6 +27,17 @@ function typeLabel(type: MemoryReviewCandidate["type"]): string {
   }
 }
 
+function stageBadgeClass(stage: MemoryReviewCandidate["reviewStage"]): string {
+  switch (stage) {
+    case "stable":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+    case "one_off":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+    default:
+      return "border-zinc-700 bg-zinc-900 text-zinc-500";
+  }
+}
+
 export default function MemoryReviewPage() {
   const [candidates, setCandidates] = useState<MemoryReviewCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<"pending" | "kept" | "remembered">("pending");
@@ -223,11 +234,7 @@ export default function MemoryReviewPage() {
                       <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-300">
                         {typeLabel(candidate.type)}
                       </span>
-                      <span className={`rounded-md border px-2 py-0.5 text-xs ${
-                        candidate.reviewStage === "stable"
-                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                          : "border-zinc-700 bg-zinc-900 text-zinc-500"
-                      }`}>
+                      <span className={`rounded-md border px-2 py-0.5 text-xs ${stageBadgeClass(candidate.reviewStage)}`}>
                         {candidate.reviewStageLabel || "观察中"}
                       </span>
                       <span className="text-xs text-zinc-600">{candidate.reason}</span>
@@ -244,6 +251,11 @@ export default function MemoryReviewPage() {
                     </div>
                     <h2 className="break-words text-base font-semibold text-zinc-100">{candidate.title}</h2>
                     <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{candidate.detail}</p>
+                    {candidate.reviewStage === "one_off" && (
+                      <p className="mt-2 rounded-lg border border-amber-500/10 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-200/80">
+                        这类线索更像一次发生的事，可以先留着观察，不必急着放进长期记忆。
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
