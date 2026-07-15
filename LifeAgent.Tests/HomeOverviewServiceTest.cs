@@ -22,6 +22,7 @@ public class HomeOverviewServiceTest
         Assert.Equal(0, overview.MemoryCount);
         Assert.Equal(0, overview.PendingReminderCount);
         Assert.Null(overview.LatestReminder);
+        Assert.Empty(overview.TodayFocus);
         Assert.True(overview.ReadOnly);
         Assert.False(overview.WroteData);
         Assert.False(overview.Executed);
@@ -143,12 +144,152 @@ public class HomeOverviewServiceTest
         Assert.Equal(3, overview.PlanSignals.Count);
     }
 
+    [Fact]
+    public async Task BuildAsync_RanksOverdueTodayAndSoonRemindersByLocalTime()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            new InMemoryMemoryRepository(),
+            new[]
+            {
+                Reminder("rem_soon", "明天提醒", now.UtcDateTime.AddHours(26), "pending"),
+                Reminder("rem_today", "今天提醒", now.UtcDateTime.AddHours(2), "pending"),
+                Reminder("rem_overdue", "逾期提醒", now.UtcDateTime.AddHours(-1), "pending")
+            },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        Assert.Equal(
+            new[] { "rem_overdue", "rem_today", "rem_soon" },
+            overview.TodayFocus.Select(item => item.Id));
+        Assert.Equal(
+            new[] { "overdue", "due_today", "due_soon" },
+            overview.TodayFocus.Select(item => item.Basis));
+    }
+
+    [Fact]
+    public async Task BuildAsync_IncludesOnlyMemoryRelatedUndatedPlanSignals()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Goal.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我计划去新疆旅行。",
+            Importance = 5
+        });
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            memoryRepository,
+            planSignals: new[]
+            {
+                PlanSignal("plan_related", "整理新疆路线", minutesAgo: 10),
+                PlanSignal("plan_unrelated", "看看新的咖啡机", minutesAgo: 5)
+            },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        var focus = Assert.Single(overview.TodayFocus);
+        Assert.Equal("plan_related", focus.Id);
+        Assert.Equal("plan", focus.Type);
+        Assert.Equal("memory_related", focus.Basis);
+        Assert.Equal("与你记住的目标相关。", focus.Reason);
+    }
+
+    [Fact]
+    public async Task BuildAsync_AddsReadOnlyInsightOnlyWhenMemoryAndRecentPatternAgree()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.Habit.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我最近关注运动状态和骑行习惯。",
+            Importance = 4
+        });
+        var service = Service(
+            new[]
+            {
+                Event("evt_ride", "骑行记录", "今天骑行时心率平稳。", minutesAgo: 5)
+            },
+            memoryRepository,
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        var focus = Assert.Single(overview.TodayFocus);
+        Assert.Equal("insight", focus.Type);
+        Assert.Equal("memory_related", focus.Basis);
+        Assert.Equal("/life/review", focus.Href);
+        Assert.True(overview.ReadOnly);
+        Assert.False(overview.WroteData);
+        Assert.False(overview.Executed);
+    }
+
+    [Fact]
+    public async Task BuildAsync_IncludesPlanRelatedToRepeatedRecentPatternWithoutMemory()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var service = Service(
+            new[]
+            {
+                Event("evt_project_1", "整理项目", "今天继续整理 LifeOS 项目。", minutesAgo: 20),
+                Event("evt_project_2", "项目进展", "昨天也在推进项目整理。", minutesAgo: 40)
+            },
+            new InMemoryMemoryRepository(),
+            planSignals: new[] { PlanSignal("plan_project", "完成 LifeOS 项目整理", minutesAgo: 5) },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        var focus = Assert.Single(overview.TodayFocus);
+        Assert.Equal("plan_project", focus.Id);
+        Assert.Equal("recent_pattern", focus.Basis);
+    }
+
+    [Fact]
+    public async Task BuildAsync_DoesNotPromotePlanFromSingleRecentNoteWithoutMemory()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var service = Service(
+            new[] { Event("evt_project", "整理项目", "今天整理了一次 LifeOS 项目。", minutesAgo: 20) },
+            new InMemoryMemoryRepository(),
+            planSignals: new[] { PlanSignal("plan_project", "完成 LifeOS 项目整理", minutesAgo: 5) },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        Assert.Empty(overview.TodayFocus);
+    }
+
+    [Fact]
+    public async Task BuildAsync_InvalidTimeZoneFallsBackWithoutFailing()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            new InMemoryMemoryRepository(),
+            new[] { Reminder("rem_today", "今天提醒", now.UtcDateTime.AddHours(2), "pending") },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "not/a-time-zone");
+
+        var focus = Assert.Single(overview.TodayFocus);
+        Assert.Equal("due_today", focus.Basis);
+    }
+
     private static HomeOverviewService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,
         IReadOnlyList<Reminder>? reminders = null,
         IReadOnlyList<PlanSignal>? planSignals = null,
-        IMemoryReviewStateStore? reviewStateStore = null)
+        IMemoryReviewStateStore? reviewStateStore = null,
+        TimeProvider? timeProvider = null)
     {
         return new HomeOverviewService(
             new PersonalContextService(
@@ -159,7 +300,8 @@ public class HomeOverviewServiceTest
                 NullLogger<PersonalContextService>.Instance),
             new MemoryInsightPreviewService(new MemoryExtractionService(new MemoryProposalGuard())),
             new MemoryReviewInboxPreviewService(),
-            reviewStateStore ?? new FakeMemoryReviewStateStore());
+            reviewStateStore ?? new FakeMemoryReviewStateStore(),
+            timeProvider);
     }
 
     private static LifeEvent Event(string id, string title, string content, int minutesAgo)
@@ -241,6 +383,18 @@ public class HomeOverviewServiceTest
         {
             throw new NotSupportedException("FakeMemoryReviewStateStore is read-only.");
         }
+    }
+
+    private sealed class FixedTimeProvider : TimeProvider
+    {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
     }
 
 }

@@ -8,7 +8,6 @@ import {
   Brain,
   Calendar,
   ClipboardList,
-  Clock,
   LogOut,
   MessageCircle,
   Sparkles
@@ -21,38 +20,56 @@ import {
   getHomeOverview,
   type HomeOverviewData,
   type HomeOverviewPlanSignal,
-  type HomeOverviewReminder
+  type HomeOverviewReminder,
+  type HomeOverviewTodayFocus
 } from "@/app/actions/homeOverview";
 import { InsightSkeleton, PageContentSkeleton, TimelineSkeleton } from "@/components/LoadingSkeletons";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 
-function planSignalLabel(kind: string): string {
-  return kind === "reminder_signal" ? "待补充提醒" : "计划";
-}
-
 function DailyActionCard({
+  todayFocus,
   reminders,
   planSignals,
   pendingReminderCount,
   planSignalCount,
   isLoading,
 }: {
+  todayFocus?: HomeOverviewTodayFocus[];
   reminders: HomeOverviewReminder[];
   planSignals: HomeOverviewPlanSignal[];
   pendingReminderCount: number;
   planSignalCount: number;
   isLoading: boolean;
 }) {
-  const hasItems = reminders.length > 0 || planSignals.length > 0;
-  const hiddenReminderCount = Math.max(0, pendingReminderCount - reminders.length);
-  const hiddenPlanCount = Math.max(0, planSignalCount - planSignals.length);
+  const legacyFocus: HomeOverviewTodayFocus[] = [
+    ...reminders.map(reminder => ({
+      id: reminder.id,
+      type: "reminder" as const,
+      title: reminder.title,
+      reason: formatShortChineseDateTime(reminder.dueAt),
+      href: "/reminders",
+      basis: "due_soon" as const,
+    })),
+    ...planSignals.map(signal => ({
+      id: signal.id,
+      type: "plan" as const,
+      title: signal.title,
+      reason: signal.content && signal.content !== signal.title ? signal.content : "最近保存的计划线索。",
+      href: "/plans",
+      basis: "recent_pattern" as const,
+    })),
+  ].slice(0, 3);
+  const visibleFocus = todayFocus ?? legacyFocus;
+  const hasItems = visibleFocus.length > 0;
+  const visibleManagedItemCount = visibleFocus.filter(item => item.type === "reminder" || item.type === "plan").length;
+  const hiddenManagedItemCount = Math.max(0, pendingReminderCount + planSignalCount - visibleManagedItemCount);
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">今天需要留意</h2>
-          <p className="mt-1 text-sm text-zinc-500">提醒和计划会先放在这里，复杂处理再进入对应页面。</p>
+          <p className="mt-1 text-sm text-zinc-500">按时间和你的个人背景，整理今天最值得关注的事。</p>
         </div>
       </div>
 
@@ -63,50 +80,48 @@ function DailyActionCard({
         </div>
       ) : !hasItems ? (
         <p className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3 text-sm text-zinc-500">
-          暂时没有待处理提醒或计划线索。
+          今天暂时没有需要优先关注的事。
         </p>
       ) : (
         <div className="space-y-2.5">
-          {reminders.map(reminder => (
+          {visibleFocus.map(item => (
             <Link
-              key={reminder.id}
-              href="/reminders"
-              className="block rounded-xl border border-indigo-500/15 bg-indigo-500/5 px-3 py-3 transition-colors hover:border-indigo-400/30"
+              key={`${item.type}-${item.id}`}
+              href={item.href}
+              className={`block rounded-xl border px-3 py-3 transition-colors ${
+                item.type === "reminder"
+                  ? "border-indigo-500/15 bg-indigo-500/5 hover:border-indigo-400/30"
+                  : item.type === "plan"
+                    ? "border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-400/30"
+                    : "border-emerald-500/15 bg-emerald-500/5 hover:border-emerald-400/30"
+              }`}
             >
-              <div className="mb-1 flex items-center gap-2 text-xs text-indigo-200">
-                <Bell className="h-3.5 w-3.5" />
-                提醒
+              <div className={`mb-1 flex items-center gap-2 text-xs ${
+                item.type === "reminder"
+                  ? "text-indigo-200"
+                  : item.type === "plan"
+                    ? "text-cyan-200"
+                    : "text-emerald-200"
+              }`}>
+                {item.type === "reminder" ? (
+                  <Bell className="h-3.5 w-3.5" />
+                ) : item.type === "plan" ? (
+                  <ClipboardList className="h-3.5 w-3.5" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {item.type === "reminder" ? "提醒" : item.type === "plan" ? "计划" : "个人整理"}
               </div>
-              <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{reminder.title}</div>
-              <div className="mt-1 flex items-center gap-1 text-xs text-zinc-500">
-                <Clock className="h-3.5 w-3.5" />
-                {formatShortChineseDateTime(reminder.dueAt)}
-              </div>
-            </Link>
-          ))}
-
-          {planSignals.map(signal => (
-            <Link
-              key={signal.id}
-              href="/plans"
-              className="block rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-3 py-3 transition-colors hover:border-cyan-400/30"
-            >
-              <div className="mb-1 flex items-center gap-2 text-xs text-cyan-200">
-                <ClipboardList className="h-3.5 w-3.5" />
-                {planSignalLabel(signal.kind)}
-              </div>
-              <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{signal.title}</div>
-              {signal.content && signal.content !== signal.title && (
-                <p className="mt-1 line-clamp-2 break-words text-xs leading-relaxed text-zinc-500">{signal.content}</p>
-              )}
+              <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{item.title}</div>
+              <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{item.reason}</p>
             </Link>
           ))}
         </div>
       )}
 
-      {(hiddenReminderCount > 0 || hiddenPlanCount > 0) && (
+      {hiddenManagedItemCount > 0 && (
         <p className="mt-3 text-xs text-zinc-600">
-          还有 {hiddenReminderCount + hiddenPlanCount} 条未显示，可进入提醒或计划页查看。
+          另有 {hiddenManagedItemCount} 条提醒或计划线索，可进入对应页面查看。
         </p>
       )}
     </section>
@@ -236,7 +251,8 @@ export default function Home() {
       setIsLoadingOverview(true);
       setOverviewError(null);
       try {
-        const nextOverview = await getHomeOverview(20);
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
+        const nextOverview = await getHomeOverview(20, timeZone);
         if (!cancelled) {
           setOverview(nextOverview);
         }
@@ -377,6 +393,7 @@ export default function Home() {
               }}
             />
             <DailyActionCard
+              todayFocus={overview?.todayFocus}
               reminders={overview?.pendingReminders ?? []}
               planSignals={overview?.planSignals ?? []}
               pendingReminderCount={overview?.pendingReminderCount ?? 0}

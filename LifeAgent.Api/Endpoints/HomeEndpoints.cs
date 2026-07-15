@@ -13,7 +13,8 @@ public static class HomeEndpoints
         group.MapGet("/overview", async (
             HttpContext ctx,
             IHomeOverviewService homeOverviewService,
-            int limit = 20) =>
+            int limit = 20,
+            string? timeZone = null) =>
         {
             var userId = ctx.Items["userId"] as string;
             if (string.IsNullOrEmpty(userId))
@@ -21,7 +22,7 @@ public static class HomeEndpoints
                 throw new UnauthorizedException();
             }
 
-            var data = await homeOverviewService.BuildAsync(userId, limit);
+            var data = await homeOverviewService.BuildAsync(userId, limit, timeZone);
             return Results.Ok(new HomeOverviewResponse
             {
                 Success = true,

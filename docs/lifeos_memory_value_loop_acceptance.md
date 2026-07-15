@@ -65,6 +65,22 @@ Expected:
 - Findings describe patterns or recent state, not backend mechanics.
 - One-off notes should not be presented as certain long-term traits.
 
+### 2a. Review personalized today focus
+
+On the home page, inspect `今天需要留意`.
+
+Expected:
+
+- At most three items are shown.
+- Overdue and locally due-today reminders are prioritized.
+- An undated plan signal appears only when an active Memory or a repeated
+  recent pattern clearly supports its relevance.
+- A personalized insight requires both active remembered context and recent
+  record evidence.
+- Each item explains why it matters and links to its read-only detail or
+  management surface.
+- Loading the card does not write data or execute an action.
+
 ### 3. Inspect possible memories
 
 Open `/memory/review`.

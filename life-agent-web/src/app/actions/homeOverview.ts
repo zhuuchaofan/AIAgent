@@ -23,6 +23,15 @@ export interface HomeOverviewPlanSignal {
   createdAt: string;
 }
 
+export interface HomeOverviewTodayFocus {
+  id: string;
+  type: "reminder" | "plan" | "insight";
+  title: string;
+  reason: string;
+  href: string;
+  basis: "overdue" | "due_today" | "due_soon" | "memory_related" | "recent_pattern";
+}
+
 export interface HomeOverviewData {
   recentEvents: LifeEvent[];
   hasMoreRecentEvents: boolean;
@@ -35,17 +44,19 @@ export interface HomeOverviewData {
   planSignalCount: number;
   planSignals: HomeOverviewPlanSignal[];
   latestPlanSignal?: HomeOverviewPlanSignal | null;
+  todayFocus?: HomeOverviewTodayFocus[];
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;
 }
 
-export async function getHomeOverview(limit = 20): Promise<HomeOverviewData> {
+export async function getHomeOverview(limit = 20, timeZone = "Asia/Shanghai"): Promise<HomeOverviewData> {
   const token = await getToken();
   if (!token) throw new Error("Unauthorized");
 
   const url = new URL(`${API_BASE}/api/home/overview`);
   url.searchParams.set("limit", String(limit));
+  url.searchParams.set("timeZone", timeZone);
 
   const res = await fetch(url.toString(), {
     headers: {

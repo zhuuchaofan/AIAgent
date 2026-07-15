@@ -1,6 +1,6 @@
 # LifeOS Project Consolidation Map
 
-Date: 2026-07-14
+Date: 2026-07-15
 
 ## Purpose
 
@@ -107,6 +107,9 @@ GET /api/home/overview
   -> active Memory count
   -> pending reminder count and nearest pending reminder
   -> active plan signal count and latest plan signal
+  -> up to 3 personalized today-focus items
+     (overdue/today/soon reminders, Memory-related plans, grounded insights)
+  -> browser time zone for local due-date boundaries
   -> no durable write, no tool execution
 ```
 
@@ -167,7 +170,10 @@ The web product surfaces are:
 
 - Home `AI 发现`: a lightweight preview of repeated themes.
 - Home Overview: a single read-only first-screen payload for recent records,
-  AI insights, Memory count, Memory Review count, and pending reminder summary.
+  AI insights, Memory count, Memory Review count, pending reminder summary, and
+  a deterministic personalized today-focus ranking. Undated plan signals only
+  enter today focus when active Memory or a recent repeated pattern supports
+  their relevance.
 - `/reminders`: the user's confirmed pending reminders, grouped by overdue,
   today, tomorrow, and later, with complete/cancel actions only.
 - `/plans`: the user's confirmed plan signals and missing-time reminder

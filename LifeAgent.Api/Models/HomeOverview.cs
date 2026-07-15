@@ -21,9 +21,20 @@ public sealed class HomeOverviewData
     public int PlanSignalCount { get; set; }
     public IReadOnlyList<HomeOverviewPlanSignalDto> PlanSignals { get; set; } = Array.Empty<HomeOverviewPlanSignalDto>();
     public HomeOverviewPlanSignalDto? LatestPlanSignal { get; set; }
+    public IReadOnlyList<HomeOverviewTodayFocusDto> TodayFocus { get; set; } = Array.Empty<HomeOverviewTodayFocusDto>();
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
     public bool Executed { get; set; } = false;
+}
+
+public sealed class HomeOverviewTodayFocusDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public string Href { get; set; } = string.Empty;
+    public string Basis { get; set; } = string.Empty;
 }
 
 public sealed class HomeOverviewReminderDto

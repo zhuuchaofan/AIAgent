@@ -1,6 +1,6 @@
 # LifeOS Unified Inbox Current Design
 
-Date: 2026-07-12
+Date: 2026-07-15
 
 ## Purpose
 
@@ -111,7 +111,7 @@ This means:
   under plan signals so the user does not lose the thought.
 - Plan Confirm writes a lightweight plan signal. Plan signals are future-context
   clues, not calendar events, tasks, notifications, or external executions.
-- Memory remains candidate-only.
+- Automatic Memory remains candidate-only; durable Memory still requires the separate explicit Review Inbox remember action.
 - External tools and MCP-style side effects remain closed.
 
 `AllowReminderWrites` is controlled by configuration and defaults to false:
@@ -148,6 +148,10 @@ on `/reminders`.
      recent records, AI insights, Memory Review count, active Memory count,
      pending reminder count, and the nearest pending reminder.
      It also returns active plan signal count and latest plan signal.
+     It returns up to three read-only `todayFocus` items ranked from overdue or
+     near-term reminders, Memory-related plan signals, and recent patterns that
+     agree with active Memory. The optional browser time zone is used for local
+     due-date boundaries.
    - It is read-only and must not create pending actions, write Memory, create
      reminders, or execute tools.
 

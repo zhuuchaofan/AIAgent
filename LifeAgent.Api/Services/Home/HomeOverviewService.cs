@@ -2,6 +2,7 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
+using System.Text.RegularExpressions;
 
 namespace LifeAgent.Api.Services.Home;
 
@@ -11,27 +12,37 @@ public sealed class HomeOverviewService : IHomeOverviewService
     private const int MaxInsightSourceEvents = 20;
     private const int MaxVisibleReminders = 3;
     private const int MaxVisiblePlanSignals = 3;
+    private const int MaxTodayFocusItems = 3;
+    private static readonly HashSet<string> GenericMatchFragments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "一个", "事情", "今天", "最近", "近期", "计划", "目标", "希望", "需要", "关注", "继续", "准备", "相关", "记住",
+        "状态", "个人", "背景", "记录", "整理", "反复", "出现", "内容"
+    };
 
     private readonly IPersonalContextService _personalContextService;
     private readonly IMemoryInsightPreviewService _memoryInsightPreviewService;
     private readonly IMemoryReviewInboxPreviewService _memoryReviewInboxPreviewService;
     private readonly IMemoryReviewStateStore _memoryReviewStateStore;
+    private readonly TimeProvider _timeProvider;
 
     public HomeOverviewService(
         IPersonalContextService personalContextService,
         IMemoryInsightPreviewService memoryInsightPreviewService,
         IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
-        IMemoryReviewStateStore memoryReviewStateStore)
+        IMemoryReviewStateStore memoryReviewStateStore,
+        TimeProvider? timeProvider = null)
     {
         _personalContextService = personalContextService;
         _memoryInsightPreviewService = memoryInsightPreviewService;
         _memoryReviewInboxPreviewService = memoryReviewInboxPreviewService;
         _memoryReviewStateStore = memoryReviewStateStore;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<HomeOverviewData> BuildAsync(
         string userId,
         int limit = MaxInsightSourceEvents,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userId))
@@ -45,7 +56,8 @@ public sealed class HomeOverviewService : IHomeOverviewService
             MaxEvents = boundedLimit,
             MaxMemories = 20,
             MaxReminders = MaxVisibleReminders,
-            MaxPlanSignals = 20
+            MaxPlanSignals = 20,
+            ClientTimeZone = timeZone
         }, cancellationToken);
 
         var insightPreview = _memoryInsightPreviewService.BuildPreview(userId, context.Events);
@@ -58,6 +70,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
             MemoryReviewInboxStateProjection.Apply(reviewPreview, states),
             keptCandidates);
         var insights = AddPlanSignalInsight(insightPreview.Insights, context.PlanSignalCount);
+        var todayFocus = BuildTodayFocus(context, insightPreview.Insights, timeZone);
 
         return new HomeOverviewData
         {
@@ -72,11 +85,201 @@ public sealed class HomeOverviewService : IHomeOverviewService
             PlanSignalCount = context.PlanSignalCount,
             PlanSignals = context.PlanSignals.Take(MaxVisiblePlanSignals).Select(ToPlanSignalDto).ToArray(),
             LatestPlanSignal = context.PlanSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
+            TodayFocus = todayFocus,
             ReadOnly = true,
             WroteData = false,
             Executed = false
         };
     }
+
+    private IReadOnlyList<HomeOverviewTodayFocusDto> BuildTodayFocus(
+        PersonalContextSnapshot context,
+        IReadOnlyList<MemoryInsightPreviewItem> insights,
+        string? timeZoneId)
+    {
+        var timeZone = ResolveTimeZone(timeZoneId);
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, timeZone);
+        var candidates = new List<TodayFocusCandidate>();
+
+        foreach (var reminder in context.PendingReminders)
+        {
+            var localDueAt = TimeZoneInfo.ConvertTimeFromUtc(EnsureUtc(reminder.DueAt), timeZone);
+            if (localDueAt < localNow)
+            {
+                candidates.Add(new TodayFocusCandidate(
+                    ToFocus(reminder.Id, "reminder", reminder.Title, "已逾期，建议今天优先处理。", "/reminders", "overdue"),
+                    1000,
+                    localDueAt));
+            }
+            else if (localDueAt.Date == localNow.Date)
+            {
+                candidates.Add(new TodayFocusCandidate(
+                    ToFocus(reminder.Id, "reminder", reminder.Title, $"今天 {localDueAt:HH:mm} 到期。", "/reminders", "due_today"),
+                    900,
+                    localDueAt));
+            }
+            else if (localDueAt <= localNow.AddHours(48))
+            {
+                candidates.Add(new TodayFocusCandidate(
+                    ToFocus(reminder.Id, "reminder", reminder.Title, "未来 48 小时内到期。", "/reminders", "due_soon"),
+                    600,
+                    localDueAt));
+            }
+        }
+
+        foreach (var signal in context.PlanSignals)
+        {
+            var signalText = $"{signal.Title} {signal.Content}";
+            var relatedMemory = context.Memories
+                .Where(memory => HasMeaningfulOverlap(signalText, memory.Content))
+                .OrderByDescending(memory => memory.Importance)
+                .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+                .FirstOrDefault();
+
+            if (relatedMemory is not null)
+            {
+                candidates.Add(new TodayFocusCandidate(
+                    ToFocus(signal.Id, "plan", signal.Title, MemoryRelationReason(relatedMemory.Type), "/plans", "memory_related"),
+                    800 + relatedMemory.Importance,
+                    signal.CreatedAt));
+                continue;
+            }
+
+            if (insights.Any(insight =>
+                    insight.SourceEventIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() >= 2 &&
+                    HasMeaningfulOverlap(signalText, insight.Text)))
+            {
+                candidates.Add(new TodayFocusCandidate(
+                    ToFocus(signal.Id, "plan", signal.Title, "与最近反复出现的主题相关。", "/plans", "recent_pattern"),
+                    700,
+                    signal.CreatedAt));
+            }
+        }
+
+        foreach (var insight in insights)
+        {
+            var relatedMemory = context.Memories
+                .Where(memory => HasMeaningfulOverlap(insight.Text, memory.Content))
+                .OrderByDescending(memory => memory.Importance)
+                .FirstOrDefault();
+            if (relatedMemory is null)
+            {
+                continue;
+            }
+
+            var idSuffix = insight.SourceEventIds.FirstOrDefault() ?? NormalizeText(insight.Text);
+            candidates.Add(new TodayFocusCandidate(
+                ToFocus($"insight_{idSuffix}", "insight", insight.Text, "与你记住的个人背景相呼应。", "/life/review", "memory_related"),
+                500 + relatedMemory.Importance,
+                relatedMemory.UpdatedAt ?? relatedMemory.CreatedAt));
+        }
+
+        return candidates
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Item.Type == "reminder"
+                ? candidate.SortAt.Ticks
+                : -candidate.SortAt.Ticks)
+            .ThenBy(candidate => candidate.Item.Id, StringComparer.Ordinal)
+            .GroupBy(candidate => $"{candidate.Item.Type}:{candidate.Item.Id}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First().Item)
+            .Take(MaxTodayFocusItems)
+            .ToArray();
+    }
+
+    private static HomeOverviewTodayFocusDto ToFocus(
+        string id,
+        string type,
+        string title,
+        string reason,
+        string href,
+        string basis)
+    {
+        return new HomeOverviewTodayFocusDto
+        {
+            Id = id,
+            Type = type,
+            Title = title,
+            Reason = reason,
+            Href = href,
+            Basis = basis
+        };
+    }
+
+    private static bool HasMeaningfulOverlap(string left, string right)
+    {
+        var leftFragments = ExtractMatchFragments(left);
+        var rightFragments = ExtractMatchFragments(right);
+        return leftFragments.Overlaps(rightFragments);
+    }
+
+    private static string MemoryRelationReason(string memoryType)
+    {
+        return memoryType switch
+        {
+            "goal" => "与你记住的目标相关。",
+            "temporary_context" => "与你记住的近期背景相关。",
+            "preference" or "constraint" => "与你记住的偏好或边界相关。",
+            "habit" or "routine" => "与你记住的习惯相关。",
+            _ => "与你记住的个人背景相关。"
+        };
+    }
+
+    private static HashSet<string> ExtractMatchFragments(string text)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in Regex.Matches(text ?? string.Empty, @"[A-Za-z0-9]+|[\u4e00-\u9fff]+"))
+        {
+            var token = match.Value.ToLowerInvariant();
+            if (Regex.IsMatch(token, @"^[a-z0-9]+$") && token.Length >= 2)
+            {
+                result.Add(token);
+                continue;
+            }
+
+            for (var index = 0; index < token.Length - 1; index++)
+            {
+                var fragment = token.Substring(index, 2);
+                if (!GenericMatchFragments.Contains(fragment))
+                {
+                    result.Add(fragment);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static string NormalizeText(string text)
+    {
+        return Regex.Replace(text ?? string.Empty, @"[^A-Za-z0-9\u4e00-\u9fff]+", string.Empty)
+            .ToLowerInvariant();
+    }
+
+    private static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(
+                string.IsNullOrWhiteSpace(timeZoneId) ? "Asia/Shanghai" : timeZoneId.Trim());
+        }
+        catch
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        }
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
+
+    private sealed record TodayFocusCandidate(HomeOverviewTodayFocusDto Item, double Score, DateTime SortAt);
 
     private static IReadOnlyList<MemoryInsightPreviewItem> AddPlanSignalInsight(
         IReadOnlyList<MemoryInsightPreviewItem> insights,
