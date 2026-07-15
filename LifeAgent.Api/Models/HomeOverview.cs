@@ -48,6 +48,8 @@ public sealed class HomeOverviewDailyBriefSignalDto
     public string Detail { get; set; } = string.Empty;
     public string Basis { get; set; } = string.Empty;
     public string Href { get; set; } = string.Empty;
+    public string ActionLabel { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
 }
 
 public sealed class HomeOverviewDailyBriefContextCountsDto
@@ -66,6 +68,10 @@ public sealed class HomeOverviewTodayFocusDto
     public string Reason { get; set; } = string.Empty;
     public string Href { get; set; } = string.Empty;
     public string Basis { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public string PriorityLabel { get; set; } = string.Empty;
+    public string ActionLabel { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
 }
 
 public sealed class HomeOverviewReminderDto

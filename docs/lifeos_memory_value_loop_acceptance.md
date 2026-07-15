@@ -111,6 +111,9 @@ Expected:
 - A likely one-off event is presented as something to observe, not something
   LifeOS already believes as long-term memory.
 - Source expansion shows life-record evidence, not prompts or backend payloads.
+- Home Daily Hub explains why each today-focus or daily-brief item matters now,
+  and offers a navigation action label without executing tools or writing new
+  data.
 
 ### 4. Keep and remember one candidate
 

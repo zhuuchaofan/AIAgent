@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  ArrowRight,
   Bell,
   BookOpen,
   Brain,
@@ -26,6 +27,48 @@ import {
 } from "@/app/actions/homeOverview";
 import { InsightSkeleton, PageContentSkeleton, TimelineSkeleton } from "@/components/LoadingSkeletons";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
+
+function focusTone(type: HomeOverviewTodayFocus["type"]) {
+  if (type === "reminder") {
+    return {
+      border: "border-indigo-500/20",
+      bg: "bg-indigo-500/10",
+      text: "text-indigo-200",
+      hover: "hover:border-indigo-400/40",
+      button: "bg-indigo-600 hover:bg-indigo-500"
+    };
+  }
+
+  if (type === "plan") {
+    return {
+      border: "border-cyan-500/20",
+      bg: "bg-cyan-500/10",
+      text: "text-cyan-200",
+      hover: "hover:border-cyan-400/40",
+      button: "bg-cyan-600 hover:bg-cyan-500"
+    };
+  }
+
+  return {
+    border: "border-emerald-500/20",
+    bg: "bg-emerald-500/10",
+    text: "text-emerald-200",
+    hover: "hover:border-emerald-400/40",
+    button: "bg-emerald-600 hover:bg-emerald-500"
+  };
+}
+
+function focusTypeLabel(type: HomeOverviewTodayFocus["type"]) {
+  if (type === "reminder") return "提醒";
+  if (type === "plan") return "计划";
+  return "个人整理";
+}
+
+function FocusIcon({ type, className }: { type: HomeOverviewTodayFocus["type"]; className?: string }) {
+  if (type === "reminder") return <Bell className={className} />;
+  if (type === "plan") return <ClipboardList className={className} />;
+  return <Sparkles className={className} />;
+}
 
 function DailyActionCard({
   todayFocus,
@@ -62,8 +105,11 @@ function DailyActionCard({
   ].slice(0, 3);
   const visibleFocus = todayFocus ?? legacyFocus;
   const hasItems = visibleFocus.length > 0;
+  const primaryFocus = visibleFocus[0];
+  const secondaryFocus = visibleFocus.slice(1);
   const visibleManagedItemCount = visibleFocus.filter(item => item.type === "reminder" || item.type === "plan").length;
   const hiddenManagedItemCount = Math.max(0, pendingReminderCount + planSignalCount - visibleManagedItemCount);
+  const primaryTone = primaryFocus ? focusTone(primaryFocus.type) : null;
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
@@ -84,39 +130,63 @@ function DailyActionCard({
           今天暂时没有需要优先关注的事。
         </p>
       ) : (
-        <div className="space-y-2.5">
-          {visibleFocus.map(item => (
+        <div className="space-y-3">
+          {primaryFocus && primaryTone && (
             <Link
-              key={`${item.type}-${item.id}`}
-              href={item.href}
-              className={`block rounded-xl border px-3 py-3 transition-colors ${
-                item.type === "reminder"
-                  ? "border-indigo-500/15 bg-indigo-500/5 hover:border-indigo-400/30"
-                  : item.type === "plan"
-                    ? "border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-400/30"
-                    : "border-emerald-500/15 bg-emerald-500/5 hover:border-emerald-400/30"
-              }`}
+              href={primaryFocus.href}
+              className={`block rounded-2xl border ${primaryTone.border} ${primaryTone.bg} p-4 transition-colors ${primaryTone.hover}`}
             >
-              <div className={`mb-1 flex items-center gap-2 text-xs ${
-                item.type === "reminder"
-                  ? "text-indigo-200"
-                  : item.type === "plan"
-                    ? "text-cyan-200"
-                    : "text-emerald-200"
-              }`}>
-                {item.type === "reminder" ? (
-                  <Bell className="h-3.5 w-3.5" />
-                ) : item.type === "plan" ? (
-                  <ClipboardList className="h-3.5 w-3.5" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" />
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border ${primaryTone.border} bg-zinc-950/30 px-2.5 py-1 text-xs ${primaryTone.text}`}>
+                  <FocusIcon type={primaryFocus.type} className="h-3.5 w-3.5" />
+                  {focusTypeLabel(primaryFocus.type)}
+                </span>
+                {(primaryFocus.priorityLabel || primaryFocus.priority) && (
+                  <span className="rounded-full border border-zinc-700 bg-zinc-950/40 px-2.5 py-1 text-xs text-zinc-300">
+                    {primaryFocus.priorityLabel || `优先级 ${primaryFocus.priority}`}
+                  </span>
                 )}
-                {item.type === "reminder" ? "提醒" : item.type === "plan" ? "计划" : "个人整理"}
               </div>
-              <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{item.title}</div>
-              <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{item.reason}</p>
+              <div className="mt-3 break-words text-base font-semibold leading-relaxed text-zinc-100">{primaryFocus.title}</div>
+              <p className="mt-1 break-words text-sm leading-relaxed text-zinc-300">{primaryFocus.reason}</p>
+              {(primaryFocus.explanation || primaryFocus.actionLabel) && (
+                <div className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-950/35 px-3 py-2">
+                  {primaryFocus.explanation && (
+                    <p className="text-xs leading-relaxed text-zinc-400">{primaryFocus.explanation}</p>
+                  )}
+                  <span className={`mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white ${primaryTone.button}`}>
+                    {primaryFocus.actionLabel || "查看"}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              )}
             </Link>
-          ))}
+          )}
+
+          {secondaryFocus.length > 0 && (
+            <div className="space-y-2">
+              {secondaryFocus.map(item => {
+                const tone = focusTone(item.type);
+                return (
+                  <Link
+                    key={`${item.type}-${item.id}`}
+                    href={item.href}
+                    className={`block rounded-xl border px-3 py-3 transition-colors ${tone.border} ${tone.bg} ${tone.hover}`}
+                  >
+                    <div className={`mb-1 flex items-center gap-2 text-xs ${tone.text}`}>
+                      <FocusIcon type={item.type} className="h-3.5 w-3.5" />
+                      {focusTypeLabel(item.type)}
+                      {(item.priorityLabel || item.priority) && (
+                        <span className="text-zinc-500">· {item.priorityLabel || `优先级 ${item.priority}`}</span>
+                      )}
+                    </div>
+                    <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{item.title}</div>
+                    <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{item.explanation || item.reason}</p>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -201,10 +271,21 @@ function DailyAiPanel({
                 <Link
                   key={signal.id}
                   href={signal.href || "/"}
-                  className="block rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-2 transition-colors hover:border-zinc-700"
+                  className="block rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3 transition-colors hover:border-zinc-700"
                 >
                   <div className="text-sm font-medium leading-relaxed text-zinc-300">{signal.title}</div>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-500">{signal.detail}</p>
+                  {signal.explanation && (
+                    <p className="mt-2 rounded-lg border border-zinc-800/70 bg-zinc-900/40 px-2.5 py-2 text-xs leading-relaxed text-zinc-500">
+                      {signal.explanation}
+                    </p>
+                  )}
+                  {signal.actionLabel && (
+                    <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-300">
+                      {signal.actionLabel}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>

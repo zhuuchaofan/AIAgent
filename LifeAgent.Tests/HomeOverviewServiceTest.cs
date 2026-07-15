@@ -26,6 +26,8 @@ public class HomeOverviewServiceTest
         Assert.Equal("今天暂时没有需要特别整理的事。", overview.DailyBrief.Summary);
         var emptySignal = Assert.Single(overview.DailyBrief.Signals);
         Assert.Equal("empty_context", emptySignal.Basis);
+        Assert.Equal("继续记录", emptySignal.ActionLabel);
+        Assert.Contains("没有明确", emptySignal.Explanation, StringComparison.Ordinal);
         Assert.Equal(0, overview.DailyBrief.ContextCounts.RecentEventCount);
         Assert.Equal(0, overview.DailyBrief.ContextCounts.ActiveMemoryCount);
         Assert.True(overview.DailyBrief.ReadOnly);
@@ -83,7 +85,9 @@ public class HomeOverviewServiceTest
         Assert.Equal(1, overview.MemoryReviewRememberedCandidateCount);
         Assert.Contains(overview.DailyBrief.Signals, signal =>
             signal.Basis == "memory_review_pending" &&
-            signal.Detail.Contains("2 条", StringComparison.Ordinal));
+            signal.Detail.Contains("2 条", StringComparison.Ordinal) &&
+            signal.ActionLabel == "判断记忆" &&
+            signal.Explanation.Contains("确认后才会进入长期记忆", StringComparison.Ordinal));
         Assert.True(overview.ReadOnly);
         Assert.False(overview.WroteData);
         Assert.False(overview.Executed);
@@ -232,9 +236,15 @@ public class HomeOverviewServiceTest
         Assert.Equal(
             new[] { "overdue", "due_today", "due_soon" },
             overview.TodayFocus.Select(item => item.Basis));
+        Assert.Equal(100, overview.TodayFocus[0].Priority);
+        Assert.Equal("最高", overview.TodayFocus[0].PriorityLabel);
+        Assert.Equal("查看提醒", overview.TodayFocus[0].ActionLabel);
+        Assert.Contains("已经超过时间", overview.TodayFocus[0].Explanation, StringComparison.Ordinal);
         Assert.Equal("今天先看时间相关的提醒。", overview.DailyBrief.Summary);
         Assert.Equal("due_reminder", overview.DailyBrief.Signals[0].Basis);
         Assert.Contains("逾期提醒", overview.DailyBrief.Signals[0].Detail, StringComparison.Ordinal);
+        Assert.Equal("查看提醒", overview.DailyBrief.Signals[0].ActionLabel);
+        Assert.Contains("最明确的待处理事项", overview.DailyBrief.Signals[0].Explanation, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -266,10 +276,16 @@ public class HomeOverviewServiceTest
         Assert.Equal("plan", focus.Type);
         Assert.Equal("memory_related", focus.Basis);
         Assert.Equal("与你记住的目标相关。", focus.Reason);
+        Assert.Equal(80, focus.Priority);
+        Assert.Equal("相关", focus.PriorityLabel);
+        Assert.Equal("查看计划", focus.ActionLabel);
+        Assert.Contains("已记住的个人背景", focus.Explanation, StringComparison.Ordinal);
         Assert.Equal("今天适合推进和个人背景相关的计划。", overview.DailyBrief.Summary);
         Assert.Contains(overview.DailyBrief.Signals, signal =>
             signal.Basis == "memory_related_plan" &&
-            signal.Detail.Contains("整理新疆路线", StringComparison.Ordinal));
+            signal.Detail.Contains("整理新疆路线", StringComparison.Ordinal) &&
+            signal.ActionLabel == "查看计划" &&
+            signal.Explanation.Contains("已记住的个人背景", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -298,6 +314,8 @@ public class HomeOverviewServiceTest
         Assert.Equal("insight", focus.Type);
         Assert.Equal("memory_related", focus.Basis);
         Assert.Equal("/life/review", focus.Href);
+        Assert.Equal("查看回顾", focus.ActionLabel);
+        Assert.Contains("复盘参考", focus.Explanation, StringComparison.Ordinal);
         Assert.True(overview.ReadOnly);
         Assert.False(overview.WroteData);
         Assert.False(overview.Executed);
@@ -322,7 +340,11 @@ public class HomeOverviewServiceTest
         var focus = Assert.Single(overview.TodayFocus);
         Assert.Equal("plan_project", focus.Id);
         Assert.Equal("recent_pattern", focus.Basis);
-        Assert.Contains(overview.DailyBrief.Signals, signal => signal.Basis == "recent_pattern");
+        Assert.Equal("重复", focus.PriorityLabel);
+        Assert.Equal("查看计划", focus.ActionLabel);
+        Assert.Contains(overview.DailyBrief.Signals, signal =>
+            signal.Basis == "recent_pattern" &&
+            signal.ActionLabel == "查看计划");
     }
 
     [Fact]

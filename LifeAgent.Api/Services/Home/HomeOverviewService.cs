@@ -147,7 +147,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                         "有提醒已经逾期。",
                         $"{reminder.Title} 已经过了时间，建议今天先处理。",
                         "due_reminder",
-                        "/reminders"),
+                        "/reminders",
+                        "查看提醒",
+                        "这条提醒已经超过时间，是今天最明确的待处理事项。"),
                     1000,
                     localDueAt));
             }
@@ -159,7 +161,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                         "今天有提醒到期。",
                         $"{reminder.Title} 今天 {localDueAt:HH:mm} 到期。",
                         "due_reminder",
-                        "/reminders"),
+                        "/reminders",
+                        "查看提醒",
+                        "这条提醒在今天到期，时间确定性高。"),
                     900,
                     localDueAt));
             }
@@ -182,7 +186,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                         "有计划和你的个人背景相关。",
                         $"{signal.Title}：{MemoryRelationReason(relatedMemory.Type).TrimEnd('。')}",
                         "memory_related_plan",
-                        "/plans"),
+                        "/plans",
+                        "查看计划",
+                        "这条计划与已记住的个人背景有重合，适合今天优先推进。"),
                     800 + relatedMemory.Importance,
                     signal.CreatedAt));
                 continue;
@@ -198,7 +204,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                         "有计划连着最近反复出现的主题。",
                         $"{signal.Title} 和最近反复出现的记录有关。",
                         "recent_pattern",
-                        "/plans"),
+                        "/plans",
+                        "查看计划",
+                        "这条计划与最近多条生活记录中的重复主题相关。"),
                     700,
                     signal.CreatedAt));
             }
@@ -213,7 +221,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                     "最近有重复出现的主题。",
                     insight.Text,
                     "recent_pattern",
-                    "/life/review"),
+                    "/life/review",
+                    "查看回顾",
+                    "这个主题来自多条近期记录，还不是长期记忆，但值得回看。"),
                 650,
                 utcNow));
         }
@@ -226,7 +236,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                     "有新的记忆线索待判断。",
                     $"有 {reviewStatusCounts.Pending} 条可能值得记住的事等你确认。",
                     "memory_review_pending",
-                    "/memory/review"),
+                    "/memory/review",
+                    "判断记忆",
+                    "这些只是候选线索，需要你确认后才会进入长期记忆。"),
                 500,
                 utcNow));
         }
@@ -249,7 +261,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
                     "继续记录后，我会帮你整理重点。",
                     "今天暂时没有足够的记录、提醒或记忆可整理。",
                     "empty_context",
-                    "/")
+                    "/",
+                    "继续记录",
+                    "当前没有明确的提醒、计划或重复主题可排序。")
             };
         }
 
@@ -275,7 +289,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
         string title,
         string detail,
         string basis,
-        string href)
+        string href,
+        string actionLabel,
+        string explanation)
     {
         return new HomeOverviewDailyBriefSignalDto
         {
@@ -283,7 +299,9 @@ public sealed class HomeOverviewService : IHomeOverviewService
             Title = title,
             Detail = detail,
             Basis = basis,
-            Href = href
+            Href = href,
+            ActionLabel = actionLabel,
+            Explanation = explanation
         };
     }
 
@@ -330,21 +348,51 @@ public sealed class HomeOverviewService : IHomeOverviewService
             if (localDueAt < localNow)
             {
                 candidates.Add(new TodayFocusCandidate(
-                    ToFocus(reminder.Id, "reminder", reminder.Title, "已逾期，建议今天优先处理。", "/reminders", "overdue"),
+                    ToFocus(
+                        reminder.Id,
+                        "reminder",
+                        reminder.Title,
+                        "已逾期，建议今天优先处理。",
+                        "/reminders",
+                        "overdue",
+                        100,
+                        "最高",
+                        "查看提醒",
+                        "这条提醒已经超过时间，是今天最明确的待处理事项。"),
                     1000,
                     localDueAt));
             }
             else if (localDueAt.Date == localNow.Date)
             {
                 candidates.Add(new TodayFocusCandidate(
-                    ToFocus(reminder.Id, "reminder", reminder.Title, $"今天 {localDueAt:HH:mm} 到期。", "/reminders", "due_today"),
+                    ToFocus(
+                        reminder.Id,
+                        "reminder",
+                        reminder.Title,
+                        $"今天 {localDueAt:HH:mm} 到期。",
+                        "/reminders",
+                        "due_today",
+                        90,
+                        "今天",
+                        "查看提醒",
+                        "这条提醒在今天到期，时间确定性高。"),
                     900,
                     localDueAt));
             }
             else if (localDueAt <= localNow.AddHours(48))
             {
                 candidates.Add(new TodayFocusCandidate(
-                    ToFocus(reminder.Id, "reminder", reminder.Title, "未来 48 小时内到期。", "/reminders", "due_soon"),
+                    ToFocus(
+                        reminder.Id,
+                        "reminder",
+                        reminder.Title,
+                        "未来 48 小时内到期。",
+                        "/reminders",
+                        "due_soon",
+                        60,
+                        "近期",
+                        "查看提醒",
+                        "这条提醒在未来 48 小时内到期，可以提前安排。"),
                     600,
                     localDueAt));
             }
@@ -362,7 +410,17 @@ public sealed class HomeOverviewService : IHomeOverviewService
             if (relatedMemory is not null)
             {
                 candidates.Add(new TodayFocusCandidate(
-                    ToFocus(signal.Id, "plan", signal.Title, MemoryRelationReason(relatedMemory.Type), "/plans", "memory_related"),
+                    ToFocus(
+                        signal.Id,
+                        "plan",
+                        signal.Title,
+                        MemoryRelationReason(relatedMemory.Type),
+                        "/plans",
+                        "memory_related",
+                        80,
+                        "相关",
+                        "查看计划",
+                        "这条计划与已记住的个人背景有重合，适合今天优先推进。"),
                     800 + relatedMemory.Importance,
                     signal.CreatedAt));
                 continue;
@@ -373,7 +431,17 @@ public sealed class HomeOverviewService : IHomeOverviewService
                     HasMeaningfulOverlap(signalText, insight.Text)))
             {
                 candidates.Add(new TodayFocusCandidate(
-                    ToFocus(signal.Id, "plan", signal.Title, "与最近反复出现的主题相关。", "/plans", "recent_pattern"),
+                    ToFocus(
+                        signal.Id,
+                        "plan",
+                        signal.Title,
+                        "与最近反复出现的主题相关。",
+                        "/plans",
+                        "recent_pattern",
+                        70,
+                        "重复",
+                        "查看计划",
+                        "这条计划与最近多条生活记录中的重复主题相关。"),
                     700,
                     signal.CreatedAt));
             }
@@ -392,7 +460,17 @@ public sealed class HomeOverviewService : IHomeOverviewService
 
             var idSuffix = insight.SourceEventIds.FirstOrDefault() ?? NormalizeText(insight.Text);
             candidates.Add(new TodayFocusCandidate(
-                ToFocus($"insight_{idSuffix}", "insight", insight.Text, "与你记住的个人背景相呼应。", "/life/review", "memory_related"),
+                ToFocus(
+                    $"insight_{idSuffix}",
+                    "insight",
+                    insight.Text,
+                    "与你记住的个人背景相呼应。",
+                    "/life/review",
+                    "memory_related",
+                    50,
+                    "参考",
+                    "查看回顾",
+                    "这条近期发现与已记住的个人背景相呼应，可作为今天的复盘参考。"),
                 500 + relatedMemory.Importance,
                 relatedMemory.UpdatedAt ?? relatedMemory.CreatedAt));
         }
@@ -415,7 +493,11 @@ public sealed class HomeOverviewService : IHomeOverviewService
         string title,
         string reason,
         string href,
-        string basis)
+        string basis,
+        int priority,
+        string priorityLabel,
+        string actionLabel,
+        string explanation)
     {
         return new HomeOverviewTodayFocusDto
         {
@@ -424,7 +506,11 @@ public sealed class HomeOverviewService : IHomeOverviewService
             Title = title,
             Reason = reason,
             Href = href,
-            Basis = basis
+            Basis = basis,
+            Priority = priority,
+            PriorityLabel = priorityLabel,
+            ActionLabel = actionLabel,
+            Explanation = explanation
         };
     }
 

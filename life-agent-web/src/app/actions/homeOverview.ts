@@ -30,6 +30,10 @@ export interface HomeOverviewTodayFocus {
   reason: string;
   href: string;
   basis: "overdue" | "due_today" | "due_soon" | "memory_related" | "recent_pattern";
+  priority?: number;
+  priorityLabel?: string;
+  actionLabel?: string;
+  explanation?: string;
 }
 
 export interface HomeOverviewDailyBriefSignal {
@@ -38,6 +42,8 @@ export interface HomeOverviewDailyBriefSignal {
   detail: string;
   basis: "due_reminder" | "memory_related_plan" | "recent_pattern" | "memory_review_pending" | "empty_context";
   href: string;
+  actionLabel?: string;
+  explanation?: string;
 }
 
 export interface HomeOverviewDailyBriefContextCounts {

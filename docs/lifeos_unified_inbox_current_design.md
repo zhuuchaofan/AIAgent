@@ -169,6 +169,10 @@ on `/reminders`.
      Candidates include read-only quality guidance (`qualityReason` and
      `suggestedAction`) so one-off events, stable repeated signals, and items
      already covered by active Memory are not treated as the same pending work.
+   - `GET /api/home/overview` powers the Home Daily Hub. Today-focus and daily
+     brief items include read-only priority, action label, and explanation
+     metadata so the Home page can show why an item matters today without
+     executing tools or writing new data.
    - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
      Review Inbox status to `users/{userId}/memory_review_items`.
    - `POST /api/memory/review-inbox/{candidateId}/remember` writes an edited,
