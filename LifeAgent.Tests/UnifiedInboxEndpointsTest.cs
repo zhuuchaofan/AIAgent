@@ -252,7 +252,7 @@ public class UnifiedInboxEndpointsTest
         Assert.Equal(Phase80PersonalHomeIntentRouter.MediumRisk, ReadString(createResult.Body, "data", "riskLevel"));
         Assert.True(ReadBool(createResult.Body, "data", "requiresPendingAction"));
         Assert.Equal("inferred_from_home_input", ReadString(createResult.Body, "data", "routeReason"));
-        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetNone, ReadString(createResult.Body, "data", "confirmTarget"));
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetPlanSignals, ReadString(createResult.Body, "data", "confirmTarget"));
         Assert.False(ReadBool(createResult.Body, "data", "confirmWriteEnabled"));
         Assert.Equal("confirmed", ReadString(confirmResult.Body, "data", "status"));
         Assert.False(ReadBool(confirmResult.Body, "data", "executed"));
@@ -260,7 +260,7 @@ public class UnifiedInboxEndpointsTest
         Assert.False(ReadBool(confirmResult.Body, "data", "realWritePath"));
         Assert.Equal(Phase80PendingActionRuntime.MemoryCandidateTarget, ReadString(confirmResult.Body, "data", "memoryTarget"));
         Assert.False(ReadBool(confirmResult.Body, "data", "memoryWriteEnabled"));
-        Assert.Contains("未写入计划数据", ReadString(confirmResult.Body, "message"));
+        Assert.Contains("未写入计划线索", ReadString(confirmResult.Body, "message"));
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Home;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
+using LifeAgent.Api.Services.Plans;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LifeAgent.Tests;
@@ -93,10 +94,30 @@ public class HomeOverviewServiceTest
         Assert.Equal("rem_soon", overview.LatestReminder!.Id);
     }
 
+    [Fact]
+    public async Task BuildAsync_IncludesPlanSignalCountAndLatestSignal()
+    {
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            new InMemoryMemoryRepository(),
+            planSignals: new[]
+            {
+                PlanSignal("plan_old", "旧计划", minutesAgo: 20),
+                PlanSignal("plan_new", "新计划", minutesAgo: 5)
+            });
+
+        var overview = await service.BuildAsync("user_a");
+
+        Assert.Equal(2, overview.PlanSignalCount);
+        Assert.NotNull(overview.LatestPlanSignal);
+        Assert.Equal("plan_new", overview.LatestPlanSignal!.Id);
+    }
+
     private static HomeOverviewService Service(
         IReadOnlyList<LifeEvent> events,
         IMemoryRepository memoryRepository,
         IReadOnlyList<Reminder>? reminders = null,
+        IReadOnlyList<PlanSignal>? planSignals = null,
         IMemoryReviewStateStore? reviewStateStore = null)
     {
         return new HomeOverviewService(
@@ -107,7 +128,8 @@ public class HomeOverviewServiceTest
                 NullLogger<PersonalContextService>.Instance),
             new MemoryInsightPreviewService(new MemoryExtractionService(new MemoryProposalGuard())),
             new MemoryReviewInboxPreviewService(),
-            reviewStateStore ?? new FakeMemoryReviewStateStore());
+            reviewStateStore ?? new FakeMemoryReviewStateStore(),
+            new FakePlanSignalService(planSignals ?? Array.Empty<PlanSignal>()));
     }
 
     private static LifeEvent Event(string id, string title, string content, int minutesAgo)
@@ -137,6 +159,22 @@ public class HomeOverviewServiceTest
             DueAt = dueAt,
             Timezone = "Asia/Shanghai",
             Status = status
+        };
+    }
+
+    private static PlanSignal PlanSignal(string id, string title, int minutesAgo)
+    {
+        var createdAt = DateTime.UtcNow.AddMinutes(-minutesAgo);
+        return new PlanSignal
+        {
+            Id = id,
+            UserId = "user_a",
+            Kind = "plan",
+            Title = title,
+            Content = title,
+            Status = "active",
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
         };
     }
 
@@ -172,6 +210,44 @@ public class HomeOverviewServiceTest
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException("FakeMemoryReviewStateStore is read-only.");
+        }
+    }
+
+    private sealed class FakePlanSignalService : IPlanSignalService
+    {
+        private readonly IReadOnlyList<PlanSignal> _signals;
+
+        public FakePlanSignalService(IReadOnlyList<PlanSignal> signals)
+        {
+            _signals = signals;
+        }
+
+        public Task<PlanSignal> CreateAsync(
+            string userId,
+            PlanSignal signal,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("FakePlanSignalService is read-only.");
+        }
+
+        public Task<IReadOnlyList<PlanSignal>> ListAsync(
+            string userId,
+            string status = "active",
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<PlanSignal>>(_signals
+                .Where(signal => signal.UserId == userId)
+                .Where(signal => string.Equals(signal.Status, status, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(signal => signal.CreatedAt)
+                .ToList());
+        }
+
+        public Task<bool> ArchiveAsync(
+            string userId,
+            string signalId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("FakePlanSignalService is read-only.");
         }
     }
 }

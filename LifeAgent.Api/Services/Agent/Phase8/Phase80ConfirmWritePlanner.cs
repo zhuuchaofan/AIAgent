@@ -28,10 +28,12 @@ public sealed partial class Phase80PendingActionRuntime
                     ? "reminder_confirm_write_allowed_by_policy"
                     : "reminder_confirm_write_disabled_until_beta_gate"),
             PlanPreview => new Phase80ConfirmExecutionPlan(
-                Target: ConfirmTargetNone,
-                WriteEnabled: false,
+                Target: ConfirmTargetPlanSignals,
+                WriteEnabled: policy.AllowPlanSignalWrites,
                 MemoryCandidateOnly: true,
-                Reason: "plan_confirm_preview_only_until_planning_store_exists"),
+                Reason: policy.AllowPlanSignalWrites
+                    ? "plan_signal_confirm_write_allowed_by_policy"
+                    : "plan_confirm_preview_only_until_planning_store_exists"),
             _ => new Phase80ConfirmExecutionPlan(
                 Target: ConfirmTargetNone,
                 WriteEnabled: false,

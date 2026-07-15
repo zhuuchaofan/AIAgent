@@ -19,6 +19,7 @@ public sealed partial class Phase80PendingActionRuntime
     public const string GuardDecision = "deny_all_no_real_execution";
     public const string ConfirmTargetLifeEvents = "life_events";
     public const string ConfirmTargetReminders = "reminders";
+    public const string ConfirmTargetPlanSignals = "plan_signals";
     public const string ConfirmTargetNone = "none";
     public const string MemoryCandidateTarget = "memory_candidate";
 

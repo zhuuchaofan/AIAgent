@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Bell, BookOpen, Brain, Calendar, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import { Bell, BookOpen, Brain, Calendar, ClipboardList, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
@@ -14,12 +14,14 @@ function InsightCard({
   insights,
   reviewCandidateCount,
   memoryCount,
+  planSignalCount,
   isLoading,
   error,
 }: {
   insights: MemoryInsight[];
   reviewCandidateCount: number;
   memoryCount: number;
+  planSignalCount: number;
   isLoading: boolean;
   error: string | null;
 }) {
@@ -82,6 +84,14 @@ function InsightCard({
           >
             {memoryCountText}
           </Link>
+          {planSignalCount > 0 && (
+            <Link
+              href="/plans"
+              className="mt-2 block text-sm text-cyan-300 transition-colors hover:text-cyan-200"
+            >
+              查看 {planSignalCount} 条计划线索
+            </Link>
+          )}
         </div>
       </div>
     </section>
@@ -206,6 +216,13 @@ export default function Home() {
                 <Bell className="h-3.5 w-3.5" />
                 提醒事项
               </Link>
+              <Link
+                href="/plans"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                计划线索
+              </Link>
             </nav>
           )}
         </header>
@@ -261,6 +278,7 @@ export default function Home() {
               insights={overview?.insights ?? []}
               reviewCandidateCount={overview?.memoryReviewCandidateCount ?? 0}
               memoryCount={overview?.memoryCount ?? 0}
+              planSignalCount={overview?.planSignalCount ?? 0}
               isLoading={isLoadingOverview}
               error={overviewError}
             />

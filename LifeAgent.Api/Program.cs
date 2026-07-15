@@ -14,6 +14,7 @@ using LifeAgent.Api.Services.Home;
 using LifeAgent.Api.Services.LifeEvents;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
+using LifeAgent.Api.Services.Plans;
 using LifeAgent.Api.Services.Reminders;
 using LifeAgent.Api.Endpoints;
 using Microsoft.Extensions.Options;
@@ -46,6 +47,7 @@ builder.Services.AddScoped<ILifeChatService, LifeChatService>();
 builder.Services.AddScoped<ILifeReviewService, LifeReviewService>();
 builder.Services.AddScoped<ILifeReviewMemoryCandidateService, LifeReviewMemoryCandidateService>();
 builder.Services.AddScoped<IReminderService, ReminderService>();
+builder.Services.AddScoped<IPlanSignalService, FirestorePlanSignalService>();
 builder.Services.AddScoped<IDailySummaryService, DailySummaryService>();
 builder.Services.AddHttpClient<IFirestoreVectorStore, RestFirestoreVectorStore>();
 builder.Services.AddScoped<IRagChatService, RagChatService>();
@@ -76,9 +78,11 @@ builder.Services.AddSingleton<IPendingActionStore>(sp =>
         sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<Phase80LifeEventConfirmWriteExecutor>();
 builder.Services.AddScoped<Phase80ReminderConfirmWriteExecutor>();
+builder.Services.AddScoped<Phase80PlanSignalConfirmWriteExecutor>();
 builder.Services.AddScoped<IPhase80ConfirmWriteExecutor>(sp => new Phase80ConfirmWriteExecutorRouter(
     sp.GetRequiredService<Phase80LifeEventConfirmWriteExecutor>(),
-    sp.GetRequiredService<Phase80ReminderConfirmWriteExecutor>()));
+    sp.GetRequiredService<Phase80ReminderConfirmWriteExecutor>(),
+    sp.GetRequiredService<Phase80PlanSignalConfirmWriteExecutor>()));
 builder.Services.AddScoped<IUnifiedInboxIntentClassifier, LlmUnifiedInboxIntentClassifier>();
 builder.Services.AddScoped<Phase80PendingActionRuntime>(sp =>
 {
@@ -93,7 +97,8 @@ builder.Services.AddScoped<Phase80PendingActionRuntime>(sp =>
             : "personal_agent_v2_life_record_confirm_write_only",
         confirmWritePolicy: new Phase80ConfirmWritePolicy(
             AllowLifeEventWrites: confirmWriteOptions.AllowLifeEventWrites,
-            AllowReminderWrites: confirmWriteOptions.AllowReminderWrites),
+            AllowReminderWrites: confirmWriteOptions.AllowReminderWrites,
+            AllowPlanSignalWrites: true),
         confirmWriteExecutor: sp.GetRequiredService<IPhase80ConfirmWriteExecutor>(),
         intentClassifier: sp.GetRequiredService<IUnifiedInboxIntentClassifier>(),
         logger: sp.GetRequiredService<ILogger<Phase80PendingActionRuntime>>(),
@@ -273,6 +278,7 @@ app.UseRateLimiter();
 app.MapLifeEndpoints();
 app.MapHomeEndpoints();
 app.MapReminderEndpoints();
+app.MapPlanSignalEndpoints();
 app.MapDailySummaryEndpoints();
 app.MapMigrationEndpoints();
 app.MapDocumentEndpoints();

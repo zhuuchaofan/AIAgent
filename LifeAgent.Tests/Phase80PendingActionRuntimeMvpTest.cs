@@ -4,6 +4,7 @@ using LifeAgent.Api.Services.Agent.PendingActions;
 using LifeAgent.Api.Services.Agent.Phase8;
 using LifeAgent.Api.Services.Agent.UnifiedInbox;
 using LifeAgent.Api.Services.LifeEvents;
+using LifeAgent.Api.Services.Plans;
 using LifeAgent.Api.Services.Reminders;
 
 public class Phase80PendingActionRuntimeMvpTest
@@ -275,6 +276,10 @@ public class Phase80PendingActionRuntimeMvpTest
     {
         var lifeOnly = new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false);
         var reminderOnly = new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true);
+        var planOnly = new Phase80ConfirmWritePolicy(
+            AllowLifeEventWrites: false,
+            AllowReminderWrites: false,
+            AllowPlanSignalWrites: true);
 
         var lifeRecordPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
             Phase80PendingActionRuntime.LifeRecordPreview,
@@ -282,15 +287,22 @@ public class Phase80PendingActionRuntimeMvpTest
         var reminderPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
             Phase80PendingActionRuntime.ReminderPreview,
             reminderOnly);
+        var planPlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.PlanPreview,
+            planOnly);
 
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetLifeEvents, lifeRecordPlan.Target);
         Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetReminders, reminderPlan.Target);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetPlanSignals, planPlan.Target);
         Assert.True(lifeRecordPlan.WriteEnabled);
         Assert.True(reminderPlan.WriteEnabled);
+        Assert.True(planPlan.WriteEnabled);
         Assert.True(lifeRecordPlan.MemoryCandidateOnly);
         Assert.True(reminderPlan.MemoryCandidateOnly);
+        Assert.True(planPlan.MemoryCandidateOnly);
         Assert.Contains("allowed_by_policy", lifeRecordPlan.Reason);
         Assert.Contains("allowed_by_policy", reminderPlan.Reason);
+        Assert.Contains("allowed_by_policy", planPlan.Reason);
     }
 
     [Fact]
@@ -496,7 +508,8 @@ public class Phase80PendingActionRuntimeMvpTest
                     DueAtIso8601 = "2026-07-15T01:00:00Z",
                     ParseStatus = "success"
                 }
-            }));
+            }),
+            new CapturingPlanSignalService());
         var plan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
             Phase80PendingActionRuntime.ReminderPreview,
             new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
@@ -524,9 +537,10 @@ public class Phase80PendingActionRuntimeMvpTest
     }
 
     [Fact]
-    public async Task ReminderConfirmWriteExecutorSkipsWhenDueTimeIsMissing()
+    public async Task ReminderConfirmWriteExecutorStoresSignalWhenDueTimeIsMissing()
     {
         var reminderService = new CapturingReminderService();
+        var planSignalService = new CapturingPlanSignalService();
         var executor = new Phase80ReminderConfirmWriteExecutor(
             reminderService,
             new FixedReminderLlmService(new ParsedEvent
@@ -541,7 +555,8 @@ public class Phase80PendingActionRuntimeMvpTest
                     DueAtIso8601 = null,
                     ParseStatus = "missing_due_time"
                 }
-            }));
+            }),
+            planSignalService);
         var plan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
             Phase80PendingActionRuntime.ReminderPreview,
             new Phase80ConfirmWritePolicy(AllowLifeEventWrites: false, AllowReminderWrites: true));
@@ -555,11 +570,46 @@ public class Phase80PendingActionRuntimeMvpTest
             Plan: plan,
             ClientTimeZone: "Asia/Shanghai"));
 
-        Assert.False(result.Success);
-        Assert.False(result.WroteData);
-        Assert.False(result.RealWritePath);
-        Assert.Equal("missing_due_time", result.Status);
+        Assert.True(result.Success);
+        Assert.True(result.WroteData);
+        Assert.True(result.RealWritePath);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetPlanSignals, result.Target);
         Assert.Empty(reminderService.Writes);
+        Assert.Single(planSignalService.Writes);
+        Assert.Equal("reminder_signal", planSignalService.Writes[0].Signal.Kind);
+        Assert.Equal("reminder_action_missing_time", planSignalService.Writes[0].Signal.SourceActionId);
+        Assert.Equal("买一本新书", planSignalService.Writes[0].Signal.Title);
+    }
+
+    [Fact]
+    public async Task PlanSignalConfirmWriteExecutorWritesPlanSignal()
+    {
+        var planSignalService = new CapturingPlanSignalService();
+        var executor = new Phase80PlanSignalConfirmWriteExecutor(planSignalService);
+        var plan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
+            Phase80PendingActionRuntime.PlanPreview,
+            new Phase80ConfirmWritePolicy(
+                AllowLifeEventWrites: false,
+                AllowReminderWrites: false,
+                AllowPlanSignalWrites: true));
+
+        var result = await executor.ExecuteAsync(new Phase80ConfirmExecutionRequest(
+            UserId: "user_a",
+            ActionId: "plan_action_123",
+            ActionType: Phase80PendingActionRuntime.PlanPreview,
+            Title: "计划：下周整理新疆路线",
+            Summary: "用户输入：下周整理新疆路线和装备",
+            Plan: plan));
+
+        Assert.True(result.Success);
+        Assert.True(result.WroteData);
+        Assert.True(result.RealWritePath);
+        Assert.Equal(Phase80PendingActionRuntime.ConfirmTargetPlanSignals, result.Target);
+        Assert.Single(planSignalService.Writes);
+        Assert.Equal("plan", planSignalService.Writes[0].Signal.Kind);
+        Assert.Equal("plan_action_123", planSignalService.Writes[0].Signal.SourceActionId);
+        Assert.Equal("下周整理新疆路线", planSignalService.Writes[0].Signal.Title);
+        Assert.Equal("下周整理新疆路线和装备", planSignalService.Writes[0].Signal.Content);
     }
 
     [Fact]
@@ -582,7 +632,8 @@ public class Phase80PendingActionRuntimeMvpTest
                         DueAtIso8601 = "2026-07-15T01:00:00Z",
                         ParseStatus = "success"
                     }
-                })));
+                }),
+                new CapturingPlanSignalService()));
         var lifePlan = Phase80PendingActionRuntime.ResolveConfirmExecutionPlan(
             Phase80PendingActionRuntime.LifeRecordPreview,
             new Phase80ConfirmWritePolicy(AllowLifeEventWrites: true, AllowReminderWrites: false));
@@ -1008,6 +1059,45 @@ public class Phase80PendingActionRuntimeMvpTest
         }
 
         public Task<bool> UpdateReminderAsync(string userId, string reminderId, string? status, DateTime? dueAt)
+        {
+            return Task.FromResult(false);
+        }
+    }
+
+    private sealed class CapturingPlanSignalService : IPlanSignalService
+    {
+        public List<(string UserId, PlanSignal Signal)> Writes { get; } = new();
+
+        public Task<PlanSignal> CreateAsync(
+            string userId,
+            PlanSignal signal,
+            CancellationToken cancellationToken = default)
+        {
+            signal.UserId = userId;
+            if (string.IsNullOrWhiteSpace(signal.Id))
+            {
+                signal.Id = "plan_test";
+            }
+
+            Writes.Add((userId, signal));
+            return Task.FromResult(signal);
+        }
+
+        public Task<IReadOnlyList<PlanSignal>> ListAsync(
+            string userId,
+            string status = "active",
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<PlanSignal>>(Writes
+                .Where(write => write.UserId == userId && write.Signal.Status == status)
+                .Select(write => write.Signal)
+                .ToList());
+        }
+
+        public Task<bool> ArchiveAsync(
+            string userId,
+            string signalId,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(false);
         }

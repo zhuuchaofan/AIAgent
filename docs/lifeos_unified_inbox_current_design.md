@@ -59,7 +59,7 @@ Classifier outputs map to the existing pending action types:
 |---|---|---|
 | `life_record` | `life_record_preview` | Confirm writes `life_events` |
 | `reminder` | `reminder_preview` | Confirm writes `reminders` when release gate is enabled |
-| `plan` | `plan_preview` | Preview-only |
+| `plan` | `plan_preview` | Confirm writes `plan_signals` |
 | unknown / external action | custom action type | No execution |
 
 Explicit requested action types remain supported for tests and compatibility,
@@ -80,6 +80,16 @@ reminder_preview
   -> Phase80ReminderConfirmWriteExecutor
   -> users/{userId}/reminders/{reminderId}
      only when AllowReminderWrites=true and a concrete due time exists
+
+plan_preview
+  -> Confirm
+  -> Phase80PlanSignalConfirmWriteExecutor
+  -> users/{userId}/plan_signals/{signalId}
+
+reminder_preview without concrete due time
+  -> Confirm
+  -> saved as users/{userId}/plan_signals/{signalId}
+     with kind=reminder_signal
 ```
 
 Code defaults in `Program.cs` intentionally keep reminder writes closed unless
@@ -97,7 +107,10 @@ This means:
 - Life record Confirm writes `life_events`.
 - Reminder Confirm can write `reminders` in the dedicated release-gate
   deployment, but missing-time reminders remain pending-only and do not create
-  timeless reminders.
+  timeless reminders. Missing-time reminder text is saved as a reminder signal
+  under plan signals so the user does not lose the thought.
+- Plan Confirm writes a lightweight plan signal. Plan signals are future-context
+  clues, not calendar events, tasks, notifications, or external executions.
 - Memory remains candidate-only.
 - External tools and MCP-style side effects remain closed.
 
@@ -134,6 +147,7 @@ on `/reminders`.
    - `GET /api/home/overview` returns the home page's first-screen read model:
      recent records, AI insights, Memory Review count, active Memory count,
      pending reminder count, and the nearest pending reminder.
+     It also returns active plan signal count and latest plan signal.
    - It is read-only and must not create pending actions, write Memory, create
      reminders, or execute tools.
 

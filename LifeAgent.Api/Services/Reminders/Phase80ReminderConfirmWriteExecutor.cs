@@ -1,5 +1,6 @@
 using LifeAgent.Api.Models;
 using LifeAgent.Api.Services.Agent.Phase8;
+using LifeAgent.Api.Services.Plans;
 
 namespace LifeAgent.Api.Services.Reminders;
 
@@ -8,13 +9,16 @@ public sealed class Phase80ReminderConfirmWriteExecutor : IPhase80ConfirmWriteEx
     private const string ExecutorId = "phase80_reminder_confirm_write_executor";
     private readonly IReminderService _reminderService;
     private readonly ILlmService _llmService;
+    private readonly IPlanSignalService _planSignalService;
 
     public Phase80ReminderConfirmWriteExecutor(
         IReminderService reminderService,
-        ILlmService llmService)
+        ILlmService llmService,
+        IPlanSignalService planSignalService)
     {
         _reminderService = reminderService;
         _llmService = llmService;
+        _planSignalService = planSignalService;
     }
 
     public Phase80ConfirmWriteExecutorReadiness GetReadiness(Phase80ConfirmExecutionPlan plan)
@@ -53,7 +57,12 @@ public sealed class Phase80ReminderConfirmWriteExecutor : IPhase80ConfirmWriteEx
         var dueAtIso = parsed.Reminder?.DueAtIso8601 ?? parsed.ReminderDueAtIso;
         if (string.IsNullOrWhiteSpace(dueAtIso))
         {
-            return Skipped(request, "reminder_due_time_missing", status: "missing_due_time");
+            return await SaveMissingTimeReminderSignalAsync(
+                request,
+                rawText,
+                FirstNonEmpty(parsed.Reminder?.Title, parsed.ReminderTitle, CleanReminderTitle(request.Title), rawText),
+                FirstNonEmpty(parsed.Reminder?.Description, parsed.ReminderDescription, rawText),
+                cancellationToken);
         }
 
         if (!DateTime.TryParse(dueAtIso, out var dueAt))
@@ -90,6 +99,39 @@ public sealed class Phase80ReminderConfirmWriteExecutor : IPhase80ConfirmWriteEx
             RealWritePath: true,
             ExecutorId: ExecutorId,
             Reason: "reminder_written_after_confirm");
+    }
+
+    private async Task<Phase80ConfirmWriteExecutionResult> SaveMissingTimeReminderSignalAsync(
+        Phase80ConfirmExecutionRequest request,
+        string rawText,
+        string title,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        var signal = new PlanSignal
+        {
+            Id = $"plan_{Guid.NewGuid():N}",
+            UserId = request.UserId,
+            Kind = "reminder_signal",
+            SourceActionId = request.ActionId,
+            SourceActionType = request.ActionType,
+            Title = title,
+            Content = string.IsNullOrWhiteSpace(description) ? rawText : description,
+            Status = "active",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        var created = await _planSignalService.CreateAsync(request.UserId, signal, cancellationToken);
+
+        return new Phase80ConfirmWriteExecutionResult(
+            Success: true,
+            Status: "written",
+            Target: Phase80PendingActionRuntime.ConfirmTargetPlanSignals,
+            ResourcePath: $"users/{request.UserId}/plan_signals/{created.Id}",
+            WroteData: true,
+            RealWritePath: true,
+            ExecutorId: ExecutorId,
+            Reason: "reminder_signal_written_after_confirm_missing_due_time");
     }
 
     private static Phase80ConfirmWriteExecutionResult Skipped(

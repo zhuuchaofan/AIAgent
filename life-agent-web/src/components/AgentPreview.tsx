@@ -17,6 +17,7 @@ interface Phase80PendingAction {
   actionType: string;
   wroteData: boolean;
   message: string;
+  confirmTarget?: string;
 }
 
 interface Phase80ActionResponse {
@@ -46,7 +47,7 @@ function actionTypeLabel(actionType: string): string {
 function actionTypeDescription(actionType: string): string {
   if (actionType === LIFE_RECORD_PREVIEW) return "保存后会出现在最近生活记录里。";
   if (actionType === REMINDER_PREVIEW) return "保存后会出现在提醒事项里；当前还不会发送系统通知。";
-  if (actionType === PLAN_PREVIEW) return "我先帮你把这个计划线索留住。";
+  if (actionType === PLAN_PREVIEW) return "保存后会出现在计划线索里。";
   return "我会先把它作为一条待保存内容处理。";
 }
 
@@ -168,7 +169,16 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
 
       if (draftAction.actionType === REMINDER_PREVIEW && response.data?.wroteData) {
         setDraftAction(null);
-        setMessage("已保存到提醒事项。");
+        setMessage(response.data.message?.includes("提醒线索")
+          ? "还缺少提醒时间，已先保存为提醒线索。"
+          : "已保存到提醒事项。");
+        onLifeRecordWritten?.();
+        return;
+      }
+
+      if (draftAction.actionType === PLAN_PREVIEW && response.data?.wroteData) {
+        setDraftAction(null);
+        setMessage("已保存到计划线索。");
         onLifeRecordWritten?.();
         return;
       }
@@ -192,8 +202,8 @@ export function AgentPreview({ onLifeRecordWritten }: { onLifeRecordWritten?: ()
           <PenLine className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-zinc-100">今天想记录什么？</h2>
-          <p className="mt-1 text-sm text-zinc-500">写一句话，我会帮你整理成生活记录。</p>
+          <h2 className="text-lg font-semibold text-zinc-100">今天想记下什么？</h2>
+          <p className="mt-1 text-sm text-zinc-500">可以记录生活、留下计划，或创建提醒。</p>
         </div>
       </div>
 

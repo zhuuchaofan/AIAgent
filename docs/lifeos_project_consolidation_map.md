@@ -23,17 +23,18 @@ Authoritative companion docs:
 ## Current One-line State
 
 LifeOS has completed the foundation, life data layer, RAG, Agent Preview,
-pending-action persistence, and three minimal user-confirmed real writes:
+pending-action persistence, and four minimal user-confirmed real writes:
 
 ```text
 Unified Inbox life_record Confirm -> life_events
 Unified Inbox reminder Confirm -> reminders, only when reminder write gate is enabled and due time exists
 Memory Review kept candidate Remember -> memories
+Unified Inbox plan Confirm -> plan_signals
 ```
 
 It is still not a fully autonomous personal Agent. Automatic Memory writes,
-reminder delivery/scheduling, Tool Execution, external side effects, and MCP
-remain closed.
+reminder delivery/scheduling, Tool Execution, external side effects, task
+execution, calendar integration, and MCP remain closed.
 
 ## Phase / Code / Docs Map
 
@@ -44,7 +45,7 @@ remain closed.
 | Phase 3 RAG | Complete | `DocumentEndpoints.cs`, `RagChatEndpoints.cs`, `RagSearchService.cs`, `RagChat.tsx`, `KnowledgeBase.tsx` | `docs/phase3/*` | Document upload, processing, vector search, citations, chat history. |
 | Phase 3.5 Stabilization | Absorbed | rate limiting, validators, deployment docs, tests | `docs/phase3_5/*`, `docs/skills/development/*` | Non-feature hardening. |
 | Phase 4 Agent MVP | Complete / legacy-compatible | `AgentRunner.cs`, `ToolExecutor.cs`, `/api/agent/run`, `/api/agent/confirm` | `docs/phase4/*` | Legacy Agent Preview path still exists, but is not the home mainline. |
-| Phase 5 Agent Write MVP | Live for LifeEvent and gated Reminder | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, confirm write executors, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`; confirmed reminders write `reminders` only when the reminder write gate is enabled and due time exists. |
+| Phase 5 Agent Write MVP | Live for LifeEvent, Plan Signals, and gated Reminder | `UnifiedInboxRuntime`, `Phase80PendingActionRuntime.cs`, `IUnifiedInboxIntentClassifier`, confirm write executors, `IPendingActionStore` | `docs/lifeos_unified_inbox_current_design.md` | Current home mainline. Confirmed life records write `life_events`; confirmed plans write `plan_signals`; confirmed reminders write `reminders` only when the reminder write gate is enabled and due time exists. |
 | Release Gate | Partially passed | Cloud Run revisions, Firestore writer, production smoke | `docs/phase5/*`, `docs/phase9_personal_agent_v2_release_gate.md` | LifeEvent minimal write approved/deployed. Reminder minimal write is release-gate enabled for confirmed reminders with concrete due time. Memory Review minimal write approved locally. Other write targets remain No-Go. |
 | Phase 6 Memory Engine | Minimal write gate | `Services/Memories/*`, `MemoryPreviewActionPayload`, memory guard/retrieval skeletons, `/api/memory/*` | `docs/phase6_*`, `docs/memory_review_inbox_state_release_gate.md`, `docs/memory_durable_write_release_gate_readiness.md` | Home AI insights and Memory Review Inbox can surface memory signals. Review candidates are separated into stable, observing, and likely one-off signals to reduce memory pollution. Kept review candidates can be explicitly remembered; automatic Memory write remains closed. |
 | Phase 7+ Tool Runtime | Architecture / skeletons | `Services/Agent/GuardedExecution/*`, `ToolRegistry.cs`, pending action interfaces | `docs/phase7_*` | Useful contracts and tests, not a license to execute external tools. |
@@ -65,6 +66,7 @@ life-agent-web/src/components/AgentPreview.tsx
   -> Phase80ConfirmWriteExecutorRouter
   -> Phase80LifeEventConfirmWriteExecutor for life_record_preview
   -> Phase80ReminderConfirmWriteExecutor for reminder_preview only when AllowReminderWrites is enabled
+  -> Phase80PlanSignalConfirmWriteExecutor for plan_preview
 ```
 
 ## Current Write Matrix
@@ -74,7 +76,7 @@ life-agent-web/src/components/AgentPreview.tsx
 | Life record | yes | yes | yes | `users/{userId}/life_events` |
 | Reminder | yes | yes | yes, only when release gate is enabled and due time exists | `users/{userId}/reminders` only if `AllowReminderWrites=true` |
 | Memory | candidate-only | yes when preview path produces it | no | none |
-| Plan | yes | yes | no | none |
+| Plan | yes | yes | yes | `users/{userId}/plan_signals` |
 | Tool / external action | possible as high-risk candidate | no execution | no | none |
 
 ## Current Memory Preview Surface
@@ -104,6 +106,7 @@ GET /api/home/overview
   -> Memory Review candidate count
   -> active Memory count
   -> pending reminder count and nearest pending reminder
+  -> active plan signal count and latest plan signal
   -> no durable write, no tool execution
 ```
 
@@ -167,6 +170,9 @@ The web product surfaces are:
   AI insights, Memory count, Memory Review count, and pending reminder summary.
 - `/reminders`: the user's confirmed pending reminders, grouped by overdue,
   today, tomorrow, and later, with complete/cancel actions only.
+- `/plans`: the user's confirmed plan signals and missing-time reminder
+  signals, with archive action only. These are future-context clues, not tasks,
+  calendar events, notifications, or executable plans.
 - `/memory/review`: a candidate inbox where the user can inspect, observe, remember, or hide signals.
 - `/memory`: the user's confirmed durable memories, with archive/forget and
   a bridge into Life Q&A for asking about one memory.

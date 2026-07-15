@@ -2,6 +2,7 @@ using LifeAgent.Api.Models;
 using LifeAgent.Api.Models.Memories;
 using LifeAgent.Api.Services.Memories;
 using LifeAgent.Api.Services.PersonalContext;
+using LifeAgent.Api.Services.Plans;
 
 namespace LifeAgent.Api.Services.Home;
 
@@ -15,17 +16,20 @@ public sealed class HomeOverviewService : IHomeOverviewService
     private readonly IMemoryInsightPreviewService _memoryInsightPreviewService;
     private readonly IMemoryReviewInboxPreviewService _memoryReviewInboxPreviewService;
     private readonly IMemoryReviewStateStore _memoryReviewStateStore;
+    private readonly IPlanSignalService _planSignalService;
 
     public HomeOverviewService(
         IPersonalContextService personalContextService,
         IMemoryInsightPreviewService memoryInsightPreviewService,
         IMemoryReviewInboxPreviewService memoryReviewInboxPreviewService,
-        IMemoryReviewStateStore memoryReviewStateStore)
+        IMemoryReviewStateStore memoryReviewStateStore,
+        IPlanSignalService planSignalService)
     {
         _personalContextService = personalContextService;
         _memoryInsightPreviewService = memoryInsightPreviewService;
         _memoryReviewInboxPreviewService = memoryReviewInboxPreviewService;
         _memoryReviewStateStore = memoryReviewStateStore;
+        _planSignalService = planSignalService;
     }
 
     public async Task<HomeOverviewData> BuildAsync(
@@ -52,6 +56,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
             userId,
             reviewPreview.Candidates.Select(candidate => candidate.Id).ToArray());
         var keptCandidates = await _memoryReviewStateStore.ListKeptCandidatesAsync(userId);
+        var planSignals = await _planSignalService.ListAsync(userId, "active", cancellationToken);
         var reviewCandidates = MemoryReviewInboxStateProjection.AddMissingKeptCandidates(
             MemoryReviewInboxStateProjection.Apply(reviewPreview, states),
             keptCandidates);
@@ -65,6 +70,8 @@ public sealed class HomeOverviewService : IHomeOverviewService
             MemoryCount = context.ActiveMemoryCount,
             PendingReminderCount = context.PendingReminderCount,
             LatestReminder = context.PendingReminders.FirstOrDefault() is { } reminder ? ToReminderDto(reminder) : null,
+            PlanSignalCount = planSignals.Count,
+            LatestPlanSignal = planSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
             ReadOnly = true,
             WroteData = false,
             Executed = false
@@ -102,6 +109,18 @@ public sealed class HomeOverviewService : IHomeOverviewService
             DueAt = reminder.DueAt.ToString("O"),
             Timezone = reminder.Timezone,
             Status = reminder.Status
+        };
+    }
+
+    private static HomeOverviewPlanSignalDto ToPlanSignalDto(PlanSignal signal)
+    {
+        return new HomeOverviewPlanSignalDto
+        {
+            Id = signal.Id,
+            Kind = signal.Kind,
+            Title = signal.Title,
+            Content = signal.Content,
+            CreatedAt = signal.CreatedAt.ToString("O")
         };
     }
 }

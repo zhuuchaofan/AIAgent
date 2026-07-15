@@ -17,6 +17,8 @@ public sealed class HomeOverviewData
     public int MemoryCount { get; set; }
     public int PendingReminderCount { get; set; }
     public HomeOverviewReminderDto? LatestReminder { get; set; }
+    public int PlanSignalCount { get; set; }
+    public HomeOverviewPlanSignalDto? LatestPlanSignal { get; set; }
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
     public bool Executed { get; set; } = false;
@@ -30,4 +32,13 @@ public sealed class HomeOverviewReminderDto
     public string DueAt { get; set; } = string.Empty;
     public string Timezone { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+}
+
+public sealed class HomeOverviewPlanSignalDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
 }

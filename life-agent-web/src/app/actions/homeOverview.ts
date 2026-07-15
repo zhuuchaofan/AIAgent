@@ -15,6 +15,14 @@ export interface HomeOverviewReminder {
   status: string;
 }
 
+export interface HomeOverviewPlanSignal {
+  id: string;
+  kind: string;
+  title: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface HomeOverviewData {
   recentEvents: LifeEvent[];
   hasMoreRecentEvents: boolean;
@@ -23,6 +31,8 @@ export interface HomeOverviewData {
   memoryCount: number;
   pendingReminderCount: number;
   latestReminder?: HomeOverviewReminder | null;
+  planSignalCount: number;
+  latestPlanSignal?: HomeOverviewPlanSignal | null;
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;

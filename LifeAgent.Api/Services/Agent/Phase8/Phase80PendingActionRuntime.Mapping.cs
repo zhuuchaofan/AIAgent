@@ -53,7 +53,7 @@ public sealed partial class Phase80PendingActionRuntime
             MemoryRequiresConfirmation: memoryPlan.RequiresConfirmation,
             Message: status switch
             {
-                Confirmed when (executionResult?.WroteData ?? record.WroteData) => ConfirmedWrittenMessage(record.ActionType),
+                Confirmed when (executionResult?.WroteData ?? record.WroteData) => ConfirmedWrittenMessage(record.ActionType, executionResult),
                 Confirmed when executionResult?.Status == "missing_due_time" => "还缺少明确时间，暂未保存为提醒事项。",
                 Confirmed when executionResult?.Status == "invalid_due_time" => "提醒时间暂时无法识别，未保存为提醒事项。",
                 Confirmed => ConfirmedPreviewMessage(record.ActionType),
@@ -145,17 +145,27 @@ public sealed partial class Phase80PendingActionRuntime
         {
             LifeRecordPreview => "已确认生活记录；当前未写入 life_events，也未执行真实操作。",
             ReminderPreview => "已确认提醒；当前仍未写入 reminders，也未执行真实操作。",
-            PlanPreview => "已确认计划；当前仍未写入计划数据，也未执行真实操作。",
+            PlanPreview => "已确认计划；当前仍未写入计划线索，也未执行真实操作。",
             _ => "已确认，但未执行；没有写入数据，也没有执行真实操作。"
         };
     }
 
-    private static string ConfirmedWrittenMessage(string actionType)
+    private static string ConfirmedWrittenMessage(
+        string actionType,
+        Phase80ConfirmWriteExecutionResult? executionResult)
     {
+        if (string.Equals(executionResult?.Target, ConfirmTargetPlanSignals, StringComparison.Ordinal))
+        {
+            return actionType == ReminderPreview
+                ? "还缺少提醒时间，已先保存为提醒线索。"
+                : "已保存到计划线索。";
+        }
+
         return actionType switch
         {
             LifeRecordPreview => "已确认生活记录，并写入 life_events。",
             ReminderPreview => "已确认提醒，并写入 reminders。",
+            PlanPreview => "已保存到计划线索。",
             _ => ConfirmedPreviewMessage(actionType)
         };
     }

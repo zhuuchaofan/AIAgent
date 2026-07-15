@@ -124,13 +124,15 @@ public sealed record Phase80ConfirmWriteExecutorReadiness(
 
 public sealed record Phase80ConfirmWritePolicy(
     bool AllowLifeEventWrites,
-    bool AllowReminderWrites)
+    bool AllowReminderWrites,
+    bool AllowPlanSignalWrites = false)
 {
     public static Phase80ConfirmWritePolicy DefaultPreviewOnly()
     {
         return new Phase80ConfirmWritePolicy(
             AllowLifeEventWrites: false,
-            AllowReminderWrites: false);
+            AllowReminderWrites: false,
+            AllowPlanSignalWrites: false);
     }
 }
 
