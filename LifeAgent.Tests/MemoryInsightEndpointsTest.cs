@@ -143,6 +143,62 @@ public class MemoryInsightEndpointsTest
             repository));
     }
 
+    [Fact]
+    public void BuildQualityHints_FlagsDuplicateExpiringAndGenericMemories()
+    {
+        var expiring = new Memory
+        {
+            Id = "mem_expiring",
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我近期在准备新疆旅行路线。",
+            Importance = 4,
+            ExpiresAt = DateTime.UtcNow.AddDays(2)
+        };
+        var duplicate = new Memory
+        {
+            Id = "mem_duplicate",
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我最近准备新疆旅行和路线。",
+            Importance = 4,
+            ExpiresAt = DateTime.UtcNow.AddDays(20)
+        };
+        var generic = new Memory
+        {
+            Id = "mem_generic",
+            Type = MemoryType.Preference.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "计划",
+            Importance = 3
+        };
+
+        var expiringHints = MemoryInsightEndpoints.BuildQualityHints(expiring, new[] { expiring, duplicate });
+        var genericHints = MemoryInsightEndpoints.BuildQualityHints(generic, new[] { generic });
+
+        Assert.Contains(expiringHints, hint => hint.Kind == "expiring_soon");
+        Assert.Contains(expiringHints, hint => hint.Kind == "possible_duplicate");
+        Assert.Contains(genericHints, hint => hint.Kind == "too_generic");
+        Assert.All(expiringHints.Concat(genericHints), hint => Assert.False(string.IsNullOrWhiteSpace(hint.SuggestedAction)));
+    }
+
+    [Fact]
+    public void BuildQualityHints_DoesNotFlagHealthySpecificMemory()
+    {
+        var memory = new Memory
+        {
+            Id = "mem_specific",
+            Type = MemoryType.Goal.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我计划在七月底前完成 LifeOS 最近回顾优化。",
+            Importance = 4
+        };
+
+        var hints = MemoryInsightEndpoints.BuildQualityHints(memory, new[] { memory });
+
+        Assert.Empty(hints);
+    }
+
     private static DefaultHttpContext AuthenticatedContext(string userId)
     {
         var context = new DefaultHttpContext();

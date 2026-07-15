@@ -202,8 +202,9 @@ on `/reminders`.
    - `PUT /api/memory/items/{memoryId}` supports explicit user edits for
      remembered content, type, importance, and temporary-context expiry. It
      preserves owner, source, status, supporting event ids, and creation time.
-     The `/memory` UI may show possible duplicate hints, but no automatic merge
-     or delete is performed.
+     The `/memory` UI may show read-only `qualityHints` for possible
+     duplicates, expiring or missing-expiry temporary context, and overly
+     generic content, but no automatic merge, delete, or rewrite is performed.
    - `POST /api/memory/review-inbox/{candidateId}/keep|dismiss` persists
      Review Inbox status to `users/{userId}/memory_review_items`.
    - `POST /api/memory/review-inbox/{candidateId}/remember` writes an edited,

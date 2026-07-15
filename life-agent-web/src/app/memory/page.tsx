@@ -78,40 +78,6 @@ function toIsoOrNull(value: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function extractFragments(text: string): Set<string> {
-  const fragments = new Set<string>();
-  const normalized = text.toLowerCase().replace(/[^\p{Script=Han}a-z0-9]+/gu, " ");
-  for (const token of normalized.split(/\s+/u).filter(Boolean)) {
-    if (/^[a-z0-9]+$/u.test(token)) {
-      if (token.length >= 3) fragments.add(token);
-      continue;
-    }
-
-    for (let index = 0; index < token.length - 1; index += 1) {
-      const fragment = token.slice(index, index + 2);
-      if (!["一个", "事情", "今天", "最近", "近期", "计划", "目标", "关注", "记录", "记住", "内容"].includes(fragment)) {
-        fragments.add(fragment);
-      }
-    }
-  }
-  return fragments;
-}
-
-function hasLikelyDuplicate(memory: MemoryItem, memories: MemoryItem[]): boolean {
-  const left = extractFragments(memory.content);
-  if (left.size < 2) return false;
-
-  return memories.some(other => {
-    if (other.id === memory.id || other.type !== memory.type) return false;
-    const right = extractFragments(other.content);
-    let overlap = 0;
-    left.forEach(fragment => {
-      if (right.has(fragment)) overlap += 1;
-    });
-    return overlap >= 2;
-  });
-}
-
 export default function MemoryPage() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [activeType, setActiveType] = useState("all");
@@ -282,7 +248,7 @@ export default function MemoryPage() {
           <div className="space-y-4">
             {memories.map(memory => {
               const isEditing = editingId === memory.id;
-              const duplicate = hasLikelyDuplicate(memory, memories);
+              const qualityHints = memory.qualityHints ?? [];
 
               return (
               <article key={memory.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -300,11 +266,14 @@ export default function MemoryPage() {
                           来自 {memory.sourceEventIds.length} 条生活记录
                         </span>
                       )}
-                      {duplicate && !isEditing && (
-                        <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
-                          可能重复
+                      {qualityHints.slice(0, 2).map(hint => (
+                        <span
+                          key={`${memory.id}-${hint.kind}`}
+                          className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
+                        >
+                          {hint.label}
                         </span>
-                      )}
+                      ))}
                     </div>
 
                     {isEditing && editDraft ? (
@@ -367,10 +336,19 @@ export default function MemoryPage() {
                         <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">
                           {memoryUsageText(memory)}
                         </p>
-                        {duplicate && (
-                          <p className="mt-2 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-100/80">
-                            这条记忆和同类型的另一条内容有重合。你可以编辑得更准确，或归档不再需要的一条。
-                          </p>
+                        {qualityHints.length > 0 && (
+                          <div className="mt-2 space-y-2">
+                            {qualityHints.map(hint => (
+                              <div
+                                key={`${memory.id}-quality-${hint.kind}`}
+                                className="rounded-xl border border-amber-500/15 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-100/80"
+                              >
+                                <p className="font-medium text-amber-100">{hint.label}</p>
+                                <p className="mt-1">{hint.detail}</p>
+                                <p className="mt-1 text-amber-100/60">{hint.suggestedAction}</p>
+                              </div>
+                            ))}
+                          </div>
                         )}
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
                           <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">

@@ -16,6 +16,14 @@ export interface MemoryItem {
   createdAt: string;
   updatedAt?: string | null;
   expiresAt?: string | null;
+  qualityHints?: MemoryItemQualityHint[];
+}
+
+export interface MemoryItemQualityHint {
+  kind: "possible_duplicate" | "expiring_soon" | "missing_expiry" | "too_generic" | string;
+  label: string;
+  detail: string;
+  suggestedAction: string;
 }
 
 export interface MemoryItemUpdateInput {

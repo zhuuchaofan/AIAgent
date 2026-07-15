@@ -140,8 +140,9 @@ public sealed class MemoryItemDto
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
+    public IReadOnlyList<MemoryItemQualityHintDto> QualityHints { get; set; } = Array.Empty<MemoryItemQualityHintDto>();
 
-    public static MemoryItemDto FromMemory(Memory memory)
+    public static MemoryItemDto FromMemory(Memory memory, IReadOnlyList<MemoryItemQualityHintDto>? qualityHints = null)
     {
         return new MemoryItemDto
         {
@@ -155,7 +156,16 @@ public sealed class MemoryItemDto
             Status = memory.Status,
             CreatedAt = memory.CreatedAt,
             UpdatedAt = memory.UpdatedAt,
-            ExpiresAt = memory.ExpiresAt
+            ExpiresAt = memory.ExpiresAt,
+            QualityHints = qualityHints ?? Array.Empty<MemoryItemQualityHintDto>()
         };
     }
+}
+
+public sealed class MemoryItemQualityHintDto
+{
+    public string Kind { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public string SuggestedAction { get; set; } = string.Empty;
 }

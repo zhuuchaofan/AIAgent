@@ -146,6 +146,7 @@ GET /api/memory/context/preview
 GET /api/memory/items
   -> list current user's durable memories
   -> default active only
+  -> return read-only qualityHints for duplicates, expiring context, and generic content
 
 POST /api/memory/items/{memoryId}/archive
   -> archive current user's memory
@@ -186,8 +187,11 @@ The web product surfaces are:
   signals, with archive action only. These are future-context clues, not tasks,
   calendar events, notifications, or executable plans.
 - `/memory/review`: a candidate inbox where the user can inspect, observe, remember, or hide signals.
-- `/memory`: the user's confirmed durable memories, with archive/forget and
-  a bridge into Life Q&A for asking about one memory.
+- `/memory`: the user's confirmed durable memories, with archive/forget,
+  explicit edit, read-only quality hints, and a bridge into Life Q&A for asking
+  about one memory. Quality hints can flag likely duplicates, expiring recent
+  context, missing expiry, or overly generic content; they do not auto-merge,
+  auto-delete, or rewrite Memory.
 - `/life/chat`: read-only life Q&A based on recent life records, pending
   reminders, and active memories, with product feedback when reminders or
   remembered content contributed to the answer context. Assistant answers may
