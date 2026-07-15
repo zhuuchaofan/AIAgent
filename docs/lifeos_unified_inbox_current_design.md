@@ -151,7 +151,8 @@ on `/reminders`.
      It returns up to three read-only `todayFocus` items ranked from overdue or
      near-term reminders, Memory-related plan signals, and recent patterns that
      agree with active Memory. The optional browser time zone is used for local
-     due-date boundaries.
+     due-date boundaries. Weak generic overlap is not enough to promote an
+     undated plan signal into today focus.
      It also returns a read-only `dailyBrief` with a short summary, up to four
      explainable signals, and context counts drawn from recent records, active
      Memory, pending reminders, plan signals, and pending Memory Review
@@ -182,7 +183,9 @@ on `/reminders`.
      Context threads on the same endpoint are also read-only: they may explain
      why a reminder, plan, memory, or repeated record pattern matters now, but
      the Home UI presents them as a lightweight summary and they do not create
-     or modify any underlying resource.
+     or modify any underlying resource. A plan-memory context thread requires a
+     concrete overlap; generic words such as "project" or "work" alone are not
+     sufficient.
    - `POST /api/life/review` can attach read-only evidence hints to review
      cards when active Memory or active Plan Signals overlap with the card
      context. These hints are navigation/explanation only and do not create

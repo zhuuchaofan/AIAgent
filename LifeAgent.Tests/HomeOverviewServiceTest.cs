@@ -342,7 +342,7 @@ public class HomeOverviewServiceTest
     }
 
     [Fact]
-    public async Task BuildAsync_IncludesPlanRelatedToRepeatedRecentPatternWithoutMemory()
+    public async Task BuildAsync_DoesNotPromoteMemorylessRepeatedPatternPlanToTodayFocus()
     {
         var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
         var service = Service(
@@ -357,14 +357,10 @@ public class HomeOverviewServiceTest
 
         var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
 
-        var focus = Assert.Single(overview.TodayFocus);
-        Assert.Equal("plan_project", focus.Id);
-        Assert.Equal("recent_pattern", focus.Basis);
-        Assert.Equal("重复", focus.PriorityLabel);
-        Assert.Equal("查看计划", focus.ActionLabel);
+        Assert.Empty(overview.TodayFocus);
         Assert.Contains(overview.DailyBrief.Signals, signal =>
             signal.Basis == "recent_pattern" &&
-            signal.ActionLabel == "查看计划");
+            signal.ActionLabel == "查看回顾");
     }
 
     [Fact]
@@ -381,7 +377,52 @@ public class HomeOverviewServiceTest
 
         Assert.Empty(overview.TodayFocus);
         Assert.Empty(overview.ContextThreads);
-        Assert.DoesNotContain(overview.DailyBrief.Signals, signal => signal.Basis == "recent_pattern");
+        Assert.DoesNotContain(overview.DailyBrief.Signals, signal => signal.Id == "plan_pattern_plan_project");
+    }
+
+    [Fact]
+    public async Task BuildAsync_DoesNotPromoteWeakMemoryPlanOverlapToHomeFocus()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var memoryRepository = new InMemoryMemoryRepository();
+        await memoryRepository.CreateAsync("user_a", new Memory
+        {
+            Type = MemoryType.TemporaryContext.ToSnakeCaseString(),
+            Status = MemoryStatus.Active.ToSnakeCaseString(),
+            Content = "我最近工作项目比较多。",
+            Importance = 4
+        });
+        var service = Service(
+            Array.Empty<LifeEvent>(),
+            memoryRepository,
+            planSignals: new[] { PlanSignal("plan_project", "项目安排", minutesAgo: 5) },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        Assert.Empty(overview.TodayFocus);
+        Assert.Empty(overview.ContextThreads);
+        Assert.DoesNotContain(overview.DailyBrief.Signals, signal => signal.Basis == "memory_related_plan");
+    }
+
+    [Fact]
+    public async Task BuildAsync_DoesNotPromoteWeakRepeatedPatternPlan()
+    {
+        var now = new DateTimeOffset(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
+        var service = Service(
+            new[]
+            {
+                Event("evt_project_1", "项目", "今天项目有一点进展。", minutesAgo: 20),
+                Event("evt_project_2", "项目", "昨天也记录了项目。", minutesAgo: 40)
+            },
+            new InMemoryMemoryRepository(),
+            planSignals: new[] { PlanSignal("plan_project", "项目安排", minutesAgo: 5) },
+            timeProvider: new FixedTimeProvider(now));
+
+        var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
+
+        Assert.Empty(overview.TodayFocus);
+        Assert.DoesNotContain(overview.DailyBrief.Signals, signal => signal.Id == "plan_pattern_plan_project");
     }
 
     [Fact]

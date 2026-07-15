@@ -91,6 +91,41 @@ interface AiActionLink {
   tone: "indigo" | "cyan" | "zinc";
 }
 
+function selectAiActionLinks({
+  pendingReviewCandidateCount,
+  memoryCount,
+  planSignalCount,
+}: {
+  pendingReviewCandidateCount: number;
+  memoryCount: number;
+  planSignalCount: number;
+}): AiActionLink[] {
+  const candidates: AiActionLink[] = [
+    ...(pendingReviewCandidateCount > 0
+      ? [{ href: "/memory/review", label: `判断 ${pendingReviewCandidateCount} 条记忆线索`, tone: "indigo" as const }]
+      : []),
+    { href: "/life/review", label: "查看最近回顾", tone: "indigo" },
+    ...(memoryCount > 0
+      ? [{ href: "/memory", label: "查看我的记忆", tone: "zinc" as const }]
+      : []),
+    ...(planSignalCount > 0
+      ? [{ href: "/plans", label: `查看 ${planSignalCount} 条计划线索`, tone: "cyan" as const }]
+      : []),
+    { href: "/life/chat", label: "问问最近状态", tone: "zinc" },
+  ];
+
+  const seen = new Set<string>();
+  return candidates
+    .filter(link => {
+      if (seen.has(link.href)) {
+        return false;
+      }
+      seen.add(link.href);
+      return true;
+    })
+    .slice(0, 2);
+}
+
 function DailyActionCard({
   todayFocus,
   reminders,
@@ -239,23 +274,18 @@ function DailyAiPanel({
   isLoading: boolean;
   error: string | null;
 }) {
-  const reviewLinkText = pendingReviewCandidateCount > 0
-    ? `查看 ${pendingReviewCandidateCount} 条待确认线索`
-    : "查看可能值得记住的事";
   const memoryCountText = isLoading ? "已记住 -- 条" : `已记住 ${memoryCount} 条`;
   const hasMemoryLoop = reviewCandidateCount > 0 || memoryCount > 0;
   const primaryThread = contextThreads?.[0];
-  const summary = dailyBrief?.summary || "继续记录后，我会把最近值得关注的变化整理在这里。";
-  const actionLinks: AiActionLink[] = [
-    pendingReviewCandidateCount > 0
-      ? { href: "/memory/review", label: reviewLinkText, tone: "indigo" }
-      : { href: "/life/review", label: "查看最近回顾", tone: "indigo" },
-    memoryCount > 0
-      ? { href: "/memory", label: "查看我的记忆", tone: "zinc" }
-      : planSignalCount > 0
-        ? { href: "/plans", label: `查看 ${planSignalCount} 条计划线索`, tone: "cyan" }
-        : { href: "/life/chat", label: "问问最近状态", tone: "zinc" },
-  ];
+  const hasBriefSignals = Boolean(dailyBrief?.signals?.some(signal => signal.basis !== "empty_context"));
+  const summary = hasBriefSignals
+    ? dailyBrief?.summary || "我会把最近值得关注的变化整理在这里。"
+    : "继续记录后，我会把真正反复出现的事放到这里。";
+  const actionLinks = selectAiActionLinks({
+    pendingReviewCandidateCount,
+    memoryCount,
+    planSignalCount,
+  });
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">

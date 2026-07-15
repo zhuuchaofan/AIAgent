@@ -74,7 +74,8 @@ Expected:
 - At most three items are shown.
 - Overdue and locally due-today reminders are prioritized.
 - An undated plan signal appears only when an active Memory or a repeated
-  recent pattern clearly supports its relevance.
+  recent pattern clearly supports its relevance; weak generic overlap should
+  stay out of the main today-focus list.
 - A personalized insight requires both active remembered context and recent
   record evidence.
 - Each item explains why it matters and links to its read-only detail or
@@ -90,6 +91,8 @@ Expected:
 - A brief summary explains why today's signals matter.
 - Signals are grounded in pending reminders, active Memory, repeated recent
   themes, plan signals, or pending Memory Review candidates.
+- Repeated themes without active Memory support can appear as review prompts,
+  but should not promote a weak plan signal into today's main focus.
 - If there is a recent context thread, the home page shows only the most
   important thread summary inside this AI organizing area rather than expanding
   another full module.

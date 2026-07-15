@@ -18,6 +18,10 @@ public sealed class HomeOverviewService : IHomeOverviewService
         "一个", "事情", "今天", "最近", "近期", "计划", "目标", "希望", "需要", "关注", "继续", "准备", "相关", "记住",
         "状态", "个人", "背景", "记录", "整理", "反复", "出现", "内容"
     };
+    private static readonly HashSet<string> WeakSingleOverlapFragments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "项目", "工作", "生活", "时间", "任务", "安排", "看看", "处理"
+    };
 
     private readonly IPersonalContextService _personalContextService;
     private readonly IMemoryInsightPreviewService _memoryInsightPreviewService;
@@ -178,7 +182,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         {
             var signalText = $"{signal.Title} {signal.Content}";
             var relatedMemory = context.Memories
-                .Where(memory => HasMeaningfulOverlap(signalText, memory.Content))
+                .Where(memory => HasStrongOverlap(signalText, memory.Content))
                 .OrderByDescending(memory => memory.Importance)
                 .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
                 .FirstOrDefault();
@@ -201,7 +205,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
 
             if (insights.Any(insight =>
                     insight.SourceEventIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() >= 2 &&
-                    HasMeaningfulOverlap(signalText, insight.Text)))
+                    HasStrongOverlap(signalText, insight.Text)))
             {
                 candidates.Add(new DailyBriefCandidate(
                     ToBriefSignal(
@@ -407,7 +411,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         {
             var signalText = $"{signal.Title} {signal.Content}";
             var relatedMemory = context.Memories
-                .Where(memory => HasMeaningfulOverlap(signalText, memory.Content))
+                .Where(memory => HasStrongOverlap(signalText, memory.Content))
                 .OrderByDescending(memory => memory.Importance)
                 .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
                 .FirstOrDefault();
@@ -433,7 +437,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
 
             if (insights.Any(insight =>
                     insight.SourceEventIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() >= 2 &&
-                    HasMeaningfulOverlap(signalText, insight.Text)))
+                    HasStrongOverlap(signalText, insight.Text)))
             {
                 candidates.Add(new TodayFocusCandidate(
                     ToFocus(
@@ -524,6 +528,16 @@ public sealed class HomeOverviewService : IHomeOverviewService
         var leftFragments = ExtractMatchFragments(left);
         var rightFragments = ExtractMatchFragments(right);
         return leftFragments.Overlaps(rightFragments);
+    }
+
+    private static bool HasStrongOverlap(string left, string right)
+    {
+        var leftFragments = ExtractMatchFragments(left);
+        var rightFragments = ExtractMatchFragments(right);
+        var shared = leftFragments.Intersect(rightFragments, StringComparer.OrdinalIgnoreCase).ToArray();
+        return shared.Length >= 2 ||
+            shared.Any(fragment => fragment.Length >= 4) ||
+            shared.Any(fragment => !WeakSingleOverlapFragments.Contains(fragment));
     }
 
     private static string MemoryRelationReason(string memoryType)
