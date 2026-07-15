@@ -112,6 +112,7 @@ public sealed class FirestoreMemoryRepository : IMemoryRepository
         }
 
         existing.Content = memory.Content;
+        existing.Type = string.IsNullOrWhiteSpace(memory.Type) ? existing.Type : memory.Type;
         existing.Importance = memory.Importance;
         existing.ExpiresAt = memory.ExpiresAt;
         existing.Metadata = memory.Metadata;

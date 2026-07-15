@@ -18,6 +18,13 @@ export interface MemoryItem {
   expiresAt?: string | null;
 }
 
+export interface MemoryItemUpdateInput {
+  content: string;
+  type: string;
+  importance: number;
+  expiresAt?: string | null;
+}
+
 export async function getMemoryItems(status = "active", type?: string): Promise<MemoryItem[]> {
   const token = await getToken();
   if (!token) throw new Error("Unauthorized");
@@ -58,6 +65,28 @@ export async function archiveMemoryItem(memoryId: string): Promise<MemoryItem> {
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error?.message || "Failed to archive memory");
+  }
+
+  return data.data;
+}
+
+export async function updateMemoryItem(memoryId: string, input: MemoryItemUpdateInput): Promise<MemoryItem> {
+  const token = await getToken();
+  if (!token) throw new Error("Unauthorized");
+
+  const res = await fetch(`${API_BASE}/api/memory/items/${encodeURIComponent(memoryId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || "Failed to update memory");
   }
 
   return data.data;

@@ -134,6 +134,9 @@ public static class MemoryInsightEndpoints
             });
         }).RequireRateLimiting("auth-user");
 
+        group.MapPut("/items/{memoryId}", UpdateMemoryItemAsync)
+            .RequireRateLimiting("auth-user");
+
         group.MapPost("/review-inbox/{candidateId}/keep", async (
             string candidateId,
             HttpContext ctx,
@@ -250,6 +253,97 @@ public static class MemoryInsightEndpoints
                 Data = preview
             });
         }).RequireRateLimiting("auth-user");
+    }
+
+    public static async Task<IResult> UpdateMemoryItemAsync(
+        string memoryId,
+        MemoryItemUpdateRequest request,
+        HttpContext ctx,
+        IMemoryRepository memoryRepository)
+    {
+        var userId = ctx.Items["userId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            throw new UnauthorizedException();
+        }
+
+        if (string.IsNullOrWhiteSpace(memoryId))
+        {
+            throw new InvalidInputException("记忆 id 不能为空。");
+        }
+
+        if (request == null)
+        {
+            throw new InvalidInputException("记忆更新内容不能为空。");
+        }
+
+        var existing = await memoryRepository.GetAsync(userId, memoryId);
+        if (existing == null)
+        {
+            throw new InvalidInputException("这条记忆不存在或不属于当前用户。");
+        }
+
+        var nextType = string.IsNullOrWhiteSpace(request.Type)
+            ? existing.Type
+            : request.Type.Trim().ToLowerInvariant();
+        if (!MemoryTypeHelper.IsValid(nextType))
+        {
+            throw new InvalidInputException("不支持的记忆类型。");
+        }
+
+        var nextContent = request.Content?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(nextContent))
+        {
+            throw new InvalidInputException("记忆内容不能为空。");
+        }
+
+        var nextExpiresAt = string.Equals(nextType, MemoryType.TemporaryContext.ToSnakeCaseString(), StringComparison.OrdinalIgnoreCase)
+            ? request.ExpiresAt ?? existing.ExpiresAt
+            : null;
+
+        var updated = new Memory
+        {
+            Id = existing.Id,
+            UserId = existing.UserId,
+            Type = nextType,
+            Status = existing.Status,
+            Content = nextContent,
+            Importance = request.Importance,
+            Confidence = existing.Confidence,
+            Source = existing.Source,
+            SourceEventIds = existing.SourceEventIds.ToList(),
+            CreatedAt = existing.CreatedAt,
+            UpdatedAt = existing.UpdatedAt,
+            LastRecalledAt = existing.LastRecalledAt,
+            RecCount = existing.RecCount,
+            AgentActionId = existing.AgentActionId,
+            ExpiresAt = nextExpiresAt,
+            Metadata = existing.Metadata == null
+                ? null
+                : new Dictionary<string, object>(existing.Metadata)
+        };
+
+        try
+        {
+            var memory = await memoryRepository.UpdateAsync(userId, updated);
+            return Results.Ok(new MemoryItemResponse
+            {
+                Success = true,
+                Data = MemoryItemDto.FromMemory(memory)
+            });
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new InvalidInputException(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidInputException(ex.Message);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new InvalidInputException("这条记忆不存在或不属于当前用户。");
+        }
     }
 
     private static async Task<MemoryReviewInboxPreviewData> BuildReviewPreviewAsync(

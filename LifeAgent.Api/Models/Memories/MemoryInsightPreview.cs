@@ -119,6 +119,14 @@ public sealed class MemoryItemResponse
     public MemoryItemDto Data { get; set; } = new();
 }
 
+public sealed class MemoryItemUpdateRequest
+{
+    public string Content { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public int Importance { get; set; } = 3;
+    public DateTime? ExpiresAt { get; set; }
+}
+
 public sealed class MemoryItemDto
 {
     public string Id { get; set; } = string.Empty;

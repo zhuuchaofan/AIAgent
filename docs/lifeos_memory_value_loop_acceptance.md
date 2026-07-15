@@ -144,7 +144,21 @@ Expected:
 - The chat remains read-only: no life record, reminder, memory, or tool action
   is created.
 
-### 6. Use remembered context in recent review
+### 6. Manage remembered context
+
+Open `/memory`.
+
+Expected:
+
+- The user can edit remembered content, type, importance, and temporary-context
+  expiry through explicit UI actions.
+- Editing a Memory does not change its owner, source, supporting event ids, or
+  creation time.
+- Similar active memories may show a "possible duplicate" hint, but LifeOS does
+  not merge, delete, or rewrite memories automatically.
+- Archiving remains explicit and removes the item from the active Memory list.
+
+### 7. Use remembered context in recent review
 
 Open `/life/review`.
 

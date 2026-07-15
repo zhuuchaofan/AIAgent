@@ -112,12 +112,15 @@ public class InMemoryMemoryRepository : IMemoryRepository
 
         // 仅允许修改业务限制的可写字段与统计属性，保护 UserId / CreatedAt 不被篡改
         existing.Content = memory.Content;
+        existing.Type = string.IsNullOrWhiteSpace(memory.Type) ? existing.Type : memory.Type;
         existing.Importance = memory.Importance;
         existing.ExpiresAt = memory.ExpiresAt;
         existing.Metadata = memory.Metadata;
         existing.Confidence = memory.Confidence;
         existing.Status = memory.Status;
         existing.UpdatedAt = DateTime.UtcNow;
+
+        MemoryValidator.Validate(existing);
 
         return Task.FromResult(existing);
     }

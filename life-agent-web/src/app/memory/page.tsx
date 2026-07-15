@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Brain, Loader2, MessageCircle, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { archiveMemoryItem, getMemoryItems, type MemoryItem } from "@/app/actions/memoryItems";
+import { ArrowLeft, Brain, Loader2, MessageCircle, PenLine, RefreshCw, Save, Sparkles, Trash2, X } from "lucide-react";
+import { archiveMemoryItem, getMemoryItems, updateMemoryItem, type MemoryItem } from "@/app/actions/memoryItems";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { MemoryListSkeleton } from "@/components/LoadingSkeletons";
 
@@ -16,8 +16,31 @@ const typeOptions = [
   { value: "temporary_context", label: "近期背景" },
 ];
 
+const editTypeOptions = [
+  { value: "preference", label: "偏好" },
+  { value: "habit", label: "习惯" },
+  { value: "goal", label: "目标" },
+  { value: "theme", label: "主题" },
+  { value: "temporary_context", label: "近期背景" },
+  { value: "constraint", label: "边界" },
+  { value: "routine", label: "惯例" },
+  { value: "knowledge", label: "知识" },
+  { value: "project", label: "项目" },
+  { value: "relationship", label: "关系" },
+  { value: "person", label: "人物" },
+  { value: "location", label: "地点" },
+  { value: "life_event", label: "事实" },
+];
+
+type MemoryEditDraft = {
+  content: string;
+  type: string;
+  importance: number;
+  expiresAt: string;
+};
+
 function typeLabel(type: string): string {
-  return typeOptions.find(option => option.value === type)?.label ?? "记忆";
+  return editTypeOptions.find(option => option.value === type)?.label ?? "记忆";
 }
 
 function buildMemoryQuestion(memory: MemoryItem): string {
@@ -41,11 +64,61 @@ function memoryUsageText(memory: MemoryItem): string {
   }
 }
 
+function toLocalDateTimeInputValue(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toIsoOrNull(value: string): string | null {
+  if (!value.trim()) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function extractFragments(text: string): Set<string> {
+  const fragments = new Set<string>();
+  const normalized = text.toLowerCase().replace(/[^\p{Script=Han}a-z0-9]+/gu, " ");
+  for (const token of normalized.split(/\s+/u).filter(Boolean)) {
+    if (/^[a-z0-9]+$/u.test(token)) {
+      if (token.length >= 3) fragments.add(token);
+      continue;
+    }
+
+    for (let index = 0; index < token.length - 1; index += 1) {
+      const fragment = token.slice(index, index + 2);
+      if (!["一个", "事情", "今天", "最近", "近期", "计划", "目标", "关注", "记录", "记住", "内容"].includes(fragment)) {
+        fragments.add(fragment);
+      }
+    }
+  }
+  return fragments;
+}
+
+function hasLikelyDuplicate(memory: MemoryItem, memories: MemoryItem[]): boolean {
+  const left = extractFragments(memory.content);
+  if (left.size < 2) return false;
+
+  return memories.some(other => {
+    if (other.id === memory.id || other.type !== memory.type) return false;
+    const right = extractFragments(other.content);
+    let overlap = 0;
+    left.forEach(fragment => {
+      if (right.has(fragment)) overlap += 1;
+    });
+    return overlap >= 2;
+  });
+}
+
 export default function MemoryPage() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [activeType, setActiveType] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<MemoryEditDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,6 +164,43 @@ export default function MemoryPage() {
       setMemories(prev => prev.filter(memory => memory.id !== memoryId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "暂时无法忘记这条记忆");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const startEdit = (memory: MemoryItem) => {
+    setError(null);
+    setEditingId(memory.id);
+    setEditDraft({
+      content: memory.content,
+      type: memory.type,
+      importance: memory.importance,
+      expiresAt: toLocalDateTimeInputValue(memory.expiresAt),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft(null);
+  };
+
+  const saveEdit = async (memoryId: string) => {
+    if (!editDraft || updatingId) return;
+
+    setUpdatingId(memoryId);
+    setError(null);
+    try {
+      const updated = await updateMemoryItem(memoryId, {
+        content: editDraft.content.trim(),
+        type: editDraft.type,
+        importance: editDraft.importance,
+        expiresAt: editDraft.type === "temporary_context" ? toIsoOrNull(editDraft.expiresAt) : null,
+      });
+      setMemories(prev => prev.map(memory => memory.id === memoryId ? updated : memory));
+      cancelEdit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "暂时无法更新这条记忆");
     } finally {
       setUpdatingId(null);
     }
@@ -170,7 +280,11 @@ export default function MemoryPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {memories.map(memory => (
+            {memories.map(memory => {
+              const isEditing = editingId === memory.id;
+              const duplicate = hasLikelyDuplicate(memory, memories);
+
+              return (
               <article key={memory.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
@@ -186,54 +300,157 @@ export default function MemoryPage() {
                           来自 {memory.sourceEventIds.length} 条生活记录
                         </span>
                       )}
+                      {duplicate && !isEditing && (
+                        <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
+                          可能重复
+                        </span>
+                      )}
                     </div>
-                    <p className="break-words text-base font-medium leading-relaxed text-zinc-100">
-                      {memory.content}
-                    </p>
-                    <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">
-                      {memoryUsageText(memory)}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
-                      <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
-                        <MessageCircle className="h-3 w-3" />
-                        用于生活问答
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
-                        <RefreshCw className="h-3 w-3" />
-                        用于最近回顾
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
-                        <Sparkles className="h-3 w-3" />
-                        用于首页整理
-                      </span>
-                    </div>
-                    <div className="mt-4">
-                      <Link
-                        href={`/life/chat?q=${encodeURIComponent(buildMemoryQuestion(memory))}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200 transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/15"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        围绕这条记忆提问
-                      </Link>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => archiveMemory(memory.id)}
-                    disabled={updatingId === memory.id}
-                    className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="忘记这条记忆"
-                    title="忘记这条记忆"
-                  >
-                    {updatingId === memory.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+
+                    {isEditing && editDraft ? (
+                      <div className="space-y-3">
+                        <label className="block text-sm text-zinc-400">
+                          记忆内容
+                          <textarea
+                            value={editDraft.content}
+                            onChange={event => setEditDraft(current => current ? { ...current, content: event.target.value } : current)}
+                            rows={3}
+                            className="mt-1 w-full resize-none rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none transition-colors focus:border-indigo-500"
+                          />
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <label className="block text-sm text-zinc-400">
+                            类型
+                            <select
+                              value={editDraft.type}
+                              onChange={event => setEditDraft(current => current ? { ...current, type: event.target.value } : current)}
+                              className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-indigo-500"
+                            >
+                              {editTypeOptions.map(option => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-sm text-zinc-400">
+                            重要度
+                            <select
+                              value={editDraft.importance}
+                              onChange={event => setEditDraft(current => current ? { ...current, importance: Number(event.target.value) } : current)}
+                              className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-indigo-500"
+                            >
+                              {[1, 2, 3, 4, 5].map(value => (
+                                <option key={value} value={value}>{value}</option>
+                              ))}
+                            </select>
+                          </label>
+                          {editDraft.type === "temporary_context" && (
+                            <label className="block text-sm text-zinc-400">
+                              过期时间
+                              <input
+                                type="datetime-local"
+                                value={editDraft.expiresAt}
+                                onChange={event => setEditDraft(current => current ? { ...current, expiresAt: event.target.value } : current)}
+                                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-indigo-500"
+                              />
+                            </label>
+                          )}
+                        </div>
+                        <p className="text-xs leading-relaxed text-zinc-600">
+                          只会更新这条记忆的内容、类型、重要度和近期背景过期时间；不会改来源、用户归属或创建时间。
+                        </p>
+                      </div>
                     ) : (
-                      <Trash2 className="h-4 w-4" />
+                      <>
+                        <p className="break-words text-base font-medium leading-relaxed text-zinc-100">
+                          {memory.content}
+                        </p>
+                        <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">
+                          {memoryUsageText(memory)}
+                        </p>
+                        {duplicate && (
+                          <p className="mt-2 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-100/80">
+                            这条记忆和同类型的另一条内容有重合。你可以编辑得更准确，或归档不再需要的一条。
+                          </p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
+                          <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
+                            <MessageCircle className="h-3 w-3" />
+                            用于生活问答
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
+                            <RefreshCw className="h-3 w-3" />
+                            用于最近回顾
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
+                            <Sparkles className="h-3 w-3" />
+                            用于首页整理
+                          </span>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Link
+                            href={`/life/chat?q=${encodeURIComponent(buildMemoryQuestion(memory))}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200 transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/15"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            围绕这条记忆提问
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(memory)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                          >
+                            <PenLine className="h-4 w-4" />
+                            编辑
+                          </button>
+                        </div>
+                      </>
                     )}
-                  </button>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => saveEdit(memory.id)}
+                          disabled={updatingId === memory.id || !editDraft?.content.trim()}
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-emerald-200 transition-colors hover:border-emerald-400/50 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="保存修改"
+                          title="保存修改"
+                        >
+                          {updatingId === memory.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={updatingId === memory.id}
+                          className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="取消编辑"
+                          title="取消编辑"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => archiveMemory(memory.id)}
+                        disabled={updatingId === memory.id}
+                        className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label="忘记这条记忆"
+                        title="忘记这条记忆"
+                      >
+                        {updatingId === memory.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
