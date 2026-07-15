@@ -7,7 +7,6 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
-  Loader2,
   Sparkles,
 } from "lucide-react";
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/app/actions/lifeReview";
 import { useAuth } from "@/providers/AuthProvider";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
+import { ReviewCardSkeleton } from "@/components/LoadingSkeletons";
 
 export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
@@ -108,14 +108,6 @@ export default function LifeReviewPage() {
     { key: "week", label: "本周" },
   ];
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 selection:bg-indigo-500/30 md:px-10 md:py-10">
       <div className="mx-auto max-w-3xl">
@@ -138,7 +130,7 @@ export default function LifeReviewPage() {
               </p>
             </div>
           </div>
-          {user && (
+          {(loading || user) && (
             <div className="mt-6 grid grid-cols-3 rounded-2xl border border-zinc-800 bg-zinc-950/30 p-1">
               {periodOptions.map(option => (
                 <button
@@ -158,7 +150,9 @@ export default function LifeReviewPage() {
           )}
         </header>
 
-        {!user ? (
+        {loading ? (
+          <ReviewCardSkeleton />
+        ) : !user ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 text-center">
             <p className="text-sm text-zinc-500">请先登录，再查看最近回顾。</p>
             <button
@@ -169,10 +163,7 @@ export default function LifeReviewPage() {
             </button>
           </div>
         ) : isLoading ? (
-          <div className="flex items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/30 py-14 text-zinc-500">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            正在整理最近回顾...
-          </div>
+          <ReviewCardSkeleton />
         ) : error ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
             暂时无法整理最近回顾。你可以稍后再来看看。

@@ -1,20 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { RagChat } from "@/components/RagChat";
 import { useAuth } from "@/providers/AuthProvider";
+import { PageContentSkeleton } from "@/components/LoadingSkeletons";
 
 export default function ChatPage() {
   const { user, loading, loginWithGoogle } = useAuth();
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-      </main>
-    );
-  }
 
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 md:px-10 md:py-10">
@@ -30,7 +23,9 @@ export default function ChatPage() {
           </div>
         </header>
 
-        {!user ? (
+        {loading ? (
+          <PageContentSkeleton />
+        ) : !user ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 text-center">
             <p className="text-sm text-zinc-500">请先登录，再使用资料问答。</p>
             <button

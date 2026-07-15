@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { ArrowLeft, Bell, Loader2, LogOut } from "lucide-react";
+import { ArrowLeft, Bell, LogOut } from "lucide-react";
 import { ReminderWidget } from "@/components/ReminderWidget";
 import { useAuth } from "@/providers/AuthProvider";
+import { PageContentSkeleton } from "@/components/LoadingSkeletons";
 
 export default function RemindersPage() {
   const { user, loading, loginWithGoogle, logoutUser } = useAuth();
@@ -14,15 +15,7 @@ export default function RemindersPage() {
     setRefreshTrigger((value) => value + 1);
   }, []);
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-      </main>
-    );
-  }
-
-  if (!user) {
+  if (!loading && !user) {
     return (
       <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 md:px-10 md:py-10">
         <div className="mx-auto flex max-w-2xl flex-col items-center justify-center py-20 text-center">
@@ -54,13 +47,15 @@ export default function RemindersPage() {
               <ArrowLeft className="h-4 w-4" />
               回到首页
             </Link>
-            <button
-              onClick={logoutUser}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
-            >
-              <LogOut className="h-4 w-4" />
-              退出
-            </button>
+            {user && (
+              <button
+                onClick={logoutUser}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
+              >
+                <LogOut className="h-4 w-4" />
+                退出
+              </button>
+            )}
           </div>
 
           <div className="flex items-start gap-3">
@@ -76,7 +71,11 @@ export default function RemindersPage() {
           </div>
         </header>
 
-        <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={refreshReminders} />
+        {loading ? (
+          <PageContentSkeleton />
+        ) : (
+          <ReminderWidget refreshTrigger={refreshTrigger} onUpdated={refreshReminders} />
+        )}
       </div>
     </main>
   );

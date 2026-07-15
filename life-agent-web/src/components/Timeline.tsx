@@ -6,6 +6,7 @@ import { Loader2, Calendar, Trash2, Edit3, Save, X, Tag } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { getLifeEventDisplayRecord } from "@/lib/lifeEventDisplay";
+import { TimelineSkeleton } from "@/components/LoadingSkeletons";
 
 function getTypeText(type: string): string {
   switch(type) {
@@ -178,9 +179,7 @@ export function Timeline({
       </details>
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
-        </div>
+        <TimelineSkeleton />
       ) : events.length === 0 ? (
         <div className="text-center py-12 text-zinc-500 bg-zinc-900/20 border border-zinc-800 rounded-2xl">
           暂无生活记录。

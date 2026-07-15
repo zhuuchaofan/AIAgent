@@ -11,6 +11,7 @@ import {
   type MemoryReviewCandidate
 } from "@/app/actions/memoryReview";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
+import { MemoryCandidateSkeleton } from "@/components/LoadingSkeletons";
 
 function typeLabel(type: MemoryReviewCandidate["type"]): string {
   switch (type) {
@@ -177,22 +178,12 @@ export default function MemoryReviewPage() {
           </div>
         </header>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/30 py-14 text-zinc-500">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            正在整理...
-          </div>
-        ) : error ? (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
-            暂时无法整理这些线索。你可以稍后再来看看。
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
+        <div className="space-y-4">
+          <div className="flex rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
               {[
-                { key: "pending" as const, label: `待确认 ${pendingCandidates.length}` },
-                { key: "kept" as const, label: `观察中 ${keptCandidates.length}` },
-                { key: "remembered" as const, label: `已记住 ${rememberedCandidates.length}` }
+                { key: "pending" as const, label: `待确认 ${isLoading ? "--" : pendingCandidates.length}` },
+                { key: "kept" as const, label: `观察中 ${isLoading ? "--" : keptCandidates.length}` },
+                { key: "remembered" as const, label: `已记住 ${isLoading ? "--" : rememberedCandidates.length}` }
               ].map(tab => (
                 <button
                   key={tab.key}
@@ -207,15 +198,21 @@ export default function MemoryReviewPage() {
                   {tab.label}
                 </button>
               ))}
+          </div>
+
+          {actionError && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+              {actionError}
             </div>
+          )}
 
-            {actionError && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
-                {actionError}
-              </div>
-            )}
-
-            {visibleCandidates.length === 0 ? (
+          {isLoading ? (
+            <MemoryCandidateSkeleton />
+          ) : error ? (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
+              暂时无法整理这些线索。你可以稍后再来看看。
+            </div>
+          ) : visibleCandidates.length === 0 ? (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
                 {activeTab === "pending"
                   ? "暂时没有需要你判断的线索。继续记录后，我会把更稳定的偏好、习惯和目标放到这里。"
@@ -223,7 +220,7 @@ export default function MemoryReviewPage() {
                     ? "还没有观察中的线索。遇到不确定但有价值的内容，可以先留着，之后再决定是否记住。"
                     : "还没有真正记住的线索。确认记住后，它们会出现在这里和「我的记忆」里。"}
               </div>
-            ) : visibleCandidates.map(candidate => (
+          ) : visibleCandidates.map(candidate => (
               <article
                 key={candidate.id}
                 className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4"
@@ -371,12 +368,11 @@ export default function MemoryReviewPage() {
                   </div>
                 )}
               </article>
-            ))}
-            <p className="px-1 text-xs leading-relaxed text-zinc-600">
-              待确认和观察中只是候选状态；只有点击“确认记住”后，才会进入「我的记忆」。
-            </p>
-          </div>
-        )}
+          ))}
+          <p className="px-1 text-xs leading-relaxed text-zinc-600">
+            待确认和观察中只是候选状态；只有点击“确认记住”后，才会进入「我的记忆」。
+          </p>
+        </div>
       </div>
     </main>
   );

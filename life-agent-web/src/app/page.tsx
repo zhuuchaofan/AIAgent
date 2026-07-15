@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BookOpen, Brain, Loader2, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import { Bell, BookOpen, Brain, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Timeline } from "@/components/Timeline";
 import { AgentPreview } from "@/components/AgentPreview";
 import { getMemoryInsightPreview, type MemoryInsight } from "@/app/actions/memoryInsights";
 import { getMemoryReviewInboxPreview } from "@/app/actions/memoryReview";
 import { getMemoryItems } from "@/app/actions/memoryItems";
+import { InsightSkeleton, PageContentSkeleton } from "@/components/LoadingSkeletons";
 
 function InsightCard({
   insights,
@@ -26,6 +27,7 @@ function InsightCard({
   const reviewLinkText = reviewCandidateCount > 0
     ? `查看 ${reviewCandidateCount} 条可能值得记住的事`
     : "查看可能值得记住的事";
+  const memoryCountText = isLoading ? "已记住 -- 条" : `已记住 ${memoryCount} 条`;
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
@@ -36,10 +38,7 @@ function InsightCard({
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-zinc-100">AI 发现</h2>
           {isLoading ? (
-            <div className="mt-3 flex items-center gap-2 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              正在整理最近的线索...
-            </div>
+            <InsightSkeleton />
           ) : error ? (
             <p className="mt-2 text-sm leading-relaxed text-zinc-500">
               暂时无法整理 AI 发现。你可以继续记录，稍后我再试一次。
@@ -82,7 +81,7 @@ function InsightCard({
             href="/memory"
             className="mt-2 block text-sm text-zinc-500 transition-colors hover:text-zinc-300"
           >
-            已记住 {memoryCount} 条
+            {memoryCountText}
           </Link>
         </div>
       </div>
@@ -160,14 +159,6 @@ export default function Home() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-      </div>
-    );
-  }
-
   const isLoggedIn = !!user;
 
   return (
@@ -234,7 +225,12 @@ export default function Home() {
           )}
         </header>
 
-        {!isLoggedIn ? (
+        {loading ? (
+          <div className="space-y-8">
+            <PageContentSkeleton />
+            <PageContentSkeleton />
+          </div>
+        ) : !isLoggedIn ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10">
               <BookOpen className="h-8 w-8 text-indigo-400" />

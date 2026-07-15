@@ -6,6 +6,7 @@ import { ArrowLeft, Brain, Loader2, Send } from "lucide-react";
 import { askLifeChat } from "@/app/actions/lifeChat";
 import { Markdown } from "@/components/Markdown";
 import { useAuth } from "@/providers/AuthProvider";
+import { PageContentSkeleton } from "@/components/LoadingSkeletons";
 
 type Message = {
   id: string;
@@ -107,14 +108,6 @@ export default function LifeChatPage() {
     await sendMessage(input);
   };
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-300 selection:bg-indigo-500/30 md:px-10 md:py-10">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-3xl flex-col">
@@ -139,7 +132,9 @@ export default function LifeChatPage() {
           </div>
         </header>
 
-        {!user ? (
+        {loading ? (
+          <PageContentSkeleton />
+        ) : !user ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 text-center">
             <p className="text-sm text-zinc-500">请先登录，再向 LifeOS 提问。</p>
             <button

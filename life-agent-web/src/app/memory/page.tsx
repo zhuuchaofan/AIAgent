@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Brain, Loader2, MessageCircle, RefreshCw, Trash2 } from "lucide-react";
 import { archiveMemoryItem, getMemoryItems, type MemoryItem } from "@/app/actions/memoryItems";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
+import { MemoryListSkeleton } from "@/components/LoadingSkeletons";
 
 const typeOptions = [
   { value: "all", label: "全部" },
@@ -61,8 +62,9 @@ export default function MemoryPage() {
   }, [activeType]);
 
   const memoryCountText = useMemo(() => {
+    if (isLoading) return "正在读取记忆...";
     return memories.length > 0 ? `已记住 ${memories.length} 条` : "还没有记住的事";
-  }, [memories.length]);
+  }, [isLoading, memories.length]);
 
   const archiveMemory = async (memoryId: string) => {
     setUpdatingId(memoryId);
@@ -141,10 +143,7 @@ export default function MemoryPage() {
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/30 py-14 text-zinc-500">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            正在读取记忆...
-          </div>
+          <MemoryListSkeleton />
         ) : memories.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-sm text-zinc-500">
             还没有记住的事。你可以先在「可能值得记住的事」里把线索留住，再确认记住。
