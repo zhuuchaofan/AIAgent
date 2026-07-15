@@ -29,6 +29,7 @@ public class LifeReviewServiceTest
         Assert.Single(response.Cards);
         Assert.Contains("记录多一点", response.Cards[0].Text);
         Assert.Empty(response.ReviewThemes);
+        Assert.Empty(response.ContinuityHints);
         Assert.Empty(response.SourceEvents);
     }
 
@@ -481,6 +482,18 @@ public class LifeReviewServiceTest
         var hint = Assert.Single(theme.EvidenceHints);
         Assert.Equal("memory", hint.Kind);
         Assert.Contains("习惯", hint.Reason, StringComparison.Ordinal);
+        Assert.Contains(response.ContinuityHints, item =>
+            item.Kind == "memory" &&
+            item.Href == "/memory" &&
+            item.Reason.Contains("不会自动新增", StringComparison.Ordinal));
+        Assert.Contains(response.ContinuityHints, item =>
+            item.Kind == "memory_review" &&
+            item.Href == "/memory/review" &&
+            item.Reason.Contains("再次确认", StringComparison.Ordinal));
+        Assert.Contains(response.ContinuityHints, item =>
+            item.Kind == "life_chat" &&
+            item.Href == "/life/chat" &&
+            item.Reason.Contains("保持只读", StringComparison.Ordinal));
         Assert.True(response.ReadOnly);
         Assert.False(response.WroteData);
         Assert.False(response.Executed);
@@ -529,6 +542,26 @@ public class LifeReviewServiceTest
             theme.EvidenceHints,
             hint => Assert.Equal("plan_signal", hint.Kind),
             hint => Assert.Equal("memory", hint.Kind));
+        Assert.Collection(
+            response.ContinuityHints,
+            hint =>
+            {
+                Assert.Equal("plan", hint.Kind);
+                Assert.Equal("/plans", hint.Href);
+                Assert.Contains("不会自动执行", hint.Reason, StringComparison.Ordinal);
+            },
+            hint =>
+            {
+                Assert.Equal("memory", hint.Kind);
+                Assert.Equal("/memory", hint.Href);
+                Assert.Contains("不会自动新增", hint.Reason, StringComparison.Ordinal);
+            },
+            hint =>
+            {
+                Assert.Equal("life_chat", hint.Kind);
+                Assert.Equal("/life/chat", hint.Href);
+                Assert.Contains("保持只读", hint.Reason, StringComparison.Ordinal);
+            });
     }
 
     [Fact]
@@ -567,6 +600,7 @@ public class LifeReviewServiceTest
         var response = await service.BuildReviewAsync("user_a", new LifeReviewRequest());
 
         Assert.Empty(response.ReviewThemes);
+        Assert.DoesNotContain(response.ContinuityHints, hint => hint.Href == "/plans");
     }
 
     [Fact]

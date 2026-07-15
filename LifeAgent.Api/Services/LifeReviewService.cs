@@ -15,6 +15,7 @@ public class LifeReviewService : ILifeReviewService
     private const int MaxPlanSignals = 12;
     private const int MaxEvidenceHintsPerCard = 2;
     private const int MaxReviewThemes = 3;
+    private const int MaxContinuityHints = 3;
     private const int MinRelatedEventsForTheme = 2;
 
     private static readonly HashSet<string> GenericMatchFragments = new(StringComparer.OrdinalIgnoreCase)
@@ -338,12 +339,14 @@ public class LifeReviewService : ILifeReviewService
     {
         var enrichedCards = AddEvidenceHints(cards, events, memories, planSignals);
         var reviewThemes = BuildReviewThemes(events, memories, planSignals);
+        var continuityHints = BuildContinuityHints(enrichedCards, reviewThemes, events, memories, planSignals);
         return new LifeReviewResponse
         {
             Period = period,
             WindowLabel = ToWindowLabel(period),
             Cards = enrichedCards,
             ReviewThemes = reviewThemes,
+            ContinuityHints = continuityHints,
             SourceEvents = events.Select(ToSourceEvent).ToList(),
             UsedEventCount = events.Count,
             UsedMemoryCount = memories.Count,
@@ -438,6 +441,88 @@ public class LifeReviewService : ILifeReviewService
                 card.EvidenceHints = hints;
                 return card;
             })
+            .ToArray();
+    }
+
+    private static IReadOnlyList<LifeReviewContinuityHint> BuildContinuityHints(
+        IReadOnlyList<LifeReviewCard> cards,
+        IReadOnlyList<LifeReviewTheme> reviewThemes,
+        IReadOnlyList<LifeEvent> events,
+        IReadOnlyList<Memory> memories,
+        IReadOnlyList<PlanSignal> planSignals)
+    {
+        if (events.Count == 0 && memories.Count == 0 && planSignals.Count == 0)
+        {
+            return Array.Empty<LifeReviewContinuityHint>();
+        }
+
+        var hints = new List<LifeReviewContinuityHint>();
+        var hasPlanTheme = reviewThemes.Any(theme =>
+            string.Equals(theme.Kind, "plan_progress", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(theme.Href, "/plans", StringComparison.OrdinalIgnoreCase));
+        var hasMemoryTheme = reviewThemes.Any(theme =>
+            string.Equals(theme.Kind, "memory_progress", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(theme.Href, "/memory", StringComparison.OrdinalIgnoreCase));
+        var hasMemoryEvidence = cards.Any(card =>
+            card.EvidenceHints.Any(hint => string.Equals(hint.Kind, "memory", StringComparison.OrdinalIgnoreCase)));
+        var hasSourceEvents = cards.Any(card => card.SourceEventIds.Count > 0);
+
+        if (hasPlanTheme)
+        {
+            hints.Add(new LifeReviewContinuityHint
+            {
+                Id = "plans",
+                Kind = "plan",
+                Label = "查看相关计划",
+                Detail = "有回顾点和计划线索相连，可以去计划页继续整理。",
+                Href = "/plans",
+                Reason = "计划线索只是上下文，不会自动执行。"
+            });
+        }
+
+        if (hasMemoryTheme || hasMemoryEvidence)
+        {
+            hints.Add(new LifeReviewContinuityHint
+            {
+                Id = "memory",
+                Kind = "memory",
+                Label = "查看我的记忆",
+                Detail = "有回顾点引用了已确认的个人背景。",
+                Href = "/memory",
+                Reason = "这里只读取已确认记忆，不会自动新增或改写。"
+            });
+        }
+
+        if (hasSourceEvents)
+        {
+            hints.Add(new LifeReviewContinuityHint
+            {
+                Id = "memory_review",
+                Kind = "memory_review",
+                Label = "整理值得记住的事",
+                Detail = "如果某个回顾点以后还会用到，可以先放入记忆候选。",
+                Href = "/memory/review",
+                Reason = "候选需要你再次确认后才会进入长期记忆。"
+            });
+        }
+
+        if (events.Count > 0 || memories.Count > 0 || planSignals.Count > 0)
+        {
+            hints.Add(new LifeReviewContinuityHint
+            {
+                Id = "life_chat",
+                Kind = "life_chat",
+                Label = "问问最近状态",
+                Detail = "可以基于这些记录和背景继续追问。",
+                Href = "/life/chat",
+                Reason = "生活问答保持只读，不会创建记录、提醒或记忆。"
+            });
+        }
+
+        return hints
+            .GroupBy(hint => hint.Href, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(MaxContinuityHints)
             .ToArray();
     }
 

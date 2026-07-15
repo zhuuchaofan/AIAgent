@@ -15,6 +15,7 @@ import {
   getLifeReview,
   keepLifeReviewCard,
   type LifeReviewCard,
+  type LifeReviewContinuityHint,
   type LifeReviewPeriod,
   type LifeReviewSourceEvent,
   type LifeReviewTheme,
@@ -27,6 +28,7 @@ export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [cards, setCards] = useState<LifeReviewCard[]>([]);
   const [reviewThemes, setReviewThemes] = useState<LifeReviewTheme[]>([]);
+  const [continuityHints, setContinuityHints] = useState<LifeReviewContinuityHint[]>([]);
   const [sourceEvents, setSourceEvents] = useState<LifeReviewSourceEvent[]>([]);
   const [usedMemoryCount, setUsedMemoryCount] = useState(0);
   const [usedPlanSignalCount, setUsedPlanSignalCount] = useState(0);
@@ -53,6 +55,7 @@ export default function LifeReviewPage() {
         if (!cancelled) {
           setCards(review.cards ?? []);
           setReviewThemes(review.reviewThemes ?? []);
+          setContinuityHints(review.continuityHints ?? []);
           setSourceEvents(review.sourceEvents ?? []);
           setUsedMemoryCount(review.usedMemoryCount ?? 0);
           setUsedPlanSignalCount(review.usedPlanSignalCount ?? 0);
@@ -63,6 +66,7 @@ export default function LifeReviewPage() {
           setError(err instanceof Error ? err.message : "暂时无法整理最近回顾");
           setCards([]);
           setReviewThemes([]);
+          setContinuityHints([]);
           setSourceEvents([]);
           setUsedMemoryCount(0);
           setUsedPlanSignalCount(0);
@@ -257,6 +261,27 @@ export default function LifeReviewPage() {
                       </Link>
                     );
                   })}
+                </div>
+              </section>
+            )}
+            {continuityHints.length > 0 && (
+              <section className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-zinc-300" />
+                  <h2 className="text-sm font-semibold text-zinc-100">接下来可以</h2>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {continuityHints.map(hint => (
+                    <Link
+                      key={hint.id || hint.href}
+                      href={hint.href}
+                      className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3 transition-colors hover:border-zinc-700"
+                    >
+                      <p className="text-sm font-medium text-zinc-100">{hint.label}</p>
+                      <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{hint.detail}</p>
+                      <p className="mt-2 break-words text-[11px] leading-relaxed text-zinc-600">{hint.reason}</p>
+                    </Link>
+                  ))}
                 </div>
               </section>
             )}

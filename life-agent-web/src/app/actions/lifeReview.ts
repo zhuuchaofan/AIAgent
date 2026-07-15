@@ -30,6 +30,15 @@ export interface LifeReviewTheme {
   evidenceHints?: LifeReviewEvidenceHint[];
 }
 
+export interface LifeReviewContinuityHint {
+  id: string;
+  kind: "plan" | "memory" | "memory_review" | "life_chat" | string;
+  label: string;
+  detail: string;
+  href: string;
+  reason: string;
+}
+
 export interface LifeReviewSourceEvent {
   id: string;
   title: string;
@@ -43,6 +52,7 @@ export interface LifeReviewResponse {
   windowLabel: string;
   cards: LifeReviewCard[];
   reviewThemes: LifeReviewTheme[];
+  continuityHints: LifeReviewContinuityHint[];
   sourceEvents: LifeReviewSourceEvent[];
   usedEventCount: number;
   usedMemoryCount: number;
