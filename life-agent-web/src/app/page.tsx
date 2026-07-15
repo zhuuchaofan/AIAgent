@@ -132,6 +132,7 @@ function DailyAiPanel({
     ? `查看 ${reviewCandidateCount} 条可能值得记住的事`
     : "查看可能值得记住的事";
   const memoryCountText = isLoading ? "已记住 -- 条" : `已记住 ${memoryCount} 条`;
+  const hasMemoryLoop = reviewCandidateCount > 0 || memoryCount > 0;
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
@@ -140,7 +141,30 @@ function DailyAiPanel({
           <Sparkles className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-zinc-100">AI 帮你整理</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h2 className="text-lg font-semibold text-zinc-100">AI 帮你整理</h2>
+            <span className="text-xs text-zinc-600">{memoryCountText}</span>
+          </div>
+          {!isLoading && hasMemoryLoop && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {reviewCandidateCount > 0 && (
+                <Link
+                  href="/memory/review"
+                  className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-xs text-indigo-200 transition-colors hover:border-indigo-400/40"
+                >
+                  {reviewCandidateCount} 条待判断
+                </Link>
+              )}
+              {memoryCount > 0 && (
+                <Link
+                  href="/memory"
+                  className="rounded-full border border-zinc-700 bg-zinc-950/50 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-600"
+                >
+                  查看我的记忆
+                </Link>
+              )}
+            </div>
+          )}
           {isLoading ? (
             <InsightSkeleton />
           ) : error ? (
@@ -180,12 +204,6 @@ function DailyAiPanel({
             className="mt-2 block text-sm text-indigo-300 transition-colors hover:text-indigo-200"
           >
             {reviewLinkText}
-          </Link>
-          <Link
-            href="/memory"
-            className="mt-2 block text-sm text-zinc-500 transition-colors hover:text-zinc-300"
-          >
-            {memoryCountText}
           </Link>
           {planSignalCount > 0 && (
             <Link

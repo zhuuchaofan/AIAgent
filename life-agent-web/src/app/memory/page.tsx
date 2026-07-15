@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Brain, Loader2, MessageCircle, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Brain, Loader2, MessageCircle, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { archiveMemoryItem, getMemoryItems, type MemoryItem } from "@/app/actions/memoryItems";
 import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { MemoryListSkeleton } from "@/components/LoadingSkeletons";
@@ -22,6 +22,23 @@ function typeLabel(type: string): string {
 
 function buildMemoryQuestion(memory: MemoryItem): string {
   return `结合这条记忆，帮我看看最近状态：${memory.content}`;
+}
+
+function memoryUsageText(memory: MemoryItem): string {
+  switch (memory.type) {
+    case "preference":
+      return "我会在建议和回顾里参考这个偏好。";
+    case "habit":
+      return "我会把它当作你近期习惯的一部分。";
+    case "goal":
+      return "我会在计划和回顾里留意这个目标。";
+    case "temporary_context":
+      return "我会把它作为近期背景，过期后不再使用。";
+    case "theme":
+      return "我会用它帮助整理反复出现的主题。";
+    default:
+      return "我会把它作为个人背景参考。";
+  }
 }
 
 export default function MemoryPage() {
@@ -128,9 +145,9 @@ export default function MemoryPage() {
               <MessageCircle className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-zinc-200">这些记忆会在哪里用到</p>
+              <p className="text-sm font-medium text-zinc-200">记住之后会发生什么</p>
               <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-                生活问答、最近回顾和资料问答会把它们当作你的个人背景参考，但不会把它们当作文档引用，也不会自动执行操作。
+                生活问答和最近回顾会把它们当作你的个人背景参考。它们不会触发提醒、不会执行操作，也可以随时忘记。
               </p>
             </div>
           </div>
@@ -173,6 +190,9 @@ export default function MemoryPage() {
                     <p className="break-words text-base font-medium leading-relaxed text-zinc-100">
                       {memory.content}
                     </p>
+                    <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">
+                      {memoryUsageText(memory)}
+                    </p>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
                       <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
                         <MessageCircle className="h-3 w-3" />
@@ -183,8 +203,8 @@ export default function MemoryPage() {
                         用于最近回顾
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/40 px-2 py-1">
-                        <Brain className="h-3 w-3" />
-                        用于资料问答背景
+                        <Sparkles className="h-3 w-3" />
+                        用于首页整理
                       </span>
                     </div>
                     <div className="mt-4">

@@ -24,6 +24,8 @@ export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [cards, setCards] = useState<LifeReviewCard[]>([]);
   const [sourceEvents, setSourceEvents] = useState<LifeReviewSourceEvent[]>([]);
+  const [usedMemoryCount, setUsedMemoryCount] = useState(0);
+  const [usedPlanSignalCount, setUsedPlanSignalCount] = useState(0);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [activePeriod, setActivePeriod] = useState<LifeReviewPeriod>("recent");
   const [keptCardIds, setKeptCardIds] = useState<Record<string, boolean>>({});
@@ -47,6 +49,8 @@ export default function LifeReviewPage() {
         if (!cancelled) {
           setCards(review.cards ?? []);
           setSourceEvents(review.sourceEvents ?? []);
+          setUsedMemoryCount(review.usedMemoryCount ?? 0);
+          setUsedPlanSignalCount(review.usedPlanSignalCount ?? 0);
           setExpandedCards({});
         }
       } catch (err) {
@@ -54,6 +58,8 @@ export default function LifeReviewPage() {
           setError(err instanceof Error ? err.message : "暂时无法整理最近回顾");
           setCards([]);
           setSourceEvents([]);
+          setUsedMemoryCount(0);
+          setUsedPlanSignalCount(0);
         }
       } finally {
         if (!cancelled) {
@@ -74,6 +80,16 @@ export default function LifeReviewPage() {
   }, [sourceEvents]);
 
   const recentEvents = sourceEvents.slice(0, 5);
+  const contextParts = [`${sourceEvents.length} 条生活记录`];
+  if (usedMemoryCount > 0) {
+    contextParts.push(`${usedMemoryCount} 条已记住内容`);
+  }
+  if (usedPlanSignalCount > 0) {
+    contextParts.push(`${usedPlanSignalCount} 条计划线索`);
+  }
+  const contextSummary = cards.length > 0
+    ? `基于 ${contextParts.join("、")}整理出 ${cards.length} 个回顾点`
+    : null;
 
   const toggleExpanded = (cardId: string) => {
     setExpandedCards(current => ({
@@ -170,6 +186,13 @@ export default function LifeReviewPage() {
           </div>
         ) : (
           <div className="space-y-5">
+            {(contextSummary || cards.length > 0) && (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4 text-sm leading-relaxed text-zinc-500">
+                {contextSummary}
+                {contextSummary && "。"}
+                {" "}如果某个回顾点以后还会用到，可以先放进「可能值得记住的事」。
+              </div>
+            )}
             {(actionMessage || actionError) && (
               <div className={`rounded-2xl border p-4 text-sm ${
                 actionError

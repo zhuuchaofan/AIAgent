@@ -206,6 +206,13 @@ export default function MemoryReviewPage() {
             </div>
           )}
 
+          {!isLoading && !error && (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4 text-sm leading-relaxed text-zinc-500">
+              <span className="font-medium text-zinc-300">这里不是自动记忆。</span>
+              {" "}你可以先观察，也可以编辑成更准确的话再确认。只有「确认记住」后，它才会进入我的记忆，并用于之后的生活问答和最近回顾。
+            </div>
+          )}
+
           {isLoading ? (
             <MemoryCandidateSkeleton />
           ) : error ? (
@@ -248,6 +255,11 @@ export default function MemoryReviewPage() {
                     </div>
                     <h2 className="break-words text-base font-semibold text-zinc-100">{candidate.title}</h2>
                     <p className="mt-2 break-words text-sm leading-relaxed text-zinc-500">{candidate.detail}</p>
+                    {candidate.sources.length > 0 && (
+                      <p className="mt-2 text-xs text-zinc-600">
+                        来自最近 {candidate.sources.length} 条生活记录。
+                      </p>
+                    )}
                     {candidate.reviewStage === "one_off" && (
                       <p className="mt-2 rounded-lg border border-amber-500/10 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-200/80">
                         这类线索更像一次发生的事，可以先留着观察，不必急着放进长期记忆。
@@ -343,12 +355,20 @@ export default function MemoryReviewPage() {
                     <p className="text-sm leading-relaxed text-sky-100">
                       已记住。之后回答和整理时，LifeOS 会把它作为你的个人背景参考。
                     </p>
-                    <Link
-                      href="/memory"
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
-                    >
-                      查看我的记忆
-                    </Link>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link
+                        href="/memory"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                      >
+                        查看我的记忆
+                      </Link>
+                      <Link
+                        href={`/life/chat?q=${encodeURIComponent(`结合这条记忆，帮我看看最近状态：${candidate.title}`)}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200 transition-colors hover:border-indigo-400/40"
+                      >
+                        围绕它提问
+                      </Link>
+                    </div>
                   </div>
                 )}
 
