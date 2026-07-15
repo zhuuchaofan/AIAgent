@@ -152,6 +152,10 @@ on `/reminders`.
      near-term reminders, Memory-related plan signals, and recent patterns that
      agree with active Memory. The optional browser time zone is used for local
      due-date boundaries.
+     It also returns a read-only `dailyBrief` with a short summary, up to four
+     explainable signals, and context counts drawn from recent records, active
+     Memory, pending reminders, plan signals, and pending Memory Review
+     candidates.
    - It is read-only and must not create pending actions, write Memory, create
      reminders, or execute tools.
 

@@ -25,9 +25,37 @@ public sealed class HomeOverviewData
     public IReadOnlyList<HomeOverviewPlanSignalDto> PlanSignals { get; set; } = Array.Empty<HomeOverviewPlanSignalDto>();
     public HomeOverviewPlanSignalDto? LatestPlanSignal { get; set; }
     public IReadOnlyList<HomeOverviewTodayFocusDto> TodayFocus { get; set; } = Array.Empty<HomeOverviewTodayFocusDto>();
+    public HomeOverviewDailyBriefDto DailyBrief { get; set; } = new();
     public bool ReadOnly { get; set; } = true;
     public bool WroteData { get; set; } = false;
     public bool Executed { get; set; } = false;
+}
+
+public sealed class HomeOverviewDailyBriefDto
+{
+    public string Summary { get; set; } = string.Empty;
+    public IReadOnlyList<HomeOverviewDailyBriefSignalDto> Signals { get; set; } = Array.Empty<HomeOverviewDailyBriefSignalDto>();
+    public HomeOverviewDailyBriefContextCountsDto ContextCounts { get; set; } = new();
+    public bool ReadOnly { get; set; } = true;
+    public bool WroteData { get; set; } = false;
+    public bool Executed { get; set; } = false;
+}
+
+public sealed class HomeOverviewDailyBriefSignalDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public string Basis { get; set; } = string.Empty;
+    public string Href { get; set; } = string.Empty;
+}
+
+public sealed class HomeOverviewDailyBriefContextCountsDto
+{
+    public int RecentEventCount { get; set; }
+    public int ActiveMemoryCount { get; set; }
+    public int PendingReminderCount { get; set; }
+    public int PlanSignalCount { get; set; }
 }
 
 public sealed class HomeOverviewTodayFocusDto

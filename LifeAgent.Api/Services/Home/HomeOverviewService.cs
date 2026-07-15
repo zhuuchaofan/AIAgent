@@ -72,6 +72,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
         var reviewStatusCounts = CountReviewStatuses(reviewCandidates.Candidates);
         var insights = AddPlanSignalInsight(insightPreview.Insights, context.PlanSignalCount);
         var todayFocus = BuildTodayFocus(context, insightPreview.Insights, timeZone);
+        var dailyBrief = BuildDailyBrief(context, insightPreview.Insights, reviewStatusCounts, timeZone);
 
         return new HomeOverviewData
         {
@@ -90,6 +91,7 @@ public sealed class HomeOverviewService : IHomeOverviewService
             PlanSignals = context.PlanSignals.Take(MaxVisiblePlanSignals).Select(ToPlanSignalDto).ToArray(),
             LatestPlanSignal = context.PlanSignals.FirstOrDefault() is { } planSignal ? ToPlanSignalDto(planSignal) : null,
             TodayFocus = todayFocus,
+            DailyBrief = dailyBrief,
             ReadOnly = true,
             WroteData = false,
             Executed = false
@@ -121,6 +123,195 @@ public sealed class HomeOverviewService : IHomeOverviewService
         }
 
         return new ReviewStatusCounts(pending, kept, remembered);
+    }
+
+    private HomeOverviewDailyBriefDto BuildDailyBrief(
+        PersonalContextSnapshot context,
+        IReadOnlyList<MemoryInsightPreviewItem> insights,
+        ReviewStatusCounts reviewStatusCounts,
+        string? timeZoneId)
+    {
+        var timeZone = ResolveTimeZone(timeZoneId);
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, timeZone);
+        var candidates = new List<DailyBriefCandidate>();
+
+        foreach (var reminder in context.PendingReminders)
+        {
+            var localDueAt = TimeZoneInfo.ConvertTimeFromUtc(EnsureUtc(reminder.DueAt), timeZone);
+            if (localDueAt < localNow)
+            {
+                candidates.Add(new DailyBriefCandidate(
+                    ToBriefSignal(
+                        $"reminder_{reminder.Id}",
+                        "有提醒已经逾期。",
+                        $"{reminder.Title} 已经过了时间，建议今天先处理。",
+                        "due_reminder",
+                        "/reminders"),
+                    1000,
+                    localDueAt));
+            }
+            else if (localDueAt.Date == localNow.Date)
+            {
+                candidates.Add(new DailyBriefCandidate(
+                    ToBriefSignal(
+                        $"reminder_{reminder.Id}",
+                        "今天有提醒到期。",
+                        $"{reminder.Title} 今天 {localDueAt:HH:mm} 到期。",
+                        "due_reminder",
+                        "/reminders"),
+                    900,
+                    localDueAt));
+            }
+        }
+
+        foreach (var signal in context.PlanSignals)
+        {
+            var signalText = $"{signal.Title} {signal.Content}";
+            var relatedMemory = context.Memories
+                .Where(memory => HasMeaningfulOverlap(signalText, memory.Content))
+                .OrderByDescending(memory => memory.Importance)
+                .ThenByDescending(memory => memory.UpdatedAt ?? memory.CreatedAt)
+                .FirstOrDefault();
+
+            if (relatedMemory is not null)
+            {
+                candidates.Add(new DailyBriefCandidate(
+                    ToBriefSignal(
+                        $"plan_memory_{signal.Id}",
+                        "有计划和你的个人背景相关。",
+                        $"{signal.Title}：{MemoryRelationReason(relatedMemory.Type).TrimEnd('。')}",
+                        "memory_related_plan",
+                        "/plans"),
+                    800 + relatedMemory.Importance,
+                    signal.CreatedAt));
+                continue;
+            }
+
+            if (insights.Any(insight =>
+                    insight.SourceEventIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() >= 2 &&
+                    HasMeaningfulOverlap(signalText, insight.Text)))
+            {
+                candidates.Add(new DailyBriefCandidate(
+                    ToBriefSignal(
+                        $"plan_pattern_{signal.Id}",
+                        "有计划连着最近反复出现的主题。",
+                        $"{signal.Title} 和最近反复出现的记录有关。",
+                        "recent_pattern",
+                        "/plans"),
+                    700,
+                    signal.CreatedAt));
+            }
+        }
+
+        foreach (var insight in insights.Where(insight =>
+                     insight.SourceEventIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() >= 2))
+        {
+            candidates.Add(new DailyBriefCandidate(
+                ToBriefSignal(
+                    $"pattern_{insight.SourceEventIds.FirstOrDefault() ?? NormalizeText(insight.Text)}",
+                    "最近有重复出现的主题。",
+                    insight.Text,
+                    "recent_pattern",
+                    "/life/review"),
+                650,
+                utcNow));
+        }
+
+        if (reviewStatusCounts.Pending > 0)
+        {
+            candidates.Add(new DailyBriefCandidate(
+                ToBriefSignal(
+                    "memory_review_pending",
+                    "有新的记忆线索待判断。",
+                    $"有 {reviewStatusCounts.Pending} 条可能值得记住的事等你确认。",
+                    "memory_review_pending",
+                    "/memory/review"),
+                500,
+                utcNow));
+        }
+
+        var signals = candidates
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.SortAt.Ticks)
+            .ThenBy(candidate => candidate.Signal.Id, StringComparer.Ordinal)
+            .GroupBy(candidate => candidate.Signal.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First().Signal)
+            .Take(4)
+            .ToArray();
+
+        if (signals.Length == 0)
+        {
+            signals = new[]
+            {
+                ToBriefSignal(
+                    "empty_context",
+                    "继续记录后，我会帮你整理重点。",
+                    "今天暂时没有足够的记录、提醒或记忆可整理。",
+                    "empty_context",
+                    "/")
+            };
+        }
+
+        return new HomeOverviewDailyBriefDto
+        {
+            Summary = BuildDailyBriefSummary(signals),
+            Signals = signals,
+            ContextCounts = new HomeOverviewDailyBriefContextCountsDto
+            {
+                RecentEventCount = context.Events.Count,
+                ActiveMemoryCount = context.ActiveMemoryCount,
+                PendingReminderCount = context.PendingReminderCount,
+                PlanSignalCount = context.PlanSignalCount
+            },
+            ReadOnly = true,
+            WroteData = false,
+            Executed = false
+        };
+    }
+
+    private static HomeOverviewDailyBriefSignalDto ToBriefSignal(
+        string id,
+        string title,
+        string detail,
+        string basis,
+        string href)
+    {
+        return new HomeOverviewDailyBriefSignalDto
+        {
+            Id = id,
+            Title = title,
+            Detail = detail,
+            Basis = basis,
+            Href = href
+        };
+    }
+
+    private static string BuildDailyBriefSummary(IReadOnlyList<HomeOverviewDailyBriefSignalDto> signals)
+    {
+        var bases = signals.Select(signal => signal.Basis).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (bases.Contains("due_reminder"))
+        {
+            return "今天先看时间相关的提醒。";
+        }
+
+        if (bases.Contains("memory_related_plan"))
+        {
+            return "今天适合推进和个人背景相关的计划。";
+        }
+
+        if (bases.Contains("recent_pattern"))
+        {
+            return "最近有重复出现的主题，值得回头看一眼。";
+        }
+
+        if (bases.Contains("memory_review_pending"))
+        {
+            return "有新的记忆线索等你判断。";
+        }
+
+        return "今天暂时没有需要特别整理的事。";
     }
 
     private IReadOnlyList<HomeOverviewTodayFocusDto> BuildTodayFocus(
@@ -311,6 +502,8 @@ public sealed class HomeOverviewService : IHomeOverviewService
     }
 
     private sealed record TodayFocusCandidate(HomeOverviewTodayFocusDto Item, double Score, DateTime SortAt);
+
+    private sealed record DailyBriefCandidate(HomeOverviewDailyBriefSignalDto Signal, double Score, DateTime SortAt);
 
     private static IReadOnlyList<MemoryInsightPreviewItem> AddPlanSignalInsight(
         IReadOnlyList<MemoryInsightPreviewItem> insights,

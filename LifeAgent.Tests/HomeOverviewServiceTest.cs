@@ -23,6 +23,14 @@ public class HomeOverviewServiceTest
         Assert.Equal(0, overview.PendingReminderCount);
         Assert.Null(overview.LatestReminder);
         Assert.Empty(overview.TodayFocus);
+        Assert.Equal("今天暂时没有需要特别整理的事。", overview.DailyBrief.Summary);
+        var emptySignal = Assert.Single(overview.DailyBrief.Signals);
+        Assert.Equal("empty_context", emptySignal.Basis);
+        Assert.Equal(0, overview.DailyBrief.ContextCounts.RecentEventCount);
+        Assert.Equal(0, overview.DailyBrief.ContextCounts.ActiveMemoryCount);
+        Assert.True(overview.DailyBrief.ReadOnly);
+        Assert.False(overview.DailyBrief.WroteData);
+        Assert.False(overview.DailyBrief.Executed);
         Assert.True(overview.ReadOnly);
         Assert.False(overview.WroteData);
         Assert.False(overview.Executed);
@@ -73,6 +81,9 @@ public class HomeOverviewServiceTest
         Assert.Equal(2, overview.MemoryReviewPendingCandidateCount);
         Assert.Equal(1, overview.MemoryReviewKeptCandidateCount);
         Assert.Equal(1, overview.MemoryReviewRememberedCandidateCount);
+        Assert.Contains(overview.DailyBrief.Signals, signal =>
+            signal.Basis == "memory_review_pending" &&
+            signal.Detail.Contains("2 条", StringComparison.Ordinal));
         Assert.True(overview.ReadOnly);
         Assert.False(overview.WroteData);
         Assert.False(overview.Executed);
@@ -196,6 +207,9 @@ public class HomeOverviewServiceTest
         Assert.Equal(
             new[] { "overdue", "due_today", "due_soon" },
             overview.TodayFocus.Select(item => item.Basis));
+        Assert.Equal("今天先看时间相关的提醒。", overview.DailyBrief.Summary);
+        Assert.Equal("due_reminder", overview.DailyBrief.Signals[0].Basis);
+        Assert.Contains("逾期提醒", overview.DailyBrief.Signals[0].Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -227,6 +241,10 @@ public class HomeOverviewServiceTest
         Assert.Equal("plan", focus.Type);
         Assert.Equal("memory_related", focus.Basis);
         Assert.Equal("与你记住的目标相关。", focus.Reason);
+        Assert.Equal("今天适合推进和个人背景相关的计划。", overview.DailyBrief.Summary);
+        Assert.Contains(overview.DailyBrief.Signals, signal =>
+            signal.Basis == "memory_related_plan" &&
+            signal.Detail.Contains("整理新疆路线", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -279,6 +297,7 @@ public class HomeOverviewServiceTest
         var focus = Assert.Single(overview.TodayFocus);
         Assert.Equal("plan_project", focus.Id);
         Assert.Equal("recent_pattern", focus.Basis);
+        Assert.Contains(overview.DailyBrief.Signals, signal => signal.Basis == "recent_pattern");
     }
 
     [Fact]
@@ -294,6 +313,7 @@ public class HomeOverviewServiceTest
         var overview = await service.BuildAsync("user_a", timeZone: "Asia/Shanghai");
 
         Assert.Empty(overview.TodayFocus);
+        Assert.DoesNotContain(overview.DailyBrief.Signals, signal => signal.Basis == "recent_pattern");
     }
 
     [Fact]

@@ -171,9 +171,11 @@ The web product surfaces are:
 - Home `AI 发现`: a lightweight preview of repeated themes.
 - Home Overview: a single read-only first-screen payload for recent records,
   AI insights, Memory count, Memory Review count, pending reminder summary, and
-  a deterministic personalized today-focus ranking. Undated plan signals only
-  enter today focus when active Memory or a recent repeated pattern supports
-  their relevance.
+  a deterministic personalized today-focus ranking plus a read-only daily
+  brief. Undated plan signals only enter today focus when active Memory or a
+  recent repeated pattern supports their relevance; daily brief signals explain
+  reminders, Memory-related plans, repeated themes, and pending Memory Review
+  items without writing data.
 - `/reminders`: the user's confirmed pending reminders, grouped by overdue,
   today, tomorrow, and later, with complete/cancel actions only.
 - `/plans`: the user's confirmed plan signals and missing-time reminder

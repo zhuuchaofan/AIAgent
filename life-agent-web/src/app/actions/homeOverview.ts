@@ -32,6 +32,30 @@ export interface HomeOverviewTodayFocus {
   basis: "overdue" | "due_today" | "due_soon" | "memory_related" | "recent_pattern";
 }
 
+export interface HomeOverviewDailyBriefSignal {
+  id: string;
+  title: string;
+  detail: string;
+  basis: "due_reminder" | "memory_related_plan" | "recent_pattern" | "memory_review_pending" | "empty_context";
+  href: string;
+}
+
+export interface HomeOverviewDailyBriefContextCounts {
+  recentEventCount: number;
+  activeMemoryCount: number;
+  pendingReminderCount: number;
+  planSignalCount: number;
+}
+
+export interface HomeOverviewDailyBrief {
+  summary: string;
+  signals: HomeOverviewDailyBriefSignal[];
+  contextCounts: HomeOverviewDailyBriefContextCounts;
+  readOnly: boolean;
+  wroteData: boolean;
+  executed: boolean;
+}
+
 export interface HomeOverviewData {
   recentEvents: LifeEvent[];
   hasMoreRecentEvents: boolean;
@@ -48,6 +72,7 @@ export interface HomeOverviewData {
   planSignals: HomeOverviewPlanSignal[];
   latestPlanSignal?: HomeOverviewPlanSignal | null;
   todayFocus?: HomeOverviewTodayFocus[];
+  dailyBrief?: HomeOverviewDailyBrief;
   readOnly: boolean;
   wroteData: boolean;
   executed: boolean;

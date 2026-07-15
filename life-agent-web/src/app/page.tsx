@@ -18,6 +18,7 @@ import { AgentPreview } from "@/components/AgentPreview";
 import type { MemoryInsight } from "@/app/actions/memoryInsights";
 import {
   getHomeOverview,
+  type HomeOverviewDailyBrief,
   type HomeOverviewData,
   type HomeOverviewPlanSignal,
   type HomeOverviewReminder,
@@ -130,6 +131,7 @@ function DailyActionCard({
 
 function DailyAiPanel({
   insights,
+  dailyBrief,
   reviewCandidateCount,
   pendingReviewCandidateCount,
   memoryCount,
@@ -138,6 +140,7 @@ function DailyAiPanel({
   error,
 }: {
   insights: MemoryInsight[];
+  dailyBrief?: HomeOverviewDailyBrief;
   reviewCandidateCount: number;
   pendingReviewCandidateCount: number;
   memoryCount: number;
@@ -150,6 +153,7 @@ function DailyAiPanel({
     : "查看可能值得记住的事";
   const memoryCountText = isLoading ? "已记住 -- 条" : `已记住 ${memoryCount} 条`;
   const hasMemoryLoop = reviewCandidateCount > 0 || memoryCount > 0;
+  const hasDailyBrief = Boolean(dailyBrief?.summary);
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
@@ -188,6 +192,22 @@ function DailyAiPanel({
             <p className="mt-2 text-sm leading-relaxed text-zinc-500">
               暂时无法整理 AI 发现。你可以继续记录，稍后我再试一次。
             </p>
+          ) : hasDailyBrief ? (
+            <div className="mt-3 space-y-2">
+              <p className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm leading-relaxed text-zinc-200">
+                {dailyBrief?.summary}
+              </p>
+              {(dailyBrief?.signals ?? []).map(signal => (
+                <Link
+                  key={signal.id}
+                  href={signal.href || "/"}
+                  className="block rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-2 transition-colors hover:border-zinc-700"
+                >
+                  <div className="text-sm font-medium leading-relaxed text-zinc-300">{signal.title}</div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{signal.detail}</p>
+                </Link>
+              ))}
+            </div>
           ) : insights.length === 0 ? (
             <p className="mt-2 text-sm leading-relaxed text-zinc-500">
               记录多一点后，我会帮你看见反复出现的主题。
@@ -424,6 +444,7 @@ export default function Home() {
             )}
             <DailyAiPanel
               insights={overview?.insights ?? []}
+              dailyBrief={overview?.dailyBrief}
               reviewCandidateCount={overview?.memoryReviewCandidateCount ?? 0}
               pendingReviewCandidateCount={overview?.memoryReviewPendingCandidateCount ?? overview?.memoryReviewCandidateCount ?? 0}
               memoryCount={overview?.memoryCount ?? 0}

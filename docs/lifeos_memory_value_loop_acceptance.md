@@ -81,6 +81,21 @@ Expected:
   management surface.
 - Loading the card does not write data or execute an action.
 
+### 2b. Review personalized daily brief
+
+On the home page, inspect `AI 帮你整理`.
+
+Expected:
+
+- A brief summary explains why today's signals matter.
+- Signals are grounded in pending reminders, active Memory, repeated recent
+  themes, plan signals, or pending Memory Review candidates.
+- Pending Memory Review counts include only items still waiting for judgment;
+  remembered items do not inflate the pending number.
+- The brief links only to existing read-only or management surfaces.
+- Loading the brief does not write data, create reminders, remember anything,
+  deliver notifications, or execute tools.
+
 ### 3. Inspect possible memories
 
 Open `/memory/review`.
