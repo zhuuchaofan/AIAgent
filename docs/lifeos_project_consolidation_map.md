@@ -14,6 +14,7 @@ Authoritative companion docs:
 - `docs/skills/lifeos-phase-assessment.md`
 - `docs/skills/_shared/phase-map.md`
 - `docs/lifeos_unified_inbox_current_design.md`
+- `docs/phase6_memory_value_loop_implementation_review.md`
 - `docs/lifeos_authenticated_production_smoke_checklist.md`
 - `docs/lifeos_reminder_delivery_gate.md`
 - `docs/memory_durable_write_release_gate_readiness.md`
