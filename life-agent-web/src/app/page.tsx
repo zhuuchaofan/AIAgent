@@ -97,6 +97,28 @@ function focusBasisLabel(basis: HomeOverviewTodayFocus["basis"]) {
   return "近期反复出现";
 }
 
+function focusStatusGroup(item: HomeOverviewTodayFocus): "now" | "soon" | "review" {
+  if (item.statusGroup === "now" || item.statusGroup === "soon" || item.statusGroup === "review") {
+    return item.statusGroup;
+  }
+
+  if (item.basis === "overdue" || item.basis === "due_today") return "now";
+  if (item.basis === "due_soon" || (item.type === "plan" && item.basis === "memory_related")) return "soon";
+  return "review";
+}
+
+function focusStatusGroupLabel(group: "now" | "soon" | "review") {
+  if (group === "now") return "现在处理";
+  if (group === "soon") return "近期留意";
+  return "回头整理";
+}
+
+function focusStatusGroupDescription(group: "now" | "soon" | "review") {
+  if (group === "now") return "时间明确或已经逾期，适合先看。";
+  if (group === "soon") return "和近期安排或个人背景有关，适合持续推进。";
+  return "更适合回顾、判断或沉淀，不急着执行。";
+}
+
 function briefBasisLabel(basis: HomeOverviewDailyBrief["signals"][number]["basis"]) {
   if (basis === "due_reminder") return "提醒依据";
   if (basis === "memory_related_plan") return "记忆相关计划";
@@ -186,6 +208,10 @@ function DailyActionCard({
       reason: formatShortChineseDateTime(reminder.dueAt),
       href: "/reminders",
       basis: "due_soon" as const,
+      statusGroup: "soon" as const,
+      followUpLabel: "近期留意",
+      followUpHref: "/reminders",
+      trackingReason: "这条提醒来自已保存的待处理事项。",
     })),
     ...planSignals.map(signal => ({
       id: signal.id,
@@ -194,15 +220,22 @@ function DailyActionCard({
       reason: signal.content && signal.content !== signal.title ? signal.content : "最近保存的计划线索。",
       href: "/plans",
       basis: "recent_pattern" as const,
+      statusGroup: "review" as const,
+      followUpLabel: "回头整理",
+      followUpHref: "/plans",
+      trackingReason: "这条计划线索适合回头查看后再决定是否推进。",
     })),
   ].slice(0, 3);
   const visibleFocus = todayFocus ?? legacyFocus;
   const hasItems = visibleFocus.length > 0;
-  const primaryFocus = visibleFocus[0];
-  const secondaryFocus = visibleFocus.slice(1);
+  const groupedFocus = (["now", "soon", "review"] as const)
+    .map(group => ({
+      group,
+      items: visibleFocus.filter(item => focusStatusGroup(item) === group),
+    }))
+    .filter(group => group.items.length > 0);
   const visibleManagedItemCount = visibleFocus.filter(item => item.type === "reminder" || item.type === "plan").length;
   const hiddenManagedItemCount = Math.max(0, pendingReminderCount + planSignalCount - visibleManagedItemCount);
-  const primaryTone = primaryFocus ? focusTone(primaryFocus.type) : null;
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
@@ -237,53 +270,16 @@ function DailyActionCard({
           今天暂时没有需要优先关注的事。
         </p>
       ) : (
-        <div className="space-y-3">
-          {primaryFocus && primaryTone && (
-            <div
-              className={`block rounded-2xl border ${primaryTone.border} ${primaryTone.bg} p-4 transition-colors ${primaryTone.hover}`}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center gap-1.5 rounded-full border ${primaryTone.border} bg-zinc-950/30 px-2.5 py-1 text-xs ${primaryTone.text}`}>
-                  <FocusIcon type={primaryFocus.type} className="h-3.5 w-3.5" />
-                  {focusTypeLabel(primaryFocus.type)}
-                </span>
-                {(primaryFocus.priorityLabel || primaryFocus.priority) && (
-                  <span className="rounded-full border border-zinc-700 bg-zinc-950/40 px-2.5 py-1 text-xs text-zinc-300">
-                    {primaryFocus.priorityLabel || `优先级 ${primaryFocus.priority}`}
-                  </span>
-                )}
+        <div className="space-y-4">
+          {groupedFocus.map(({ group, items }) => (
+            <div key={group} className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="text-sm font-medium text-zinc-200">{focusStatusGroupLabel(group)}</h3>
+                <p className="text-xs text-zinc-600">{focusStatusGroupDescription(group)}</p>
               </div>
-              <div className="mt-3 break-words text-base font-semibold leading-relaxed text-zinc-100">{primaryFocus.title}</div>
-              <p className="mt-1 break-words text-sm leading-relaxed text-zinc-300">{primaryFocus.reason}</p>
-              {(primaryFocus.explanation || primaryFocus.actionLabel) && (
-                <div className="mt-3 rounded-xl border border-zinc-800/80 bg-zinc-950/35 px-3 py-2">
-                  {primaryFocus.explanation && (
-                    <p className="text-xs leading-relaxed text-zinc-400">{primaryFocus.explanation}</p>
-                  )}
-                </div>
-              )}
-              <details className="mt-3 rounded-xl border border-zinc-800/70 bg-zinc-950/20 px-3 py-2 text-xs text-zinc-500">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-zinc-400">
-                  为什么显示这个
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </summary>
-                <div className="mt-2 space-y-1.5 leading-relaxed">
-                  <p>依据类型：{focusBasisLabel(primaryFocus.basis)}</p>
-                  <p>{primaryFocus.explanation || primaryFocus.reason}</p>
-                  <p className="text-zinc-600">这里只做只读整理，不会自动写入记忆、创建任务或执行工具。</p>
-                </div>
-              </details>
-              <Link href={primaryFocus.href} className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white ${primaryTone.button}`}>
-                {primaryFocus.actionLabel || "查看"}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-          )}
-
-          {secondaryFocus.length > 0 && (
-            <div className="space-y-2">
-              {secondaryFocus.map(item => {
+              {items.map(item => {
                 const tone = focusTone(item.type);
+                const followUpHref = item.followUpHref || item.href;
                 return (
                   <div
                     key={`${item.type}-${item.id}`}
@@ -298,22 +294,28 @@ function DailyActionCard({
                     </div>
                     <div className="break-words text-sm font-medium leading-relaxed text-zinc-100">{item.title}</div>
                     <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{item.explanation || item.reason}</p>
+                    {(item.trackingReason || item.followUpLabel) && (
+                      <p className="mt-2 rounded-lg border border-zinc-800/60 bg-zinc-950/20 px-2.5 py-2 text-xs leading-relaxed text-zinc-500">
+                        {item.trackingReason || "这条关注项可从对应页面继续追踪。"}
+                      </p>
+                    )}
                     <details className="mt-2 rounded-lg border border-zinc-800/70 bg-zinc-950/20 px-2.5 py-2 text-xs text-zinc-500">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-zinc-400">
                         依据
                         <ChevronDown className="h-3.5 w-3.5" />
                       </summary>
                       <p className="mt-1.5 leading-relaxed">{focusBasisLabel(item.basis)}：{item.explanation || item.reason}</p>
+                      <p className="mt-1.5 leading-relaxed text-zinc-600">这里只做只读整理，不会自动写入记忆、创建任务或执行工具。</p>
                     </details>
-                    <Link href={item.href} className={`mt-2 inline-flex items-center gap-1 text-xs ${tone.text} hover:text-zinc-100`}>
-                      查看
+                    <Link href={followUpHref} className={`mt-2 inline-flex items-center gap-1 text-xs ${tone.text} hover:text-zinc-100`}>
+                      {item.followUpLabel || item.actionLabel || "查看"}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
                 );
               })}
             </div>
-          )}
+          ))}
         </div>
       )}
 

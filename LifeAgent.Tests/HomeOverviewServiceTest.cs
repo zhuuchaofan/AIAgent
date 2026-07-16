@@ -246,9 +246,15 @@ public class HomeOverviewServiceTest
         Assert.Equal(
             new[] { "overdue", "due_today", "due_soon" },
             overview.TodayFocus.Select(item => item.Basis));
+        Assert.Equal(
+            new[] { "now", "now", "soon" },
+            overview.TodayFocus.Select(item => item.StatusGroup));
         Assert.Equal(100, overview.TodayFocus[0].Priority);
         Assert.Equal("最高", overview.TodayFocus[0].PriorityLabel);
         Assert.Equal("查看提醒", overview.TodayFocus[0].ActionLabel);
+        Assert.Equal("现在处理", overview.TodayFocus[0].FollowUpLabel);
+        Assert.Equal("/reminders", overview.TodayFocus[0].FollowUpHref);
+        Assert.Contains("逾期", overview.TodayFocus[0].TrackingReason, StringComparison.Ordinal);
         Assert.Contains("已经超过时间", overview.TodayFocus[0].Explanation, StringComparison.Ordinal);
         Assert.Equal("今天先看时间相关的提醒。", overview.DailyBrief.Summary);
         Assert.Equal("due_reminder", overview.DailyBrief.Signals[0].Basis);
@@ -298,6 +304,10 @@ public class HomeOverviewServiceTest
         Assert.Equal(80, focus.Priority);
         Assert.Equal("相关", focus.PriorityLabel);
         Assert.Equal("查看计划", focus.ActionLabel);
+        Assert.Equal("soon", focus.StatusGroup);
+        Assert.Equal("近期留意", focus.FollowUpLabel);
+        Assert.Equal("/plans", focus.FollowUpHref);
+        Assert.Contains("持续推进", focus.TrackingReason, StringComparison.Ordinal);
         Assert.Contains("已记住的个人背景", focus.Explanation, StringComparison.Ordinal);
         Assert.Equal("今天适合推进和个人背景相关的计划。", overview.DailyBrief.Summary);
         Assert.Contains(overview.DailyBrief.Signals, signal =>
@@ -365,8 +375,12 @@ public class HomeOverviewServiceTest
         var focus = Assert.Single(overview.TodayFocus);
         Assert.Equal("insight", focus.Type);
         Assert.Equal("memory_related", focus.Basis);
+        Assert.Equal("review", focus.StatusGroup);
         Assert.Equal("/life/review", focus.Href);
         Assert.Equal("查看回顾", focus.ActionLabel);
+        Assert.Equal("回头整理", focus.FollowUpLabel);
+        Assert.Equal("/life/review?focus=memory_related", focus.FollowUpHref);
+        Assert.Contains("回顾近期变化", focus.TrackingReason, StringComparison.Ordinal);
         Assert.Contains("复盘参考", focus.Explanation, StringComparison.Ordinal);
         Assert.True(overview.ReadOnly);
         Assert.False(overview.WroteData);

@@ -30,9 +30,13 @@ export interface HomeOverviewTodayFocus {
   reason: string;
   href: string;
   basis: "overdue" | "due_today" | "due_soon" | "memory_related" | "recent_pattern";
+  statusGroup?: "now" | "soon" | "review";
   priority?: number;
   priorityLabel?: string;
   actionLabel?: string;
+  followUpLabel?: string;
+  followUpHref?: string;
+  trackingReason?: string;
   explanation?: string;
 }
 

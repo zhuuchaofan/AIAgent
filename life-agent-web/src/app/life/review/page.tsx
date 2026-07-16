@@ -25,6 +25,31 @@ import { formatShortChineseDateTime } from "@/lib/dateFormat";
 import { ReviewCardSkeleton } from "@/components/LoadingSkeletons";
 import { invalidatePageDataCache, loadPageDataCache, PageDataCacheInvalidatedError, pageDataCacheKey, readPageDataCache } from "@/lib/pageDataCache";
 
+function focusQueryLabel(focus: string | null) {
+  if (focus === "memory_related") return "和已记住背景相关的近期变化";
+  if (focus === "recent_pattern") return "近期反复出现的主题";
+  if (focus === "due_reminder") return "和提醒有关的回顾";
+  return null;
+}
+
+function focusQueryDescription(focus: string | null) {
+  if (focus === "memory_related") return "优先看看哪些记录、记忆或计划正在形成连续主线。";
+  if (focus === "recent_pattern") return "优先看看重复出现的记录是否值得继续追踪或沉淀。";
+  if (focus === "due_reminder") return "优先看看提醒前后的生活记录和上下文。";
+  return null;
+}
+
+function continuityHintScore(hint: LifeReviewContinuityHint, focus: string | null) {
+  if (!focus) return 0;
+
+  const searchable = `${hint.kind} ${hint.label} ${hint.detail} ${hint.reason} ${hint.href}`.toLowerCase();
+  if (focus === "memory_related" && (searchable.includes("memory") || searchable.includes("记忆"))) return 10;
+  if (focus === "recent_pattern" && (searchable.includes("review") || searchable.includes("回顾"))) return 10;
+  if (focus === "due_reminder" && (searchable.includes("reminder") || searchable.includes("提醒"))) return 10;
+
+  return 0;
+}
+
 export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [cards, setCards] = useState<LifeReviewCard[]>([]);
@@ -41,6 +66,16 @@ export default function LifeReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [focusQuery, setFocusQuery] = useState<string | null>(null);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const focus = new URLSearchParams(window.location.search).get("focus")?.trim() || null;
+      setFocusQuery(focus);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -146,6 +181,12 @@ export default function LifeReviewPage() {
   const contextSummary = cards.length > 0
     ? `基于 ${contextParts.join("、")}整理出 ${cards.length} 个回顾点`
     : null;
+  const focusLabel = focusQueryLabel(focusQuery);
+  const focusDescription = focusQueryDescription(focusQuery);
+  const visibleContinuityHints = useMemo(() => {
+    return [...continuityHints].sort((left, right) =>
+      continuityHintScore(right, focusQuery) - continuityHintScore(left, focusQuery));
+  }, [continuityHints, focusQuery]);
 
   const toggleExpanded = (cardId: string) => {
     setExpandedCards(current => ({
@@ -248,6 +289,18 @@ export default function LifeReviewPage() {
           </div>
         ) : (
           <div className="space-y-5">
+            {focusLabel && (
+              <section className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+                <p className="text-xs text-violet-200">从首页关注项进入</p>
+                <h2 className="mt-1 text-base font-semibold text-zinc-100">{focusLabel}</h2>
+                {focusDescription && (
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-500">{focusDescription}</p>
+                )}
+                <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+                  这里只做只读回顾。需要记住的内容仍要你点击“值得记住”后再进入候选。
+                </p>
+              </section>
+            )}
             {(contextSummary || cards.length > 0) && (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4 text-sm leading-relaxed text-zinc-500">
                 {contextSummary}
@@ -316,14 +369,14 @@ export default function LifeReviewPage() {
                 </div>
               </section>
             )}
-            {continuityHints.length > 0 && (
+            {visibleContinuityHints.length > 0 && (
               <section className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-zinc-300" />
                   <h2 className="text-sm font-semibold text-zinc-100">接下来可以</h2>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {continuityHints.map(hint => (
+                  {visibleContinuityHints.map(hint => (
                     <Link
                       key={hint.id || hint.href}
                       href={hint.href}

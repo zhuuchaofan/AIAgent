@@ -153,6 +153,10 @@ on `/reminders`.
      agree with active Memory. The optional browser time zone is used for local
      due-date boundaries. Weak generic overlap is not enough to promote an
      undated plan signal into today focus.
+     Each `todayFocus` item may also include read-only tracking metadata:
+     `statusGroup` (`now`, `soon`, or `review`), `followUpLabel`,
+     `followUpHref`, and `trackingReason`. These fields group focus items into
+     "现在处理", "近期留意", and "回头整理" without creating or executing work.
      It also returns a read-only `dailyBrief` with a short summary, up to four
      explainable signals, and context counts drawn from recent records, active
      Memory, pending reminders, plan signals, and pending Memory Review
@@ -204,6 +208,9 @@ on `/reminders`.
      users can see which reminder, plan, memory, or life record supported a
      suggestion. These explanations are read-only trust affordances, not
      confirmation prompts or execution controls.
+     When a Home focus item points into Life Review, it may use a query such as
+     `/life/review?focus=memory_related` or `/life/review?focus=recent_pattern`
+     so the review page can explain which Home concern brought the user there.
    - `POST /api/life/review` can attach read-only evidence hints to review
      cards when active Memory or active Plan Signals overlap with the card
      context. These hints are navigation/explanation only and do not create

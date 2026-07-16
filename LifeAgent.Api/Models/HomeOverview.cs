@@ -100,9 +100,13 @@ public sealed class HomeOverviewTodayFocusDto
     public string Reason { get; set; } = string.Empty;
     public string Href { get; set; } = string.Empty;
     public string Basis { get; set; } = string.Empty;
+    public string StatusGroup { get; set; } = string.Empty;
     public int Priority { get; set; }
     public string PriorityLabel { get; set; } = string.Empty;
     public string ActionLabel { get; set; } = string.Empty;
+    public string FollowUpLabel { get; set; } = string.Empty;
+    public string FollowUpHref { get; set; } = string.Empty;
+    public string TrackingReason { get; set; } = string.Empty;
     public string Explanation { get; set; } = string.Empty;
 }
 
