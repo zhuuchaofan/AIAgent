@@ -50,6 +50,33 @@ function continuityHintScore(hint: LifeReviewContinuityHint, focus: string | nul
   return 0;
 }
 
+function continuityHintGroup(hint: LifeReviewContinuityHint): "ask" | "plan" | "memory" | "review" {
+  if (hint.kind === "life_chat") return "ask";
+  if (hint.kind === "plan") return "plan";
+  if (hint.kind === "memory" || hint.kind === "memory_review") return "memory";
+  return "review";
+}
+
+function continuityHintGroupLabel(group: "ask" | "plan" | "memory" | "review") {
+  if (group === "ask") return "问问状态";
+  if (group === "plan") return "继续计划";
+  if (group === "memory") return "查看记忆";
+  return "继续回顾";
+}
+
+function lifeChatHref(prompt: string) {
+  const params = new URLSearchParams({
+    prompt,
+    source: "life_review",
+  });
+
+  return `/life/chat?${params.toString()}`;
+}
+
+function continuityQuestion(hint: LifeReviewContinuityHint) {
+  return `这条回顾线索和我的最近状态有什么关系：${hint.label}`;
+}
+
 export default function LifeReviewPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [cards, setCards] = useState<LifeReviewCard[]>([]);
@@ -187,6 +214,14 @@ export default function LifeReviewPage() {
     return [...continuityHints].sort((left, right) =>
       continuityHintScore(right, focusQuery) - continuityHintScore(left, focusQuery));
   }, [continuityHints, focusQuery]);
+  const groupedContinuityHints = useMemo(() => {
+    return (["ask", "plan", "memory", "review"] as const)
+      .map(group => ({
+        group,
+        items: visibleContinuityHints.filter(hint => continuityHintGroup(hint) === group),
+      }))
+      .filter(group => group.items.length > 0);
+  }, [visibleContinuityHints]);
 
   const toggleExpanded = (cardId: string) => {
     setExpandedCards(current => ({
@@ -369,23 +404,42 @@ export default function LifeReviewPage() {
                 </div>
               </section>
             )}
-            {visibleContinuityHints.length > 0 && (
+            {groupedContinuityHints.length > 0 && (
               <section className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-zinc-300" />
                   <h2 className="text-sm font-semibold text-zinc-100">接下来可以</h2>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {visibleContinuityHints.map(hint => (
-                    <Link
-                      key={hint.id || hint.href}
-                      href={hint.href}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3 transition-colors hover:border-zinc-700"
-                    >
-                      <p className="text-sm font-medium text-zinc-100">{hint.label}</p>
-                      <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{hint.detail}</p>
-                      <p className="mt-2 break-words text-[11px] leading-relaxed text-zinc-600">{hint.reason}</p>
-                    </Link>
+                <div className="space-y-3">
+                  {groupedContinuityHints.map(({ group, items }) => (
+                    <div key={group} className="space-y-2">
+                      <h3 className="text-xs font-medium text-zinc-500">{continuityHintGroupLabel(group)}</h3>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {items.map(hint => (
+                          <div
+                            key={hint.id || hint.href}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950/30 px-3 py-3"
+                          >
+                            <Link
+                              href={hint.href}
+                              className="block transition-colors hover:text-zinc-100"
+                            >
+                              <p className="text-sm font-medium text-zinc-100">{hint.label}</p>
+                              <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{hint.detail}</p>
+                              <p className="mt-2 break-words text-[11px] leading-relaxed text-zinc-600">{hint.reason}</p>
+                            </Link>
+                            {group !== "ask" && (
+                              <Link
+                                href={lifeChatHref(continuityQuestion(hint))}
+                                className="mt-2 inline-flex text-[11px] text-indigo-200 hover:text-indigo-100"
+                              >
+                                问问这条线索
+                              </Link>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </section>

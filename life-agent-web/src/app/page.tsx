@@ -119,6 +119,25 @@ function focusStatusGroupDescription(group: "now" | "soon" | "review") {
   return "更适合回顾、判断或沉淀，不急着执行。";
 }
 
+function lifeChatHref(prompt: string, source = "home_focus") {
+  const params = new URLSearchParams({
+    prompt,
+    source,
+  });
+
+  return `/life/chat?${params.toString()}`;
+}
+
+function focusQuestion(item: HomeOverviewTodayFocus) {
+  if (item.type === "reminder") return `这条提醒为什么现在值得关注：${item.title}`;
+  if (item.type === "plan") return `这个计划线索接下来该怎么整理：${item.title}`;
+  return `这个近期变化和我的状态有什么关系：${item.title}`;
+}
+
+function threadQuestion(thread: HomeOverviewContextThread) {
+  return `这条近期主线和我的最近状态有什么关系：${thread.title}`;
+}
+
 function briefBasisLabel(basis: HomeOverviewDailyBrief["signals"][number]["basis"]) {
   if (basis === "due_reminder") return "提醒依据";
   if (basis === "memory_related_plan") return "记忆相关计划";
@@ -307,10 +326,16 @@ function DailyActionCard({
                       <p className="mt-1.5 leading-relaxed">{focusBasisLabel(item.basis)}：{item.explanation || item.reason}</p>
                       <p className="mt-1.5 leading-relaxed text-zinc-600">这里只做只读整理，不会自动写入记忆、创建任务或执行工具。</p>
                     </details>
-                    <Link href={followUpHref} className={`mt-2 inline-flex items-center gap-1 text-xs ${tone.text} hover:text-zinc-100`}>
-                      {item.followUpLabel || item.actionLabel || "查看"}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      <Link href={followUpHref} className={`inline-flex items-center gap-1 text-xs ${tone.text} hover:text-zinc-100`}>
+                        {item.followUpLabel || item.actionLabel || "查看"}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                      <Link href={lifeChatHref(focusQuestion(item))} className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-100">
+                        问问原因
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 );
               })}
@@ -454,6 +479,10 @@ function DailyAiPanel({
                   </details>
                   <Link href={primaryThread.href || "/life/review"} className="mt-2 inline-flex items-center gap-1 text-xs text-violet-200 hover:text-violet-100">
                     {primaryThread.actionLabel || "查看最近回顾"}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                  <Link href={lifeChatHref(threadQuestion(primaryThread), "home_thread")} className="ml-4 mt-2 inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-100">
+                    问问这条主线
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>

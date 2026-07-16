@@ -211,6 +211,12 @@ on `/reminders`.
      When a Home focus item points into Life Review, it may use a query such as
      `/life/review?focus=memory_related` or `/life/review?focus=recent_pattern`
      so the review page can explain which Home concern brought the user there.
+     Home may also link into Life Q&A with a prefilled query such as
+     `/life/chat?prompt=...&source=home_focus` or
+     `/life/chat?prompt=...&source=home_thread`. The Life Q&A page may prefill
+     the question and show where it came from, but it must not auto-send the
+     question, persist chat history, create pending actions, write Memory, or
+     execute tools.
    - `POST /api/life/review` can attach read-only evidence hints to review
      cards when active Memory or active Plan Signals overlap with the card
      context. These hints are navigation/explanation only and do not create
@@ -244,6 +250,9 @@ on `/reminders`.
      user-facing source labels and navigation links. This is explanation only:
      it does not persist chat history, write Memory, create reminders, update
      plans, or execute tools.
+   - The `/life/chat` UI may accept a prefilled `prompt` query from Home or Life
+     Review. This is a client-side convenience only; the user still has to send
+     the question explicitly.
    - It does not persist chat history, write Memory, create reminders, or
      execute tools.
 

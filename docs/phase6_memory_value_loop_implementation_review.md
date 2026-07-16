@@ -18,7 +18,7 @@ execution, calendar integration, and MCP remain closed.
 Current local baseline:
 
 ```text
-4a0305e 增强今日关注连续追踪
+ee0f7fb 整理Phase 6实现回顾
 ```
 
 ## Implemented Capabilities
@@ -55,6 +55,8 @@ Current local baseline:
   surfaces.
 - Life Q&A can answer from recent life records, pending reminders, and active
   memories while showing used-context feedback.
+- Home and Life Review can route into Life Q&A with prefilled, user-confirmed
+  read-only questions; the question is not sent automatically.
 - Life Review can generate recent / today / week review cards, source evidence,
   recent themes, and continuity hints.
 - Life Review can recognize a Home focus query and explain why the user arrived
@@ -107,6 +109,7 @@ Record life
   -> confirm structured life record / reminder / plan when appropriate
   -> Home Daily Hub explains today's important context
   -> user follows focus into Reminders, Plans, Life Review, Life Q&A, or Memory
+  -> Life Review and Life Q&A preserve where the user came from as a read-only clue
   -> user keeps or remembers only the signals they choose
   -> confirmed Memory improves later Home, Life Q&A, Review, and RAG context
 ```
@@ -169,4 +172,3 @@ understanding instead of building isolated heuristics.
    behind explicit Release Gates.
 5. Only after the read-only runtime is observable and trusted, consider gated
    user-confirmed action execution.
-

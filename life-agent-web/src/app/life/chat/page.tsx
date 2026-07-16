@@ -52,25 +52,45 @@ function buildContextMeta(usedMemoryCount: number, usedReminderCount: number, us
   return `基于${parts.join("、")}整理`;
 }
 
+function sourceLabel(source: string | null) {
+  if (source === "home_focus") return "从首页今日关注进入";
+  if (source === "home_thread") return "从首页近期主线进入";
+  if (source === "life_review") return "从最近回顾进入";
+  return null;
+}
+
+function contextSourceLabel(sourceType: string) {
+  if (sourceType === "memory") return "记忆";
+  if (sourceType === "reminder") return "提醒";
+  if (sourceType === "plan") return "计划";
+  if (sourceType === "event") return "记录";
+  return "背景";
+}
+
 export default function LifeChatPage() {
   const { user, loading, loginWithGoogle } = useAuth();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [entrySource, setEntrySource] = useState<string | null>(null);
   const messageIdRef = useRef(0);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
+  const entrySourceLabel = sourceLabel(entrySource);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const query = params.get("q")?.trim();
-    if (query) {
-      const frameId = window.requestAnimationFrame(() => {
+    const query = (params.get("prompt") || params.get("q"))?.trim();
+    const source = params.get("source")?.trim() || null;
+    const frameId = window.requestAnimationFrame(() => {
+      if (query) {
         setInput(query);
-      });
-      return () => window.cancelAnimationFrame(frameId);
-    }
+      }
+      setEntrySource(source);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, []);
 
   const sendMessage = async (text: string) => {
@@ -154,6 +174,14 @@ export default function LifeChatPage() {
         ) : (
           <section className="relative flex min-h-[500px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/10 shadow-2xl">
             <div className="flex-1 space-y-5 overflow-y-auto p-5 min-h-[380px] min-w-0">
+              {entrySourceLabel && (
+                <section className="ml-11 rounded-2xl border border-violet-500/20 bg-violet-500/5 p-3">
+                  <p className="text-xs text-violet-200">{entrySourceLabel}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    我已把问题预填好，但不会自动发送。回答只会参考现有生活记录、提醒、计划线索和已记住内容。
+                  </p>
+                </section>
+              )}
               <div className="flex flex-wrap gap-2 pl-11">
                 {quickQuestions.map(question => (
                   <button
@@ -209,16 +237,20 @@ export default function LifeChatPage() {
                     )}
                     {message.role === "assistant" && message.usedContext && message.usedContext.length > 0 && (
                       <div className="space-y-1 px-1">
-                        <p className="text-[10px] text-zinc-600">参考了这些背景：</p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <p className="text-[10px] text-zinc-600">参考了这些只读背景：</p>
+                        <div className="grid gap-1.5 sm:grid-cols-2">
                           {message.usedContext.map(item => (
                             <Link
                               key={`${item.sourceType}-${item.id}`}
                               href={item.href || "/life/review"}
-                              className="max-w-full rounded-full border border-zinc-800 bg-zinc-950/40 px-2.5 py-1 text-[10px] text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+                              className="max-w-full rounded-xl border border-zinc-800 bg-zinc-950/40 px-2.5 py-2 text-[10px] text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
                               title={`${item.detail}｜${item.reason}`}
                             >
-                              <span className="break-words">{item.title}</span>
+                              <span className="mb-1 inline-flex rounded-full border border-zinc-800 bg-zinc-900/60 px-1.5 py-0.5 text-[9px] text-zinc-500">
+                                {contextSourceLabel(item.sourceType)}
+                              </span>
+                              <span className="block break-words text-zinc-300">{item.title}</span>
+                              <span className="mt-1 block break-words leading-relaxed text-zinc-600">{item.reason}</span>
                             </Link>
                           ))}
                         </div>
